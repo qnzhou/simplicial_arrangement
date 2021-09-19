@@ -1,0 +1,36 @@
+cmake_minimum_required(VERSION 3.14)
+
+project(simplicial_arrangement LANGUAGES CXX)
+
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
+include(absl)
+include(implicit_predicates)
+
+file(GLOB INC_FILES ${CMAKE_CURRENT_LIST_DIR}/include/*.h)
+file(GLOB SRC_FILES ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp)
+
+add_library(simplicial_arrangement STATIC ${SRC_FILES} ${INC_FILES})
+target_include_directories(simplicial_arrangement PUBLIC
+    ${CMAKE_CURRENT_LIST_DIR}/include)
+target_link_libraries(simplicial_arrangement PUBLIC absl::numeric
+    implicit_predicates::implicit_predicates)
+target_compile_features(simplicial_arrangement PRIVATE cxx_std_17)
+target_compile_options(simplicial_arrangement PRIVATE "-Wall" "-Werror")
+add_library(simplicial_arrangement::simplicial_arrangement ALIAS
+    simplicial_arrangement)
+
+option(SIMPLICIAL_ARRANGEMENT_UNIT_TESTS "Build unit tests for simplicial arrangement" OFF)
+if (SIMPLICIAL_ARRANGEMENT_UNIT_TESTS)
+    include(CTest)
+    enable_testing()
+    include(Catch2)
+
+    file(GLOB TEST_FILES "${CMAKE_SOURCE_DIR}/tests/*.cpp")
+    add_executable(simplicial_arrangement_tests ${TEST_FILES})
+    target_link_libraries(simplicial_arrangement_tests PRIVATE
+        simplicial_arrangement::simplicial_arrangement Catch2::Catch2)
+    target_compile_features(simplicial_arrangement_tests PRIVATE cxx_std_17)
+    target_compile_options(simplicial_arrangement_tests PRIVATE "-Wall" "-Werror")
+    target_compile_definitions(simplicial_arrangement_tests PRIVATE CATCH_CONFIG_ENABLE_BENCHMARKING)
+    catch_discover_tests(simplicial_arrangement_tests)
+endif()
