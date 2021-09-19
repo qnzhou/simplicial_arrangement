@@ -8,7 +8,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 {
     using namespace simplicial_arrangement;
 
-    constexpr size_t N = 5e2;
+    constexpr size_t N = 1e2;
     std::vector<Plane<Int, 2>> int_data;
     std::vector<Plane<double, 2>> double_data;
     int_data.reserve(N);
@@ -36,23 +36,35 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
         }
     };
 
-    BENCHMARK_ADVANCED("2D arrangement with int")(Catch::Benchmark::Chronometer meter)
+    BENCHMARK("2D arrangement (int, 3 planes)", i)
+    {
+        SimplicialArrangement<Int, 2> int_arrangement;
+        i = i % (N - 3);
+        int_arrangement.initialize({int_data[i], int_data[i + 1], int_data[i + 2]});
+        return int_arrangement;
+    };
+
+    BENCHMARK("2D arrangement (double, 3 planes)", i)
+    {
+        SimplicialArrangement<double, 2> double_arrangement;
+        i = i % (N - 3);
+        double_arrangement.initialize({double_data[i], double_data[i + 1], double_data[i + 2]});
+        return double_arrangement;
+    };
+
+    BENCHMARK_ADVANCED("2D arrangement (int, 100 planes)")(Catch::Benchmark::Chronometer meter)
     {
         SimplicialArrangement<Int, 2> int_arrangement;
         int_arrangement.set_planes(int_data);
-        meter.measure([&](){
-                int_arrangement.initialize();
-                });
-        REQUIRE(count_num_cells(int_arrangement.get_root()) == 31310);
+        meter.measure([&]() { int_arrangement.initialize(); });
+        REQUIRE(count_num_cells(int_arrangement.get_root()) == 1035);
     };
 
-    BENCHMARK_ADVANCED("2D arrangement with double")(Catch::Benchmark::Chronometer meter)
+    BENCHMARK_ADVANCED("2D arrangement (double, 100 planes)")(Catch::Benchmark::Chronometer meter)
     {
         SimplicialArrangement<double, 2> double_arrangement;
         double_arrangement.set_planes(double_data);
-        meter.measure([&](){
-                double_arrangement.initialize();
-                });
-        REQUIRE(count_num_cells(double_arrangement.get_root()) == 31310);
+        meter.measure([&]() { double_arrangement.initialize(); });
+        REQUIRE(count_num_cells(double_arrangement.get_root()) == 1035);
     };
 }
