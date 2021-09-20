@@ -1,6 +1,7 @@
 #pragma once
 
 #include <absl/numeric/int128.h>
+#include <spdlog/spdlog.h>
 
 #include <array>
 #include <limits>
@@ -11,6 +12,8 @@ namespace simplicial_arrangement {
 using Int = absl::int128;
 
 constexpr size_t INVALID = std::numeric_limits<size_t>::max();
+
+spdlog::logger& logger();
 
 /**
  * A plane is defined by the barycentric plane equation:

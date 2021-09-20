@@ -37,7 +37,7 @@ public:
         m_root.negative = nullptr;
 
         const size_t num_planes = m_planes.size();
-        for (size_t i = DIM; i < num_planes; i++) {
+        for (size_t i = DIM + 1; i < num_planes; i++) {
             internal::cut(*this, m_root, i);
         }
     }
