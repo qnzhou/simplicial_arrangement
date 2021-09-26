@@ -1,6 +1,7 @@
 include_guard()
 
 if (NOT TARGET Catch2::Catch2)
+    include(FetchContent)
     FetchContent_Declare(
         Catch2
         GIT_REPOSITORY https://github.com/catchorg/Catch2.git

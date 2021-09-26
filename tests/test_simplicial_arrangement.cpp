@@ -36,6 +36,7 @@ void test_2D()
         REQUIRE(arrangement.get_planes().size() == 3);
         REQUIRE(count_num_cells(arrangement.get_root()) == 1);
         REQUIRE(count_num_edges(arrangement.get_root()) == 3);
+        REQUIRE(arrangement.get_vertex_count() == 3);
     }
 
     SECTION("1 implicit")
@@ -47,6 +48,7 @@ void test_2D()
             REQUIRE(arrangement.get_planes().size() == 4);
             REQUIRE(count_num_cells(arrangement.get_root()) == 2);
             REQUIRE(count_num_edges(arrangement.get_root()) == 7);
+            REQUIRE(arrangement.get_vertex_count() == 5);
         }
         SECTION("passing through one corner")
         {
@@ -55,6 +57,7 @@ void test_2D()
             REQUIRE(arrangement.get_planes().size() == 4);
             REQUIRE(count_num_cells(arrangement.get_root()) == 2);
             REQUIRE(count_num_edges(arrangement.get_root()) == 6);
+            REQUIRE(arrangement.get_vertex_count() == 4);
         }
         SECTION("passing through two corners")
         {
@@ -63,11 +66,13 @@ void test_2D()
             REQUIRE(arrangement.get_planes().size() == 4);
             REQUIRE(count_num_cells(arrangement.get_root()) == 1);
             REQUIRE(count_num_edges(arrangement.get_root()) == 3);
+            REQUIRE(arrangement.get_vertex_count() == 3);
         }
     }
 
     SECTION("2 implicits")
     {
+        logger().set_level(spdlog::level::info);
         SECTION("not intersecting")
         {
             planes.push_back({1, -1, -1});
@@ -75,6 +80,7 @@ void test_2D()
             arrangement.initialize(planes);
             REQUIRE(count_num_cells(arrangement.get_root()) == 3);
             REQUIRE(count_num_edges(arrangement.get_root()) == 11);
+            REQUIRE(arrangement.get_vertex_count() == 7);
         }
 
         SECTION("crossing")
@@ -84,6 +90,7 @@ void test_2D()
             arrangement.initialize(planes);
             REQUIRE(count_num_cells(arrangement.get_root()) == 4);
             REQUIRE(count_num_edges(arrangement.get_root()) == 15);
+            REQUIRE(arrangement.get_vertex_count() == 8);
         }
 
         SECTION("touching")
@@ -93,6 +100,7 @@ void test_2D()
             arrangement.initialize(planes);
             REQUIRE(count_num_cells(arrangement.get_root()) == 3);
             REQUIRE(count_num_edges(arrangement.get_root()) == 10);
+            REQUIRE(arrangement.get_vertex_count() == 6);
         }
 
         SECTION("overlapping")
@@ -102,6 +110,7 @@ void test_2D()
             arrangement.initialize(planes);
             REQUIRE(count_num_cells(arrangement.get_root()) == 2);
             REQUIRE(count_num_edges(arrangement.get_root()) == 7);
+            REQUIRE(arrangement.get_vertex_count() == 5);
         }
     }
     SECTION("3 implicits")
@@ -114,6 +123,7 @@ void test_2D()
             arrangement.initialize(planes);
             REQUIRE(count_num_cells(arrangement.get_root()) == 4);
             REQUIRE(count_num_edges(arrangement.get_root()) == 15);
+            REQUIRE(arrangement.get_vertex_count() == 9);
         }
 
         SECTION("intersecting")
@@ -126,6 +136,7 @@ void test_2D()
                 arrangement.initialize(planes);
                 REQUIRE(count_num_cells(arrangement.get_root()) == 7);
                 REQUIRE(count_num_edges(arrangement.get_root()) == 27);
+                REQUIRE(arrangement.get_vertex_count() == 12);
             }
 
             SECTION("case 1")
@@ -136,6 +147,7 @@ void test_2D()
                 arrangement.initialize(planes);
                 REQUIRE(count_num_cells(arrangement.get_root()) == 6);
                 REQUIRE(count_num_edges(arrangement.get_root()) == 21);
+                REQUIRE(arrangement.get_vertex_count() == 10);
             }
 
             SECTION("case 2")
@@ -146,6 +158,7 @@ void test_2D()
                 arrangement.initialize(planes);
                 REQUIRE(count_num_cells(arrangement.get_root()) == 4);
                 REQUIRE(count_num_edges(arrangement.get_root()) == 12);
+                REQUIRE(arrangement.get_vertex_count() == 6);
             }
 
             SECTION("case 3")
@@ -156,6 +169,7 @@ void test_2D()
                 arrangement.initialize(planes);
                 REQUIRE(count_num_cells(arrangement.get_root()) == 4);
                 REQUIRE(count_num_edges(arrangement.get_root()) == 15);
+                REQUIRE(arrangement.get_vertex_count() == 9);
             }
 
             SECTION("case 4")
@@ -166,6 +180,7 @@ void test_2D()
                 arrangement.initialize(planes);
                 REQUIRE(count_num_cells(arrangement.get_root()) == 7);
                 REQUIRE(count_num_edges(arrangement.get_root()) == 27);
+                REQUIRE(arrangement.get_vertex_count() == 12);
             }
         }
     }
@@ -216,6 +231,7 @@ void test_3D()
         REQUIRE(count_num_cells(arrangement.get_root()) == 1);
         REQUIRE(count_num_faces(arrangement.get_root()) == 4);
         REQUIRE(count_num_half_edges(arrangement.get_root()) == 12);
+        REQUIRE(arrangement.get_vertex_count() == 4);
     }
 
     SECTION("1 implicit")
@@ -227,6 +243,7 @@ void test_3D()
             REQUIRE(count_num_cells(arrangement.get_root()) == 2);
             REQUIRE(count_num_faces(arrangement.get_root()) == 10);
             REQUIRE(count_num_half_edges(arrangement.get_root()) == 36);
+            REQUIRE(arrangement.get_vertex_count() == 8);
         }
         SECTION("tri cross section")
         {
@@ -235,6 +252,7 @@ void test_3D()
             REQUIRE(count_num_cells(arrangement.get_root()) == 2);
             REQUIRE(count_num_faces(arrangement.get_root()) == 9);
             REQUIRE(count_num_half_edges(arrangement.get_root()) == 30);
+            REQUIRE(arrangement.get_vertex_count() == 7);
         }
         SECTION("cut through a vertex")
         {
@@ -243,6 +261,7 @@ void test_3D()
             REQUIRE(count_num_cells(arrangement.get_root()) == 2);
             REQUIRE(count_num_faces(arrangement.get_root()) == 9);
             REQUIRE(count_num_half_edges(arrangement.get_root()) == 28);
+            REQUIRE(arrangement.get_vertex_count() == 6);
         }
         SECTION("cut through an edge")
         {
@@ -251,6 +270,7 @@ void test_3D()
             REQUIRE(count_num_cells(arrangement.get_root()) == 2);
             REQUIRE(count_num_faces(arrangement.get_root()) == 8);
             REQUIRE(count_num_half_edges(arrangement.get_root()) == 24);
+            REQUIRE(arrangement.get_vertex_count() == 5);
         }
     }
 
@@ -264,6 +284,7 @@ void test_3D()
             REQUIRE(count_num_cells(arrangement.get_root()) == 3);
             REQUIRE(count_num_faces(arrangement.get_root()) == 14);
             REQUIRE(count_num_half_edges(arrangement.get_root()) == 48);
+            REQUIRE(arrangement.get_vertex_count() == 10);
         }
         SECTION("crossing")
         {
@@ -273,6 +294,7 @@ void test_3D()
             REQUIRE(count_num_cells(arrangement.get_root()) == 4);
             REQUIRE(count_num_faces(arrangement.get_root()) == 20);
             REQUIRE(count_num_half_edges(arrangement.get_root()) == 72);
+            REQUIRE(arrangement.get_vertex_count() == 12);
         }
         SECTION("touching")
         {
@@ -282,6 +304,7 @@ void test_3D()
             REQUIRE(count_num_cells(arrangement.get_root()) == 3);
             REQUIRE(count_num_faces(arrangement.get_root()) == 14);
             REQUIRE(count_num_half_edges(arrangement.get_root()) == 46);
+            REQUIRE(arrangement.get_vertex_count() == 9);
         }
         SECTION("duplicated cuts")
         {
@@ -291,6 +314,7 @@ void test_3D()
             REQUIRE(count_num_cells(arrangement.get_root()) == 2);
             REQUIRE(count_num_faces(arrangement.get_root()) == 10);
             REQUIRE(count_num_half_edges(arrangement.get_root()) == 36);
+            REQUIRE(arrangement.get_vertex_count() == 8);
         }
         SECTION("2 cuts through the same vertex")
         {
@@ -300,6 +324,7 @@ void test_3D()
             REQUIRE(count_num_cells(arrangement.get_root()) == 4);
             REQUIRE(count_num_faces(arrangement.get_root()) == 17);
             REQUIRE(count_num_half_edges(arrangement.get_root()) == 52);
+            REQUIRE(arrangement.get_vertex_count() == 7);
         }
     }
 }

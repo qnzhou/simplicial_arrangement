@@ -11,10 +11,10 @@ struct BSPNode;
 
 namespace simplicial_arrangement::internal {
 
-void cut(const SimplicialArrangement<double, 2>& arrangement, BSPNode<2>& root, size_t cut_plane);
-void cut(const SimplicialArrangement<Int, 2>& arrangement, BSPNode<2>& root, size_t cut_plane);
+void cut(SimplicialArrangement<double, 2>& arrangement, BSPNode<2>& root, size_t cut_plane);
+void cut(SimplicialArrangement<Int, 2>& arrangement, BSPNode<2>& root, size_t cut_plane);
 
-void cut(const SimplicialArrangement<double, 3>& arrangement, BSPNode<3>& root, size_t cut_plane);
-void cut(const SimplicialArrangement<Int, 3>& arrangement, BSPNode<3>& root, size_t cut_plane);
+void cut(SimplicialArrangement<double, 3>& arrangement, BSPNode<3>& root, size_t cut_plane);
+void cut(SimplicialArrangement<Int, 3>& arrangement, BSPNode<3>& root, size_t cut_plane);
 
 } // namespace simplicial_arrangement::internal

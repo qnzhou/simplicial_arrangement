@@ -4,6 +4,8 @@
 
 #include <implicit_predicates/implicit_predicates.h>
 
+#include <absl/container/flat_hash_map.h>
+
 #include <algorithm>
 #include <optional>
 
@@ -23,13 +25,7 @@ using OptionalFace = std::optional<Face<DIM>>;
 template <int DIM>
 using OptionalCell = std::optional<Cell<DIM>>;
 
-// template <typename Scalar>
-// std::optional<std::tuple<Point<3>, Edge<3>, Edge<3>>> cut_edge(
-//    SimplicialArrangement<Scalar, 3>& arrangement, size_t cutting_plane, const Edge<3>& edge)
-//{
-//    // TODO
-//    return {};
-//}
+using EdgeIndexMap = absl::flat_hash_map<std::array<size_t, 2>, size_t>;
 
 /**
  * Cut a 3D face using a cut plane.
@@ -38,6 +34,7 @@ using OptionalCell = std::optional<Cell<DIM>>;
  * @param[in]  cut_plane_index
  * @param[in]  face  The face to be cut.
  *
+ * TODO: Should cut edge be returned in this form (planes) or in index form?
  * @returns three optional values:
  *   * Cut edge: The intersection of face and cut plane, oriented ccw on
  *               the positive side of the cut plane.
@@ -46,7 +43,8 @@ using OptionalCell = std::optional<Cell<DIM>>;
  */
 template <typename Scalar>
 std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
-    const SimplicialArrangement<Scalar, 3>& arrangement,
+    SimplicialArrangement<Scalar, 3>& arrangement,
+    EdgeIndexMap& edge_map,
     size_t cut_plane_index,
     const Face<3>& face)
 {
@@ -58,7 +56,7 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
     std::vector<implicit_predicates::Orientation> orientations;
     orientations.reserve(num_edges);
 
-    bool all_positive = true, all_negative = true;
+    bool non_negative = true, non_positive = true;
     std::vector<size_t> vertices_on_cut_plane;
     vertices_on_cut_plane.reserve(2);
 
@@ -70,20 +68,58 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
                 planes[face.edge_planes[i]].data(),
                 cut_plane.data()));
         assert(orientations.back() != implicit_predicates::INVALID);
-        all_positive = all_positive && orientations.back() >= 0;
-        all_negative = all_negative && orientations.back() <= 0;
+        non_negative = non_negative && orientations.back() >= 0;
+        non_positive = non_positive && orientations.back() <= 0;
         if (orientations.back() == implicit_predicates::ZERO) {
             vertices_on_cut_plane.push_back(i);
         }
     }
 
-    if (all_positive && vertices_on_cut_plane.size() < 2) {
+    auto add_vertex = [&](size_t e_prev, size_t e_curr, size_t e_next) {
+        size_t v0 = arrangement.get_vertex_index({face.supporting_plane, e_prev, e_curr});
+        size_t v1 = arrangement.get_vertex_index({face.supporting_plane, e_curr, e_next});
+        assert(v0 != simplicial_arrangement::INVALID);
+        assert(v1 != simplicial_arrangement::INVALID);
+
+        if (v0 > v1) std::swap(v0, v1);
+        std::array<size_t, 2> e({v0, v1});
+
+        auto itr = edge_map.find(e);
+        if (itr == edge_map.end()) {
+            size_t id = arrangement.get_vertex_count();
+            edge_map[e] = id;
+            assert(edge_map.contains(e));
+            arrangement.register_vertex({face.supporting_plane, e_curr, cut_plane_index}, id);
+            arrangement.bump_vertex_count();
+            logger().debug("Register ({}, {}, {}) as {} (new)",
+                face.supporting_plane,
+                e_curr,
+                cut_plane_index,
+                id);
+        } else {
+#ifndef NDEBUG
+            // Just a sanity check.
+            assert(arrangement.has_vertex({face.supporting_plane, e_curr, cut_plane_index}));
+            assert(itr->second ==
+                   arrangement.get_vertex_index({face.supporting_plane, e_curr, cut_plane_index}));
+#endif
+        }
+    };
+
+    auto add_touching_vertex = [&](size_t e0, size_t e1) {
+        size_t id = arrangement.get_vertex_index({face.supporting_plane, e0, e1});
+        assert(id != simplicial_arrangement::INVALID);
+        arrangement.register_vertex({face.supporting_plane, e0, cut_plane_index}, id);
+        arrangement.register_vertex({face.supporting_plane, e1, cut_plane_index}, id);
+    };
+
+    if (non_negative && vertices_on_cut_plane.size() < 2) {
         // Case 1: Face is on the positive side or tangent at a vertex.
         return {std::nullopt, std::nullopt, face};
-    } else if (all_negative && vertices_on_cut_plane.size() < 2) {
+    } else if (non_positive && vertices_on_cut_plane.size() < 2) {
         // Case 2: Face is on the negative side or tangent at a vertex.
         return {std::nullopt, face, std::nullopt};
-    } else if (!all_negative && !all_positive) {
+    } else if (!non_positive && !non_negative) {
         // Case 3: Face is cut into 2 halves.
         Face<3> negative, positive;
         negative.supporting_plane = face.supporting_plane;
@@ -97,24 +133,32 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
             simplicial_arrangement::INVALID);
 
         for (size_t i = 0; i < num_edges; i++) {
+            const size_t h = (i + num_edges - 1) % num_edges;
             const size_t j = (i + 1) % num_edges;
+            const size_t prev_plane = face.edge_planes[h];
             const size_t curr_plane = face.edge_planes[i];
+            const size_t next_plane = face.edge_planes[j];
             switch (orientations[i]) {
             case implicit_predicates::NEGATIVE:
                 switch (orientations[j]) {
                 case implicit_predicates::NEGATIVE:
+                    // Negative - Negative: miss.
                     negative.edge_planes.push_back(curr_plane);
                     break;
                 case implicit_predicates::POSITIVE:
+                    // Negative - Positive: crossing.
                     negative.edge_planes.push_back(curr_plane);
                     negative.edge_planes.push_back(cut_plane_index);
                     positive.edge_planes.push_back(curr_plane);
                     cut_edge.next_plane = curr_plane;
+                    add_vertex(prev_plane, curr_plane, next_plane);
                     break;
                 case implicit_predicates::ZERO:
+                    // Negative - Zero: touching.
                     negative.edge_planes.push_back(curr_plane);
                     negative.edge_planes.push_back(cut_plane_index);
                     cut_edge.next_plane = curr_plane;
+                    add_touching_vertex(curr_plane, next_plane);
                     break;
                 default: assert(false);
                 }
@@ -122,31 +166,43 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
             case implicit_predicates::POSITIVE:
                 switch (orientations[j]) {
                 case implicit_predicates::NEGATIVE:
+                    // Positive - Negative: crossing.
                     positive.edge_planes.push_back(curr_plane);
                     positive.edge_planes.push_back(cut_plane_index);
                     negative.edge_planes.push_back(curr_plane);
                     cut_edge.prev_plane = curr_plane;
+                    add_vertex(prev_plane, curr_plane, next_plane);
                     break;
                 case implicit_predicates::POSITIVE:
+                    // Positive - Positive: miss.
                     positive.edge_planes.push_back(curr_plane);
                     break;
                 case implicit_predicates::ZERO:
+                    // Positive - Zero: touching.
                     positive.edge_planes.push_back(curr_plane);
                     positive.edge_planes.push_back(cut_plane_index);
                     cut_edge.prev_plane = curr_plane;
+                    add_touching_vertex(curr_plane, next_plane);
                     break;
                 default: assert(false);
                 }
                 break;
             case implicit_predicates::ZERO:
+                add_touching_vertex(prev_plane, curr_plane);
                 switch (orientations[j]) {
                 case implicit_predicates::NEGATIVE:
+                    // Zero - Negative: touching.
                     negative.edge_planes.push_back(curr_plane);
                     break;
                 case implicit_predicates::POSITIVE:
+                    // Zero - Positive: touching.
                     positive.edge_planes.push_back(curr_plane);
                     break;
-                case implicit_predicates::ZERO: assert(false); break;
+                case implicit_predicates::ZERO:
+                    // Zero - Zero: impossible.
+                    // This case should be captured by case 4 below, not here.
+                    assert(false);
+                    break;
                 default: assert(false);
                 }
                 break;
@@ -158,18 +214,32 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
         assert(cut_edge.next_plane != simplicial_arrangement::INVALID);
         assert(cut_edge.prev_plane != cut_edge.next_plane);
         return {std::move(cut_edge), std::move(negative), std::move(positive)};
-    } else if (!all_positive || !all_negative) {
+    } else if (!non_negative || !non_positive) {
         // Case 4: Face is tangent to the cut plane at an edge.
         assert(vertices_on_cut_plane.size() == 2);
         size_t e_curr = vertices_on_cut_plane[0];
         size_t e_next = vertices_on_cut_plane[1];
-        if (e_curr == 0 && e_next == num_edges-1) {
+        if (e_curr == 0 && e_next == num_edges - 1) {
             std::swap(e_curr, e_next);
         }
         const size_t e_prev = (e_curr + num_edges - 1) % num_edges;
         assert(e_next == (e_curr + 1) % num_edges);
         assert(e_prev != e_next);
-        if (all_positive) {
+
+        // Basically, e_curr, supporting_plane and cut_plane intersect at a line.
+        // Need to update vertex index map.
+        size_t v0 = arrangement.get_vertex_index(
+            {face.supporting_plane, face.edge_planes[e_prev], face.edge_planes[e_curr]});
+        size_t v1 = arrangement.get_vertex_index(
+            {face.supporting_plane, face.edge_planes[e_curr], face.edge_planes[e_next]});
+        assert(v0 != simplicial_arrangement::INVALID);
+        assert(v1 != simplicial_arrangement::INVALID);
+        arrangement.register_vertex(
+            {face.supporting_plane, face.edge_planes[e_prev], cut_plane_index}, v0);
+        arrangement.register_vertex(
+            {face.supporting_plane, face.edge_planes[e_next], cut_plane_index}, v1);
+
+        if (non_negative) {
             return {Edge<3>({cut_plane_index,
                         face.edge_planes[e_prev],
                         face.supporting_plane,
@@ -177,7 +247,7 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
                 std::nullopt,
                 face};
         } else {
-            assert(all_negative);
+            assert(non_positive);
             return {Edge<3>({cut_plane_index,
                         face.edge_planes[e_next],
                         face.supporting_plane,
@@ -187,13 +257,15 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
         }
     } else {
         // Case 5: Face is coplanar with cut plane.
+        // TODO: Should it be tracked?
         assert(vertices_on_cut_plane.size() == num_edges);
         return {std::nullopt, std::nullopt, std::nullopt};
     }
 }
 
 template <typename Scalar>
-std::optional<std::array<Cell<3>, 2>> cut_cell(const SimplicialArrangement<Scalar, 3>& arrangement,
+std::optional<std::array<Cell<3>, 2>> cut_cell(SimplicialArrangement<Scalar, 3>& arrangement,
+    EdgeIndexMap& edge_map,
     size_t cut_plane_index,
     const Cell<3>& cell)
 {
@@ -206,7 +278,7 @@ std::optional<std::array<Cell<3>, 2>> cut_cell(const SimplicialArrangement<Scala
     cut_edges.reserve(num_faces);
 
     for (size_t i = 0; i < num_faces; i++) {
-        auto r = cut_face(arrangement, cut_plane_index, cell.faces[i]);
+        auto r = cut_face(arrangement, edge_map, cut_plane_index, cell.faces[i]);
         if (std::get<0>(r)) {
             const auto& e = std::get<0>(r).value();
             logger().debug("supporting: {}  prev: {}  curr: {}  next: {}",
@@ -236,50 +308,38 @@ std::optional<std::array<Cell<3>, 2>> cut_cell(const SimplicialArrangement<Scala
         return std::nullopt;
     }
 
-    const auto& planes = arrangement.get_planes();
-    auto is_same_point = [&](const Point<3>& p, const Point<3>& q) {
-        // TODO: could be faster if Scalar is Int.
-        using namespace implicit_predicates;
-        return (orient3d(planes[p[0]].data(),
-                    planes[p[1]].data(),
-                    planes[p[2]].data(),
-                    planes[q[0]].data()) == ZERO &&
-                orient3d(planes[p[0]].data(),
-                    planes[p[1]].data(),
-                    planes[p[2]].data(),
-                    planes[q[1]].data()) == ZERO &&
-                orient3d(planes[p[0]].data(),
-                    planes[p[1]].data(),
-                    planes[p[2]].data(),
-                    planes[q[2]].data()) == ZERO);
-    };
-
     // Chain cut edges into faces.
-    // TODO: This is a O(n^2) algorithm.
     const size_t num_cut_edges = cut_edges.size();
-    assert(num_cut_edges >= 3);
-    std::vector<bool> visited(num_cut_edges, false);
+    absl::flat_hash_map<size_t, std::pair<size_t, size_t>> next_map;
+    next_map.reserve(num_cut_edges);
+    size_t start_vertex = simplicial_arrangement::INVALID;
+    for (const auto& e : cut_edges) {
+        const size_t v0 =
+            arrangement.get_vertex_index({e.supporting_plane, e.curr_plane, e.prev_plane});
+        const size_t v1 =
+            arrangement.get_vertex_index({e.supporting_plane, e.curr_plane, e.next_plane});
+        assert(v0 != simplicial_arrangement::INVALID);
+        assert(v1 != simplicial_arrangement::INVALID);
+        next_map.insert({v0, {v1, e.curr_plane}});
+        if (start_vertex == simplicial_arrangement::INVALID) {
+            start_vertex = v0;
+        }
+    }
+
     Face<3> cut_face;
     cut_face.supporting_plane = cut_plane_index;
     cut_face.edge_planes.reserve(num_cut_edges);
-    size_t curr_edge = 0;
+    size_t curr_vertex = start_vertex;
+    size_t curr_edge;
+    size_t count = 0;
     do {
-        const Point<3> curr_end{cut_edges[curr_edge].supporting_plane,
-            cut_edges[curr_edge].curr_plane,
-            cut_edges[curr_edge].next_plane};
-        Point<3> next_start;
-        for (size_t i = 0; i < num_cut_edges; i++) {
-            if (visited[i]) continue;
-            next_start = {
-                cut_edges[i].supporting_plane, cut_edges[i].curr_plane, cut_edges[i].prev_plane};
-            if (is_same_point(curr_end, next_start)) {
-                visited[i] = true;
-                curr_edge = i;
-                cut_face.edge_planes.push_back(cut_edges[i].curr_plane);
-                break;
-            }
-        }
-    } while (curr_edge != 0);
+        auto itr = next_map.find(curr_vertex);
+        assert(itr != next_map.end());
+        std::tie(curr_vertex, curr_edge) = itr->second;
+        cut_face.edge_planes.push_back(curr_edge);
+        count++;
+        assert(count <= num_cut_edges);
+    } while (curr_vertex != start_vertex);
     assert(cut_face.edge_planes.size() == num_cut_edges);
 
     Face<3> cut_face_reversed = cut_face;
@@ -302,7 +362,8 @@ std::optional<std::array<Cell<3>, 2>> cut_cell(const SimplicialArrangement<Scala
  * the cutting does not generate that cell.
  */
 template <typename Scalar>
-std::optional<std::array<Cell<2>, 2>> cut_cell(const SimplicialArrangement<Scalar, 2>& arrangement,
+std::optional<std::array<Cell<2>, 2>> cut_cell(SimplicialArrangement<Scalar, 2>& arrangement,
+    EdgeIndexMap& edge_map,
     size_t cut_plane_index,
     const Cell<2>& cell)
 {
@@ -322,20 +383,20 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(const SimplicialArrangement<Scala
     }
 
     // Case 1: cell is on the positive side of or tangent to the cutting plane.
-    bool all_positive = std::all_of(
+    bool non_negative = std::all_of(
         orientations.begin(), orientations.end(), [](implicit_predicates::Orientation o) {
             return o == implicit_predicates::POSITIVE || o == implicit_predicates::ZERO;
         });
-    if (all_positive) {
+    if (non_negative) {
         return std::nullopt;
     }
 
     // Case 2: cell is on the negative side of or tangent to the cutting plane.
-    bool all_negative = std::all_of(
+    bool non_positive = std::all_of(
         orientations.begin(), orientations.end(), [](implicit_predicates::Orientation o) {
             return o == implicit_predicates::NEGATIVE || o == implicit_predicates::ZERO;
         });
-    if (all_negative) {
+    if (non_positive) {
         return std::nullopt;
     }
 
@@ -344,21 +405,62 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(const SimplicialArrangement<Scala
     positive.edges.reserve(num_edges + 1);
     negative.edges.reserve(num_edges + 1);
 
+    auto add_vertex = [&](size_t e_prev, size_t e_curr, size_t e_next) {
+        size_t v0 = arrangement.get_vertex_index({e_prev, e_curr});
+        size_t v1 = arrangement.get_vertex_index({e_curr, e_next});
+        assert(v0 != simplicial_arrangement::INVALID);
+        assert(v1 != simplicial_arrangement::INVALID);
+
+        if (v0 > v1) std::swap(v0, v1);
+        std::array<size_t, 2> e({v0, v1});
+
+        auto itr = edge_map.find(e);
+        if (itr == edge_map.end()) {
+            size_t id = arrangement.get_vertex_count();
+            edge_map[e] = id;
+            assert(edge_map.contains(e));
+            arrangement.register_vertex({e_curr, cut_plane_index}, id);
+            arrangement.bump_vertex_count();
+            logger().debug("Register ({}, {}) as {} (new)", e_curr, cut_plane_index, id);
+        } else {
+#ifndef NDEBUG
+            // Just a sanity check.
+            assert(arrangement.has_vertex({e_curr, cut_plane_index}));
+            assert(itr->second == arrangement.get_vertex_index({e_curr, cut_plane_index}));
+#endif
+        }
+    };
+
+    auto add_touching_vertex = [&](size_t e0, size_t e1) {
+        size_t id = arrangement.get_vertex_index({e0, e1});
+        assert(id != simplicial_arrangement::INVALID);
+        arrangement.register_vertex({e0, cut_plane_index}, id);
+        arrangement.register_vertex({e1, cut_plane_index}, id);
+    };
+
     for (size_t i = 0; i < num_edges; i++) {
+        const size_t h = (i + num_edges - 1) % num_edges;
         const size_t j = (i + 1) % num_edges;
 
         switch (orientations[i]) {
         case implicit_predicates::NEGATIVE:
             switch (orientations[j]) {
-            case implicit_predicates::NEGATIVE: negative.edges.push_back(cell.edges[i]); break;
+            case implicit_predicates::NEGATIVE:
+                // Negative - Negative: miss.
+                negative.edges.push_back(cell.edges[i]);
+                break;
             case implicit_predicates::POSITIVE:
+                // Negative - Positive: crossing.
                 negative.edges.push_back(cell.edges[i]);
                 negative.edges.push_back(cut_plane_index);
                 positive.edges.push_back(cell.edges[i]);
+                add_vertex(cell.edges[h], cell.edges[i], cell.edges[j]);
                 break;
             case implicit_predicates::ZERO:
+                // Negative - Zero: touching.
                 negative.edges.push_back(cell.edges[i]);
                 negative.edges.push_back(cut_plane_index);
+                add_touching_vertex(cell.edges[i], cell.edges[j]);
                 break;
             default: assert(false);
             }
@@ -366,23 +468,38 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(const SimplicialArrangement<Scala
         case implicit_predicates::POSITIVE:
             switch (orientations[j]) {
             case implicit_predicates::NEGATIVE:
+                // Positive - Negative: crossing.
                 positive.edges.push_back(cell.edges[i]);
                 positive.edges.push_back(cut_plane_index);
                 negative.edges.push_back(cell.edges[i]);
+                add_vertex(cell.edges[h], cell.edges[i], cell.edges[j]);
                 break;
-            case implicit_predicates::POSITIVE: positive.edges.push_back(cell.edges[i]); break;
+            case implicit_predicates::POSITIVE:
+                // Positive - Positive : miss.
+                positive.edges.push_back(cell.edges[i]);
+                break;
             case implicit_predicates::ZERO:
+                // Positive - Zero : touching.
                 positive.edges.push_back(cell.edges[i]);
                 positive.edges.push_back(cut_plane_index);
+                add_touching_vertex(cell.edges[i], cell.edges[j]);
                 break;
             default: assert(false);
             }
             break;
         case implicit_predicates::ZERO:
+            add_touching_vertex(cell.edges[h], cell.edges[i]);
             switch (orientations[j]) {
-            case implicit_predicates::NEGATIVE: negative.edges.push_back(cell.edges[i]); break;
-            case implicit_predicates::POSITIVE: positive.edges.push_back(cell.edges[i]); break;
+            case implicit_predicates::NEGATIVE:
+                // Zero - Negative: touching.
+                negative.edges.push_back(cell.edges[i]);
+                break;
+            case implicit_predicates::POSITIVE:
+                // Zero - positive: touching.
+                positive.edges.push_back(cell.edges[i]);
+                break;
             case implicit_predicates::ZERO:
+                // Zero - Zero: impossible.
                 // Cell is tangent to the cut plane, should be handled by case 1 or 2.
                 assert(false);
                 break;
@@ -396,12 +513,13 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(const SimplicialArrangement<Scala
 }
 
 template <typename Scalar, int DIM>
-void cut(const SimplicialArrangement<Scalar, DIM>& arrangement,
+void cut(SimplicialArrangement<Scalar, DIM>& arrangement,
+    EdgeIndexMap& edge_map,
     BSPNode<DIM>& root,
     size_t cut_plane_index)
 {
     if (root.negative == nullptr && root.positive == nullptr) {
-        auto r = cut_cell(arrangement, cut_plane_index, root.cell);
+        auto r = cut_cell(arrangement, edge_map, cut_plane_index, root.cell);
         if (r) {
             root.separating_plane = cut_plane_index;
             root.negative = std::make_unique<BSPNode<DIM>>();
@@ -412,8 +530,8 @@ void cut(const SimplicialArrangement<Scalar, DIM>& arrangement,
     } else {
         assert(root.negative != nullptr);
         assert(root.positive != nullptr);
-        cut(arrangement, *root.negative, cut_plane_index);
-        cut(arrangement, *root.positive, cut_plane_index);
+        cut(arrangement, edge_map, *root.negative, cut_plane_index);
+        cut(arrangement, edge_map, *root.positive, cut_plane_index);
     }
 }
 
@@ -421,26 +539,32 @@ void cut(const SimplicialArrangement<Scalar, DIM>& arrangement,
 
 namespace simplicial_arrangement::internal {
 
-void cut(
-    const SimplicialArrangement<double, 2>& arrangement, BSPNode<2>& root, size_t cut_plane_index)
+void cut(SimplicialArrangement<double, 2>& arrangement, BSPNode<2>& root, size_t cut_plane_index)
 {
-    ::cut(arrangement, root, cut_plane_index);
+    EdgeIndexMap edge_map;
+    edge_map.reserve(arrangement.get_num_planes());
+    ::cut(arrangement, edge_map, root, cut_plane_index);
 }
 
-void cut(const SimplicialArrangement<Int, 2>& arrangement, BSPNode<2>& root, size_t cut_plane_index)
+void cut(SimplicialArrangement<Int, 2>& arrangement, BSPNode<2>& root, size_t cut_plane_index)
 {
-    ::cut(arrangement, root, cut_plane_index);
+    EdgeIndexMap edge_map;
+    edge_map.reserve(arrangement.get_num_planes());
+    ::cut(arrangement, edge_map, root, cut_plane_index);
 }
 
-void cut(
-    const SimplicialArrangement<double, 3>& arrangement, BSPNode<3>& root, size_t cut_plane_index)
+void cut(SimplicialArrangement<double, 3>& arrangement, BSPNode<3>& root, size_t cut_plane_index)
 {
-    ::cut(arrangement, root, cut_plane_index);
+    EdgeIndexMap edge_map;
+    edge_map.reserve(arrangement.get_num_planes());
+    ::cut(arrangement, edge_map, root, cut_plane_index);
 }
 
-void cut(const SimplicialArrangement<Int, 3>& arrangement, BSPNode<3>& root, size_t cut_plane_index)
+void cut(SimplicialArrangement<Int, 3>& arrangement, BSPNode<3>& root, size_t cut_plane_index)
 {
-    ::cut(arrangement, root, cut_plane_index);
+    EdgeIndexMap edge_map;
+    edge_map.reserve(arrangement.get_num_planes());
+    ::cut(arrangement, edge_map, root, cut_plane_index);
 }
 
 } // namespace simplicial_arrangement::internal
