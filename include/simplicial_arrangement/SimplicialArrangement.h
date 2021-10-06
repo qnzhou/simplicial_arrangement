@@ -1,6 +1,7 @@
 #pragma once
 
 #include <simplicial_arrangement/BSPNode.h>
+#include <simplicial_arrangement/DisjointSets.h>
 #include <simplicial_arrangement/common.h>
 #include <simplicial_arrangement/cut.h>
 
@@ -30,7 +31,8 @@ public:
         initialize();
     }
 
-    void initialize() {
+    void initialize()
+    {
         if constexpr (DIM == 2) {
             m_root.cell.edges = {0, 1, 2};
         } else {
@@ -45,7 +47,8 @@ public:
         }
     }
 
-    void set_planes(const std::vector<Plane<Scalar, DIM>>& planes) {
+    void set_planes(const std::vector<Plane<Scalar, DIM>>& planes)
+    {
         const size_t num_cutting_planes = planes.size();
         m_planes.clear();
         m_planes.reserve(num_cutting_planes + DIM + 1);
@@ -70,6 +73,7 @@ public:
         }
         m_planes.insert(m_planes.end(), planes.begin(), planes.end());
         m_vertex_index_map.reserve(num_cutting_planes * 4);
+        m_coplanar_planes.init(num_cutting_planes + DIM + 1);
     }
 
     /**
@@ -82,28 +86,44 @@ public:
 
     const BSPNode<DIM>& get_root() const { return m_root; }
 
-    void register_vertex(Point<DIM> v, size_t index) {
+    void register_vertex(Point<DIM> v, size_t index)
+    {
         this->sort(v);
         m_vertex_index_map[std::move(v)] = index;
     }
 
-    bool has_vertex(Point<DIM> v) const {
+    bool has_vertex(Point<DIM> v) const
+    {
         this->sort(v);
         return m_vertex_index_map.contains(v);
     }
 
-    size_t get_vertex_index(Point<DIM> v) const {
+    size_t get_vertex_index(Point<DIM> v) const
+    {
         this->sort(v);
         auto itr = m_vertex_index_map.find(v);
-        if (itr == m_vertex_index_map.end()) return INVALID;
-        else return itr->second;
+        if (itr == m_vertex_index_map.end())
+            return INVALID;
+        else
+            return itr->second;
     }
 
     size_t get_vertex_count() const { return m_vertex_count; }
-    void bump_vertex_count()  { m_vertex_count++; }
+    void bump_vertex_count() { m_vertex_count++; }
+
+    void register_coplanar_planes(size_t p0, size_t p1) { m_coplanar_planes.merge(p0, p1); }
+
+    std::vector<std::vector<size_t>> extract_coplanar_planes() {
+        return m_coplanar_planes.extract_disjoint_sets();
+    }
+
+    size_t get_num_unique_planes() {
+        return extract_coplanar_planes().size();
+    }
 
 private:
-    inline void sort(Point<DIM>& p) const {
+    inline void sort(Point<DIM>& p) const
+    {
         if constexpr (DIM == 2) {
             if (p[0] > p[1]) std::swap(p[0], p[1]);
         } else if (DIM == 3) {
@@ -115,6 +135,7 @@ private:
 
 private:
     std::vector<Plane<Scalar, DIM>> m_planes;
+    utils::DisjointSets m_coplanar_planes;
     absl::flat_hash_map<Point<DIM>, size_t> m_vertex_index_map;
     BSPNode<DIM> m_root;
     size_t m_vertex_count = 0;

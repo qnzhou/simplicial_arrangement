@@ -257,8 +257,8 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
         }
     } else {
         // Case 5: Face is coplanar with cut plane.
-        // TODO: Should it be tracked?
         assert(vertices_on_cut_plane.size() == num_edges);
+        arrangement.register_coplanar_planes(face.supporting_plane, cut_plane_index);
         return {std::nullopt, std::nullopt, std::nullopt};
     }
 }
@@ -382,20 +382,25 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(SimplicialArrangement<Scalar, 2>&
         assert(orientations.back() != implicit_predicates::INVALID);
     }
 
+    bool non_negative = true, non_positive = true;
+    for (size_t i = 0; i < num_edges; i++) {
+        const size_t j = (i + 1) % num_edges;
+        const auto oi = orientations[i];
+        const auto oj = orientations[j];
+        if (oi == implicit_predicates::ZERO && oj == implicit_predicates::ZERO) {
+            // Cell contains an edge that is collinear with the cut plane.
+            arrangement.register_coplanar_planes(cell.edges[i], cut_plane_index);
+        }
+        non_negative &= (oi == implicit_predicates::POSITIVE || oi == implicit_predicates::ZERO);
+        non_positive &= (oi == implicit_predicates::NEGATIVE || oi == implicit_predicates::ZERO);
+    }
+
     // Case 1: cell is on the positive side of or tangent to the cutting plane.
-    bool non_negative = std::all_of(
-        orientations.begin(), orientations.end(), [](implicit_predicates::Orientation o) {
-            return o == implicit_predicates::POSITIVE || o == implicit_predicates::ZERO;
-        });
     if (non_negative) {
         return std::nullopt;
     }
 
     // Case 2: cell is on the negative side of or tangent to the cutting plane.
-    bool non_positive = std::all_of(
-        orientations.begin(), orientations.end(), [](implicit_predicates::Orientation o) {
-            return o == implicit_predicates::NEGATIVE || o == implicit_predicates::ZERO;
-        });
     if (non_positive) {
         return std::nullopt;
     }
@@ -556,14 +561,14 @@ void cut(SimplicialArrangement<Int, 2>& arrangement, BSPNode<2>& root, size_t cu
 void cut(SimplicialArrangement<double, 3>& arrangement, BSPNode<3>& root, size_t cut_plane_index)
 {
     EdgeIndexMap edge_map;
-    edge_map.reserve(arrangement.get_num_planes());
+    edge_map.reserve(arrangement.get_num_planes() * arrangement.get_num_planes());
     ::cut(arrangement, edge_map, root, cut_plane_index);
 }
 
 void cut(SimplicialArrangement<Int, 3>& arrangement, BSPNode<3>& root, size_t cut_plane_index)
 {
     EdgeIndexMap edge_map;
-    edge_map.reserve(arrangement.get_num_planes());
+    edge_map.reserve(arrangement.get_num_planes() * arrangement.get_num_planes());
     ::cut(arrangement, edge_map, root, cut_plane_index);
 }
 
