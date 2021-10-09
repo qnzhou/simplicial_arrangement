@@ -5,7 +5,7 @@
 namespace simplicial_arrangement {
 // Forward declarations.
 template <typename Scalar, int DIM>
-class SimplicialArrangement;
+class SimplicialArrangementBuilder;
 
 template <int DIM>
 struct BSPNode;
@@ -13,10 +13,10 @@ struct BSPNode;
 
 namespace simplicial_arrangement::internal {
 
-void cut(SimplicialArrangement<double, 2>& arrangement, BSPNode<2>& root, size_t cut_plane);
-void cut(SimplicialArrangement<Int, 2>& arrangement, BSPNode<2>& root, size_t cut_plane);
+void cut(SimplicialArrangementBuilder<double, 2>& builder, BSPNode<2>& root, size_t cut_plane);
+void cut(SimplicialArrangementBuilder<Int, 2>& builder, BSPNode<2>& root, size_t cut_plane);
 
-void cut(SimplicialArrangement<double, 3>& arrangement, BSPNode<3>& root, size_t cut_plane);
-void cut(SimplicialArrangement<Int, 3>& arrangement, BSPNode<3>& root, size_t cut_plane);
+void cut(SimplicialArrangementBuilder<double, 3>& builder, BSPNode<3>& root, size_t cut_plane);
+void cut(SimplicialArrangementBuilder<Int, 3>& builder, BSPNode<3>& root, size_t cut_plane);
 
 } // namespace simplicial_arrangement::internal

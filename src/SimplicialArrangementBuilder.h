@@ -15,7 +15,7 @@
 namespace simplicial_arrangement {
 
 template <typename Scalar, int DIM>
-class SimplicialArrangement
+class SimplicialArrangementBuilder
 {
 public:
     static_assert(DIM == 2 || DIM == 3, "Only 2D and 3D arrangement are supported");
@@ -23,7 +23,7 @@ public:
         "Only double and 128bit int are supported as Scalar.");
 
 public:
-    SimplicialArrangement(const std::vector<Plane<Scalar, DIM>>& planes) : m_planes(planes) {
+    SimplicialArrangementBuilder(const std::vector<Plane<Scalar, DIM>>& planes) : m_planes(planes) {
         set_planes();
         initialize();
     }

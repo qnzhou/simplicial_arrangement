@@ -1,6 +1,6 @@
 #include "cut.h"
 #include "BSPNode.h"
-#include "SimplicialArrangement.h"
+#include "SimplicialArrangementBuilder.h"
 
 #include <implicit_predicates/implicit_predicates.h>
 
@@ -30,7 +30,7 @@ using EdgeIndexMap = absl::flat_hash_map<std::array<size_t, 2>, size_t>;
 /**
  * Cut a 3D face using a cut plane.
  *
- * @param[in]  arrangement  Arrangement context.
+ * @param[in]  builder  Arrangement builder context.
  * @param[in]  cut_plane_index
  * @param[in]  face  The face to be cut.
  *
@@ -43,14 +43,14 @@ using EdgeIndexMap = absl::flat_hash_map<std::array<size_t, 2>, size_t>;
  */
 template <typename Scalar>
 std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
-    SimplicialArrangement<Scalar, 3>& arrangement,
+    SimplicialArrangementBuilder<Scalar, 3>& builder,
     EdgeIndexMap& edge_map,
     size_t cut_plane_index,
     const Face<3>& face)
 {
     const size_t num_edges = face.edge_planes.size();
-    const auto& cut_plane = arrangement.get_plane(cut_plane_index);
-    const auto& supporting_plane = arrangement.get_plane(face.supporting_plane);
+    const auto& cut_plane = builder.get_plane(cut_plane_index);
+    const auto& supporting_plane = builder.get_plane(face.supporting_plane);
 
     std::vector<implicit_predicates::Orientation> orientations;
     orientations.reserve(num_edges);
@@ -61,8 +61,8 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
 
     for (size_t i = 0; i < num_edges; i++) {
         const size_t prev_edge = (i + num_edges - 1) % num_edges;
-        const auto& prev_plane = arrangement.get_plane(face.edge_planes[prev_edge]);
-        const auto& curr_plane = arrangement.get_plane(face.edge_planes[i]);
+        const auto& prev_plane = builder.get_plane(face.edge_planes[prev_edge]);
+        const auto& curr_plane = builder.get_plane(face.edge_planes[i]);
         orientations.push_back(implicit_predicates::orient3d(
             prev_plane.data(), supporting_plane.data(), curr_plane.data(), cut_plane.data()));
         assert(orientations.back() != implicit_predicates::INVALID);
@@ -74,8 +74,8 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
     }
 
     auto add_vertex = [&](size_t e_prev, size_t e_curr, size_t e_next) {
-        size_t v0 = arrangement.get_vertex_index({face.supporting_plane, e_prev, e_curr});
-        size_t v1 = arrangement.get_vertex_index({face.supporting_plane, e_curr, e_next});
+        size_t v0 = builder.get_vertex_index({face.supporting_plane, e_prev, e_curr});
+        size_t v1 = builder.get_vertex_index({face.supporting_plane, e_curr, e_next});
         assert(v0 != simplicial_arrangement::INVALID);
         assert(v1 != simplicial_arrangement::INVALID);
 
@@ -84,11 +84,11 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
 
         auto itr = edge_map.find(e);
         if (itr == edge_map.end()) {
-            size_t id = arrangement.get_vertex_count();
+            size_t id = builder.get_vertex_count();
             edge_map[e] = id;
             assert(edge_map.contains(e));
-            arrangement.register_vertex({face.supporting_plane, e_curr, cut_plane_index}, id);
-            arrangement.bump_vertex_count();
+            builder.register_vertex({face.supporting_plane, e_curr, cut_plane_index}, id);
+            builder.bump_vertex_count();
             logger().debug("Register ({}, {}, {}) as {} (new)",
                 face.supporting_plane,
                 e_curr,
@@ -97,18 +97,18 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
         } else {
 #ifndef NDEBUG
             // Just a sanity check.
-            assert(arrangement.has_vertex({face.supporting_plane, e_curr, cut_plane_index}));
+            assert(builder.has_vertex({face.supporting_plane, e_curr, cut_plane_index}));
             assert(itr->second ==
-                   arrangement.get_vertex_index({face.supporting_plane, e_curr, cut_plane_index}));
+                   builder.get_vertex_index({face.supporting_plane, e_curr, cut_plane_index}));
 #endif
         }
     };
 
     auto add_touching_vertex = [&](size_t e0, size_t e1) {
-        size_t id = arrangement.get_vertex_index({face.supporting_plane, e0, e1});
+        size_t id = builder.get_vertex_index({face.supporting_plane, e0, e1});
         assert(id != simplicial_arrangement::INVALID);
-        arrangement.register_vertex({face.supporting_plane, e0, cut_plane_index}, id);
-        arrangement.register_vertex({face.supporting_plane, e1, cut_plane_index}, id);
+        builder.register_vertex({face.supporting_plane, e0, cut_plane_index}, id);
+        builder.register_vertex({face.supporting_plane, e1, cut_plane_index}, id);
     };
 
     if (non_negative && vertices_on_cut_plane.size() < 2) {
@@ -226,15 +226,15 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
 
         // Basically, e_curr, supporting_plane and cut_plane intersect at a line.
         // Need to update vertex index map.
-        size_t v0 = arrangement.get_vertex_index(
+        size_t v0 = builder.get_vertex_index(
             {face.supporting_plane, face.edge_planes[e_prev], face.edge_planes[e_curr]});
-        size_t v1 = arrangement.get_vertex_index(
+        size_t v1 = builder.get_vertex_index(
             {face.supporting_plane, face.edge_planes[e_curr], face.edge_planes[e_next]});
         assert(v0 != simplicial_arrangement::INVALID);
         assert(v1 != simplicial_arrangement::INVALID);
-        arrangement.register_vertex(
+        builder.register_vertex(
             {face.supporting_plane, face.edge_planes[e_prev], cut_plane_index}, v0);
-        arrangement.register_vertex(
+        builder.register_vertex(
             {face.supporting_plane, face.edge_planes[e_next], cut_plane_index}, v1);
 
         if (non_negative) {
@@ -256,13 +256,13 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
     } else {
         // Case 5: Face is coplanar with cut plane.
         assert(vertices_on_cut_plane.size() == num_edges);
-        arrangement.register_coplanar_planes(face.supporting_plane, cut_plane_index);
+        builder.register_coplanar_planes(face.supporting_plane, cut_plane_index);
         return {std::nullopt, std::nullopt, std::nullopt};
     }
 }
 
 template <typename Scalar>
-std::optional<std::array<Cell<3>, 2>> cut_cell(SimplicialArrangement<Scalar, 3>& arrangement,
+std::optional<std::array<Cell<3>, 2>> cut_cell(SimplicialArrangementBuilder<Scalar, 3>& builder,
     EdgeIndexMap& edge_map,
     size_t cut_plane_index,
     const Cell<3>& cell)
@@ -276,7 +276,7 @@ std::optional<std::array<Cell<3>, 2>> cut_cell(SimplicialArrangement<Scalar, 3>&
     cut_edges.reserve(num_faces);
 
     for (size_t i = 0; i < num_faces; i++) {
-        auto r = cut_face(arrangement, edge_map, cut_plane_index, cell.faces[i]);
+        auto r = cut_face(builder, edge_map, cut_plane_index, cell.faces[i]);
         if (std::get<0>(r)) {
             const auto& e = std::get<0>(r).value();
             logger().debug("supporting: {}  prev: {}  curr: {}  next: {}",
@@ -313,9 +313,9 @@ std::optional<std::array<Cell<3>, 2>> cut_cell(SimplicialArrangement<Scalar, 3>&
     size_t start_vertex = simplicial_arrangement::INVALID;
     for (const auto& e : cut_edges) {
         const size_t v0 =
-            arrangement.get_vertex_index({e.supporting_plane, e.curr_plane, e.prev_plane});
+            builder.get_vertex_index({e.supporting_plane, e.curr_plane, e.prev_plane});
         const size_t v1 =
-            arrangement.get_vertex_index({e.supporting_plane, e.curr_plane, e.next_plane});
+            builder.get_vertex_index({e.supporting_plane, e.curr_plane, e.next_plane});
         assert(v0 != simplicial_arrangement::INVALID);
         assert(v1 != simplicial_arrangement::INVALID);
         next_map.insert({v0, {v1, e.curr_plane}});
@@ -345,7 +345,7 @@ std::optional<std::array<Cell<3>, 2>> cut_cell(SimplicialArrangement<Scalar, 3>&
     for (size_t i = 0; i < num_cut_edges; i++) {
         const size_t curr_edge = cut_face.edge_planes[i];
         const size_t prev_edge = cut_face.edge_planes[(i + num_cut_edges - 1) % num_cut_edges];
-        arrangement.register_vertex(
+        builder.register_vertex(
             {curr_edge, prev_edge, cut_face.supporting_plane}, vertex_loop[i]);
     }
 
@@ -361,7 +361,7 @@ std::optional<std::array<Cell<3>, 2>> cut_cell(SimplicialArrangement<Scalar, 3>&
 /**
  * Cut a 2D cell using the cut plane.
  *
- * @param[in]  arrangement      Arrangement object storing all planes.
+ * @param[in]  builder      builder object storing all planes.
  * @param[in]  cut_plane_index  Index of the cut plane.
  * @param[in]  cell             The cell to be cut.
  *
@@ -369,7 +369,7 @@ std::optional<std::array<Cell<3>, 2>> cut_cell(SimplicialArrangement<Scalar, 3>&
  * the cutting does not generate that cell.
  */
 template <typename Scalar>
-std::optional<std::array<Cell<2>, 2>> cut_cell(SimplicialArrangement<Scalar, 2>& arrangement,
+std::optional<std::array<Cell<2>, 2>> cut_cell(SimplicialArrangementBuilder<Scalar, 2>& builder,
     EdgeIndexMap& edge_map,
     size_t cut_plane_index,
     const Cell<2>& cell)
@@ -377,12 +377,12 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(SimplicialArrangement<Scalar, 2>&
     std::vector<implicit_predicates::Orientation> orientations;
     const size_t num_edges = cell.edges.size();
     orientations.reserve(num_edges);
-    const auto& cut_plane = arrangement.get_plane(cut_plane_index);
+    const auto& cut_plane = builder.get_plane(cut_plane_index);
 
     for (size_t i = 0; i < num_edges; i++) {
         const size_t prev_i = (i + num_edges - 1) % num_edges;
-        const auto& prev_plane = arrangement.get_plane(cell.edges[prev_i]);
-        const auto& curr_plane = arrangement.get_plane(cell.edges[i]);
+        const auto& prev_plane = builder.get_plane(cell.edges[prev_i]);
+        const auto& curr_plane = builder.get_plane(cell.edges[i]);
         orientations.push_back(
             implicit_predicates::orient2d(prev_plane.data(), curr_plane.data(), cut_plane.data()));
         assert(orientations.back() != implicit_predicates::INVALID);
@@ -395,7 +395,7 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(SimplicialArrangement<Scalar, 2>&
         const auto oj = orientations[j];
         if (oi == implicit_predicates::ZERO && oj == implicit_predicates::ZERO) {
             // Cell contains an edge that is collinear with the cut plane.
-            arrangement.register_coplanar_planes(cell.edges[i], cut_plane_index);
+            builder.register_coplanar_planes(cell.edges[i], cut_plane_index);
         }
         non_negative &= (oi == implicit_predicates::POSITIVE || oi == implicit_predicates::ZERO);
         non_positive &= (oi == implicit_predicates::NEGATIVE || oi == implicit_predicates::ZERO);
@@ -417,8 +417,8 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(SimplicialArrangement<Scalar, 2>&
     negative.edges.reserve(num_edges + 1);
 
     auto add_vertex = [&](size_t e_prev, size_t e_curr, size_t e_next) {
-        size_t v0 = arrangement.get_vertex_index({e_prev, e_curr});
-        size_t v1 = arrangement.get_vertex_index({e_curr, e_next});
+        size_t v0 = builder.get_vertex_index({e_prev, e_curr});
+        size_t v1 = builder.get_vertex_index({e_curr, e_next});
         assert(v0 != simplicial_arrangement::INVALID);
         assert(v1 != simplicial_arrangement::INVALID);
 
@@ -427,26 +427,26 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(SimplicialArrangement<Scalar, 2>&
 
         auto itr = edge_map.find(e);
         if (itr == edge_map.end()) {
-            size_t id = arrangement.get_vertex_count();
+            size_t id = builder.get_vertex_count();
             edge_map[e] = id;
             assert(edge_map.contains(e));
-            arrangement.register_vertex({e_curr, cut_plane_index}, id);
-            arrangement.bump_vertex_count();
+            builder.register_vertex({e_curr, cut_plane_index}, id);
+            builder.bump_vertex_count();
             logger().debug("Register ({}, {}) as {} (new)", e_curr, cut_plane_index, id);
         } else {
 #ifndef NDEBUG
             // Just a sanity check.
-            assert(arrangement.has_vertex({e_curr, cut_plane_index}));
-            assert(itr->second == arrangement.get_vertex_index({e_curr, cut_plane_index}));
+            assert(builder.has_vertex({e_curr, cut_plane_index}));
+            assert(itr->second == builder.get_vertex_index({e_curr, cut_plane_index}));
 #endif
         }
     };
 
     auto add_touching_vertex = [&](size_t e0, size_t e1) {
-        size_t id = arrangement.get_vertex_index({e0, e1});
+        size_t id = builder.get_vertex_index({e0, e1});
         assert(id != simplicial_arrangement::INVALID);
-        arrangement.register_vertex({e0, cut_plane_index}, id);
-        arrangement.register_vertex({e1, cut_plane_index}, id);
+        builder.register_vertex({e0, cut_plane_index}, id);
+        builder.register_vertex({e1, cut_plane_index}, id);
     };
 
     for (size_t i = 0; i < num_edges; i++) {
@@ -524,13 +524,13 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(SimplicialArrangement<Scalar, 2>&
 }
 
 template <typename Scalar, int DIM>
-void cut(SimplicialArrangement<Scalar, DIM>& arrangement,
+void cut(SimplicialArrangementBuilder<Scalar, DIM>& builder,
     EdgeIndexMap& edge_map,
     BSPNode<DIM>& root,
     size_t cut_plane_index)
 {
     if (root.negative == nullptr && root.positive == nullptr) {
-        auto r = cut_cell(arrangement, edge_map, cut_plane_index, root.cell);
+        auto r = cut_cell(builder, edge_map, cut_plane_index, root.cell);
         if (r) {
             root.separating_plane = cut_plane_index;
             root.negative = std::make_unique<BSPNode<DIM>>();
@@ -541,8 +541,8 @@ void cut(SimplicialArrangement<Scalar, DIM>& arrangement,
     } else {
         assert(root.negative != nullptr);
         assert(root.positive != nullptr);
-        cut(arrangement, edge_map, *root.negative, cut_plane_index);
-        cut(arrangement, edge_map, *root.positive, cut_plane_index);
+        cut(builder, edge_map, *root.negative, cut_plane_index);
+        cut(builder, edge_map, *root.positive, cut_plane_index);
     }
 }
 
@@ -550,32 +550,32 @@ void cut(SimplicialArrangement<Scalar, DIM>& arrangement,
 
 namespace simplicial_arrangement::internal {
 
-void cut(SimplicialArrangement<double, 2>& arrangement, BSPNode<2>& root, size_t cut_plane_index)
+void cut(SimplicialArrangementBuilder<double, 2>& builder, BSPNode<2>& root, size_t cut_plane_index)
 {
     EdgeIndexMap edge_map;
-    edge_map.reserve(arrangement.get_num_planes());
-    ::cut(arrangement, edge_map, root, cut_plane_index);
+    edge_map.reserve(builder.get_num_planes());
+    ::cut(builder, edge_map, root, cut_plane_index);
 }
 
-void cut(SimplicialArrangement<Int, 2>& arrangement, BSPNode<2>& root, size_t cut_plane_index)
+void cut(SimplicialArrangementBuilder<Int, 2>& builder, BSPNode<2>& root, size_t cut_plane_index)
 {
     EdgeIndexMap edge_map;
-    edge_map.reserve(arrangement.get_num_planes());
-    ::cut(arrangement, edge_map, root, cut_plane_index);
+    edge_map.reserve(builder.get_num_planes());
+    ::cut(builder, edge_map, root, cut_plane_index);
 }
 
-void cut(SimplicialArrangement<double, 3>& arrangement, BSPNode<3>& root, size_t cut_plane_index)
+void cut(SimplicialArrangementBuilder<double, 3>& builder, BSPNode<3>& root, size_t cut_plane_index)
 {
     EdgeIndexMap edge_map;
-    edge_map.reserve(arrangement.get_num_planes() * arrangement.get_num_planes());
-    ::cut(arrangement, edge_map, root, cut_plane_index);
+    edge_map.reserve(builder.get_num_planes() * builder.get_num_planes());
+    ::cut(builder, edge_map, root, cut_plane_index);
 }
 
-void cut(SimplicialArrangement<Int, 3>& arrangement, BSPNode<3>& root, size_t cut_plane_index)
+void cut(SimplicialArrangementBuilder<Int, 3>& builder, BSPNode<3>& root, size_t cut_plane_index)
 {
     EdgeIndexMap edge_map;
-    edge_map.reserve(arrangement.get_num_planes() * arrangement.get_num_planes());
-    ::cut(arrangement, edge_map, root, cut_plane_index);
+    edge_map.reserve(builder.get_num_planes() * builder.get_num_planes());
+    ::cut(builder, edge_map, root, cut_plane_index);
 }
 
 } // namespace simplicial_arrangement::internal

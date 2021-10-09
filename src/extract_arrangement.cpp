@@ -1,5 +1,5 @@
 #include "extract_arrangement.h"
-#include "SimplicialArrangement.h"
+#include "SimplicialArrangementBuilder.h"
 
 #include <absl/container/flat_hash_map.h>
 
@@ -51,18 +51,18 @@ typename T::iterator cyclic_prev(T& container, const typename T::iterator& itr)
 
 
 template <typename Scalar>
-Arrangement<2> extract_arrangement_2D(SimplicialArrangement<Scalar, 2>& arrangement)
+Arrangement<2> extract_arrangement_2D(SimplicialArrangementBuilder<Scalar, 2>& builder)
 {
     Arrangement<2> r;
-    const size_t num_vertices = arrangement.get_vertex_count();
-    r.vertices = arrangement.extract_vertices();
+    const size_t num_vertices = builder.get_vertex_count();
+    r.vertices = builder.extract_vertices();
 
     // (vi, vj) |-> edge_index
     absl::flat_hash_map<std::array<size_t, 2>, size_t> edge_map;
     edge_map.reserve(num_vertices * 3); // Just a guess.
 
     auto extract_unique_planes = [&]() {
-        auto [coplanar_planes, unique_plane_indices] = arrangement.extract_coplanar_planes();
+        auto [coplanar_planes, unique_plane_indices] = builder.extract_coplanar_planes();
         size_t num_unique_planes = coplanar_planes.size();
         std::vector<std::vector<bool>> coplanar_plane_orientations;
         coplanar_plane_orientations.reserve(num_unique_planes);
@@ -74,7 +74,7 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangement<Scalar, 2>& arrangem
                 std::vector<bool> orientations(num_planes);
                 for (size_t i = 0; i < num_planes; i++) {
                     orientations[i] = is_plane_consistently_oriented<Scalar, 2>(
-                        arrangement.get_plane(planes[0]), arrangement.get_plane(planes[i]));
+                        builder.get_plane(planes[0]), builder.get_plane(planes[i]));
                 }
                 coplanar_plane_orientations.push_back(std::move(orientations));
             }
@@ -142,7 +142,7 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangement<Scalar, 2>& arrangem
             const auto& curr_plane = cell.edges[i];
             const auto& prev_plane = cell.edges[(i + num_cell_edges - 1) % num_cell_edges];
 
-            vertex_indices.push_back(arrangement.get_vertex_index({prev_plane, curr_plane}));
+            vertex_indices.push_back(builder.get_vertex_index({prev_plane, curr_plane}));
         }
 
         for (size_t i = 0; i < num_cell_edges; i++) {
@@ -165,7 +165,7 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangement<Scalar, 2>& arrangem
     };
 
     // Traverse the BSP tree and gather cells and faces.
-    std::vector<bool> bounding_plane_orientations(arrangement.get_num_planes(), true);
+    std::vector<bool> bounding_plane_orientations(builder.get_num_planes(), true);
     std::function<void(const BSPNode<2>&)> depth_first_traversal;
     depth_first_traversal = [&](const BSPNode<2>& node) {
         if (node.positive != nullptr && node.negative != nullptr) {
@@ -181,22 +181,22 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangement<Scalar, 2>& arrangem
     };
 
     extract_unique_planes();
-    depth_first_traversal(arrangement.get_root());
+    depth_first_traversal(builder.get_root());
 
     return r;
 }
 
 template <typename Scalar>
-Arrangement<3> extract_arrangement_3D(SimplicialArrangement<Scalar, 3>& arrangement)
+Arrangement<3> extract_arrangement_3D(SimplicialArrangementBuilder<Scalar, 3>& builder)
 {
     Arrangement<3> r;
-    r.vertices = arrangement.extract_vertices();
+    r.vertices = builder.extract_vertices();
 
     absl::flat_hash_map<std::vector<size_t>, size_t> face_map;
     face_map.reserve(r.vertices.size() * 3); // TODO: need more accuate guess.
 
     auto extract_unique_planes = [&]() {
-        auto [coplanar_planes, unique_plane_indices] = arrangement.extract_coplanar_planes();
+        auto [coplanar_planes, unique_plane_indices] = builder.extract_coplanar_planes();
         size_t num_unique_planes = coplanar_planes.size();
         std::vector<std::vector<bool>> coplanar_plane_orientations;
         coplanar_plane_orientations.reserve(num_unique_planes);
@@ -208,7 +208,7 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangement<Scalar, 3>& arrangem
                 std::vector<bool> orientations(num_planes);
                 for (size_t i = 0; i < num_planes; i++) {
                     orientations[i] = is_plane_consistently_oriented<Scalar, 3>(
-                        arrangement.get_plane(planes[0]), arrangement.get_plane(planes[i]));
+                        builder.get_plane(planes[0]), builder.get_plane(planes[i]));
                 }
                 coplanar_plane_orientations.push_back(std::move(orientations));
             }
@@ -231,9 +231,9 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangement<Scalar, 3>& arrangem
 
         for (size_t i = 0; i < num_edges; i++) {
             size_t prev_i = (i + num_edges - 1) % num_edges;
-            vertex_indices.push_back(arrangement.get_vertex_index(
+            vertex_indices.push_back(builder.get_vertex_index(
                 {face.edge_planes[i], face.edge_planes[prev_i], face.supporting_plane}));
-            assert(vertex_indices.back() < arrangement.get_vertex_count());
+            assert(vertex_indices.back() < builder.get_vertex_count());
         }
 
         // Step 2: reorder vertex indices such that a face alwasys starts
@@ -307,7 +307,7 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangement<Scalar, 3>& arrangem
         r.cells.push_back(std::move(out_cell));
     };
 
-    std::vector<bool> bounding_plane_orientations(arrangement.get_num_planes(), true);
+    std::vector<bool> bounding_plane_orientations(builder.get_num_planes(), true);
     std::function<void(const BSPNode<3>&)> depth_first_traversal;
     depth_first_traversal = [&](const BSPNode<3>& node) {
         if (node.positive != nullptr && node.negative != nullptr) {
@@ -323,7 +323,7 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangement<Scalar, 3>& arrangem
     };
 
     extract_unique_planes();
-    depth_first_traversal(arrangement.get_root());
+    depth_first_traversal(builder.get_root());
 
     return r;
 }
@@ -332,24 +332,24 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangement<Scalar, 3>& arrangem
 
 namespace simplicial_arrangement::internal {
 
-Arrangement<2> extract_arrangement(SimplicialArrangement<double, 2>& arrangement)
+Arrangement<2> extract_arrangement(SimplicialArrangementBuilder<double, 2>& builder)
 {
-    return ::extract_arrangement_2D(arrangement);
+    return ::extract_arrangement_2D(builder);
 }
 
-Arrangement<2> extract_arrangement(SimplicialArrangement<Int, 2>& arrangement)
+Arrangement<2> extract_arrangement(SimplicialArrangementBuilder<Int, 2>& builder)
 {
-    return ::extract_arrangement_2D(arrangement);
+    return ::extract_arrangement_2D(builder);
 }
 
-Arrangement<3> extract_arrangement(SimplicialArrangement<double, 3>& arrangement)
+Arrangement<3> extract_arrangement(SimplicialArrangementBuilder<double, 3>& builder)
 {
-    return ::extract_arrangement_3D(arrangement);
+    return ::extract_arrangement_3D(builder);
 }
 
-Arrangement<3> extract_arrangement(SimplicialArrangement<Int, 3>& arrangement)
+Arrangement<3> extract_arrangement(SimplicialArrangementBuilder<Int, 3>& builder)
 {
-    return ::extract_arrangement_3D(arrangement);
+    return ::extract_arrangement_3D(builder);
 }
 
 } // namespace simplicial_arrangement::internal
