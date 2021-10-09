@@ -13,13 +13,6 @@ constexpr size_t INVALID = std::numeric_limits<size_t>::max();
 
 spdlog::logger& logger();
 
-/**
- * A point is represented as the intersection of planes.  We store the index
- * of the plane here.
- */
-template <int DIM>
-using Point = std::array<size_t, DIM>;
-
 template <int DIM>
 struct Edge;
 

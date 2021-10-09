@@ -1,13 +1,52 @@
-#include <catch2/catch.hpp>
-
 #include <simplicial_arrangement/simplicial_arrangement.h>
+#include <catch2/catch.hpp>
 
 namespace {
 
-template <int DIM>
-void validate_arrangement(simplicial_arrangement::Arrangement<DIM>& r)
+template <typename Scalar, int DIM>
+void validate_arrangement(simplicial_arrangement::Arrangement<DIM>& r,
+    const std::vector<simplicial_arrangement::Plane<Scalar, DIM>>& planes)
 {
     using namespace simplicial_arrangement;
+
+    auto get_plane = [&](size_t i) {
+        Plane<Scalar, DIM> P;
+        if (i <= DIM) {
+            for (size_t j = 0; j <= DIM; j++) {
+                P[j] = (i == j) ? 1 : 0;
+            }
+        } else {
+            P = planes[i - DIM - 1];
+        }
+        return P;
+    };
+
+    auto dot = [&](size_t pi, size_t pj) {
+        auto Pi = get_plane(pi);
+        auto Pj = get_plane(pj);
+        Scalar s = 0;
+        for (size_t i = 0; i <= DIM; i++) {
+            s += Pi[i] * Pj[i];
+        }
+        return s;
+    };
+
+    size_t num_unique_planes = r.unique_planes.size();
+    for (size_t i = 0; i < num_unique_planes; i++) {
+        const auto& plane_group = r.unique_planes[i];
+        if (plane_group.size() == 1) continue;
+        const size_t size = plane_group.size();
+        const auto& orientations = r.unique_plane_orientations[i];
+        for (size_t j = 1; j < size; j++) {
+            REQUIRE(
+                r.unique_plane_indices[plane_group[0]] == r.unique_plane_indices[plane_group[j]]);
+            if (orientations[0] == orientations[j]) {
+                REQUIRE(dot(plane_group[0], plane_group[1]) > 0);
+            } else {
+                REQUIRE(dot(plane_group[0], plane_group[1]) < 0);
+            }
+        }
+    }
 
     size_t num_faces = r.faces.size();
     for (size_t i = 0; i < num_faces; i++) {
@@ -93,7 +132,7 @@ void test_2D()
         REQUIRE(count_num_halfedges(arrangement) == 3);
         REQUIRE(arrangement.vertices.size() == 3);
         REQUIRE(arrangement.unique_planes.size() == 3);
-        validate_arrangement(arrangement);
+        validate_arrangement(arrangement, planes);
     }
 
     SECTION("1 implicit")
@@ -107,7 +146,7 @@ void test_2D()
             REQUIRE(count_num_halfedges(arrangement) == 7);
             REQUIRE(arrangement.vertices.size() == 5);
             REQUIRE(arrangement.unique_planes.size() == 4);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
         SECTION("passing through one corner")
         {
@@ -118,7 +157,7 @@ void test_2D()
             REQUIRE(count_num_halfedges(arrangement) == 6);
             REQUIRE(arrangement.vertices.size() == 4);
             REQUIRE(arrangement.unique_planes.size() == 4);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
         SECTION("passing through two corners")
         {
@@ -129,7 +168,7 @@ void test_2D()
             REQUIRE(count_num_halfedges(arrangement) == 3);
             REQUIRE(arrangement.vertices.size() == 3);
             REQUIRE(arrangement.unique_planes.size() == 3);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
     }
 
@@ -145,7 +184,7 @@ void test_2D()
             REQUIRE(count_num_halfedges(arrangement) == 11);
             REQUIRE(arrangement.vertices.size() == 7);
             REQUIRE(arrangement.unique_planes.size() == 5);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
 
         SECTION("crossing")
@@ -158,7 +197,7 @@ void test_2D()
             REQUIRE(count_num_halfedges(arrangement) == 15);
             REQUIRE(arrangement.vertices.size() == 8);
             REQUIRE(arrangement.unique_planes.size() == 5);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
 
         SECTION("touching")
@@ -171,7 +210,7 @@ void test_2D()
             REQUIRE(count_num_halfedges(arrangement) == 10);
             REQUIRE(arrangement.vertices.size() == 6);
             REQUIRE(arrangement.unique_planes.size() == 5);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
 
         SECTION("overlapping")
@@ -184,7 +223,7 @@ void test_2D()
             REQUIRE(count_num_halfedges(arrangement) == 7);
             REQUIRE(arrangement.vertices.size() == 5);
             REQUIRE(arrangement.unique_planes.size() == 4);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
     }
     SECTION("3 implicits")
@@ -200,7 +239,7 @@ void test_2D()
             REQUIRE(count_num_halfedges(arrangement) == 15);
             REQUIRE(arrangement.vertices.size() == 9);
             REQUIRE(arrangement.unique_planes.size() == 6);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
 
         SECTION("intersecting")
@@ -216,7 +255,7 @@ void test_2D()
                 REQUIRE(count_num_halfedges(arrangement) == 27);
                 REQUIRE(arrangement.vertices.size() == 12);
                 REQUIRE(arrangement.unique_planes.size() == 6);
-                validate_arrangement(arrangement);
+                validate_arrangement(arrangement, planes);
             }
 
             SECTION("case 1")
@@ -230,7 +269,7 @@ void test_2D()
                 REQUIRE(count_num_halfedges(arrangement) == 21);
                 REQUIRE(arrangement.vertices.size() == 10);
                 REQUIRE(arrangement.unique_planes.size() == 6);
-                validate_arrangement(arrangement);
+                validate_arrangement(arrangement, planes);
             }
 
             SECTION("case 2")
@@ -244,7 +283,7 @@ void test_2D()
                 REQUIRE(count_num_halfedges(arrangement) == 12);
                 REQUIRE(arrangement.vertices.size() == 6);
                 REQUIRE(arrangement.unique_planes.size() == 6);
-                validate_arrangement(arrangement);
+                validate_arrangement(arrangement, planes);
             }
 
             SECTION("case 3")
@@ -258,7 +297,7 @@ void test_2D()
                 REQUIRE(count_num_halfedges(arrangement) == 15);
                 REQUIRE(arrangement.vertices.size() == 9);
                 REQUIRE(arrangement.unique_planes.size() == 6);
-                validate_arrangement(arrangement);
+                validate_arrangement(arrangement, planes);
             }
 
             SECTION("case 4")
@@ -272,7 +311,7 @@ void test_2D()
                 REQUIRE(count_num_halfedges(arrangement) == 27);
                 REQUIRE(arrangement.vertices.size() == 12);
                 REQUIRE(arrangement.unique_planes.size() == 6);
-                validate_arrangement(arrangement);
+                validate_arrangement(arrangement, planes);
             }
 
             SECTION("case 5")
@@ -286,7 +325,7 @@ void test_2D()
                 REQUIRE(count_num_halfedges(arrangement) == 15);
                 REQUIRE(arrangement.vertices.size() == 8);
                 REQUIRE(arrangement.unique_planes.size() == 5);
-                validate_arrangement(arrangement);
+                validate_arrangement(arrangement, planes);
             }
         }
     }
@@ -327,7 +366,7 @@ void test_3D()
         REQUIRE(count_num_half_edges(arrangement) == 12);
         REQUIRE(arrangement.vertices.size() == 4);
         REQUIRE(arrangement.unique_planes.size() == 4);
-        validate_arrangement(arrangement);
+        validate_arrangement(arrangement, planes);
     }
 
     SECTION("1 implicit")
@@ -341,7 +380,7 @@ void test_3D()
             REQUIRE(count_num_half_edges(arrangement) == 36);
             REQUIRE(arrangement.vertices.size() == 8);
             REQUIRE(arrangement.unique_planes.size() == 5);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
         SECTION("tri cross section")
         {
@@ -352,7 +391,7 @@ void test_3D()
             REQUIRE(count_num_half_edges(arrangement) == 30);
             REQUIRE(arrangement.vertices.size() == 7);
             REQUIRE(arrangement.unique_planes.size() == 5);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
         SECTION("cut through a vertex")
         {
@@ -363,7 +402,7 @@ void test_3D()
             REQUIRE(count_num_half_edges(arrangement) == 28);
             REQUIRE(arrangement.vertices.size() == 6);
             REQUIRE(arrangement.unique_planes.size() == 5);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
         SECTION("cut through an edge")
         {
@@ -374,7 +413,7 @@ void test_3D()
             REQUIRE(count_num_half_edges(arrangement) == 24);
             REQUIRE(arrangement.vertices.size() == 5);
             REQUIRE(arrangement.unique_planes.size() == 5);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
         SECTION("cut through a face")
         {
@@ -385,11 +424,11 @@ void test_3D()
             REQUIRE(count_num_half_edges(arrangement) == 12);
             REQUIRE(arrangement.vertices.size() == 4);
             REQUIRE(arrangement.unique_planes.size() == 4);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
     }
 
-     SECTION("2 implicits")
+    SECTION("2 implicits")
     {
         SECTION("not intersecting cuts")
         {
@@ -401,7 +440,7 @@ void test_3D()
             REQUIRE(count_num_half_edges(arrangement) == 48);
             REQUIRE(arrangement.vertices.size() == 10);
             REQUIRE(arrangement.unique_planes.size() == 6);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
         SECTION("crossing")
         {
@@ -413,7 +452,7 @@ void test_3D()
             REQUIRE(count_num_half_edges(arrangement) == 72);
             REQUIRE(arrangement.vertices.size() == 12);
             REQUIRE(arrangement.unique_planes.size() == 6);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
         SECTION("touching")
         {
@@ -425,7 +464,7 @@ void test_3D()
             REQUIRE(count_num_half_edges(arrangement) == 46);
             REQUIRE(arrangement.vertices.size() == 9);
             REQUIRE(arrangement.unique_planes.size() == 6);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
         SECTION("duplicated cuts")
         {
@@ -437,7 +476,7 @@ void test_3D()
             REQUIRE(count_num_half_edges(arrangement) == 36);
             REQUIRE(arrangement.vertices.size() == 8);
             REQUIRE(arrangement.unique_planes.size() == 5);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
         SECTION("2 cuts through the same vertex")
         {
@@ -449,7 +488,7 @@ void test_3D()
             REQUIRE(count_num_half_edges(arrangement) == 52);
             REQUIRE(arrangement.vertices.size() == 7);
             REQUIRE(arrangement.unique_planes.size() == 6);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
         SECTION("2 cuts through faces")
         {
@@ -461,7 +500,7 @@ void test_3D()
             REQUIRE(count_num_half_edges(arrangement) == 12);
             REQUIRE(arrangement.vertices.size() == 4);
             REQUIRE(arrangement.unique_planes.size() == 4);
-            validate_arrangement(arrangement);
+            validate_arrangement(arrangement, planes);
         }
     }
 }

@@ -19,6 +19,13 @@ using Int = absl::int128;
 template <typename Scalar, int DIM>
 using Plane = std::array<Scalar, DIM + 1>;
 
+/**
+ * A point is represented as the intersection of planes.  We store the index
+ * of the plane here.
+ */
+template <int DIM>
+using Point = std::array<size_t, DIM>;
+
 template <int DIM>
 struct Arrangement;
 
@@ -35,11 +42,6 @@ struct Arrangement
 {
     static_assert(DIM == 2 || DIM == 3, "Only 2D and 3D arrangements are supported.");
     static constexpr size_t None = std::numeric_limits<size_t>::max();
-
-    /**
-     * A vertex is represented by DIM intersecting hyperplanes.
-     */
-    using Vertex = std::array<size_t, DIM>;
 
     /**
      * A face represents a (DIM-1)-dimensional polytope.  For 2D and 3D, its
@@ -88,7 +90,7 @@ struct Arrangement
         std::vector<bool> face_orientations;
     };
 
-    std::vector<Vertex> vertices;
+    std::vector<Point<DIM>> vertices;
     std::vector<Face> faces;
     std::vector<Cell> cells;
 

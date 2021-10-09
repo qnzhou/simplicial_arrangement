@@ -13,8 +13,9 @@ file(GLOB SRC_FILES ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp)
 add_library(simplicial_arrangement STATIC ${SRC_FILES} ${INC_FILES})
 target_include_directories(simplicial_arrangement PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/include)
-target_link_libraries(simplicial_arrangement PUBLIC absl::numeric
-    absl::flat_hash_map implicit_predicates::implicit_predicates spdlog::spdlog)
+target_link_libraries(simplicial_arrangement
+    PUBLIC absl::numeric absl::flat_hash_map
+    PRIVATE implicit_predicates::implicit_predicates spdlog::spdlog)
 target_compile_features(simplicial_arrangement PRIVATE cxx_std_17)
 target_compile_options(simplicial_arrangement PRIVATE "-Wall" "-Werror")
 add_library(simplicial_arrangement::simplicial_arrangement ALIAS
