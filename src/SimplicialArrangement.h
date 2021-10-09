@@ -23,16 +23,8 @@ public:
         "Only double and 128bit int are supported as Scalar.");
 
 public:
-    SimplicialArrangement(const std::vector<Plane<Scalar, DIM>>& planes) {
-        initialize(planes);
-    }
-
-    /**
-     * Initialize the arrangement induced by a set of planes.
-     */
-    void initialize(const std::vector<Plane<Scalar, DIM>>& planes)
-    {
-        set_planes(planes);
+    SimplicialArrangement(const std::vector<Plane<Scalar, DIM>>& planes) : m_planes(planes) {
+        set_planes();
         initialize();
     }
 
@@ -46,48 +38,47 @@ public:
         m_root.positive = nullptr;
         m_root.negative = nullptr;
 
-        const size_t num_planes = m_planes.size();
+        const size_t num_planes = m_planes.size() + DIM + 1;
         for (size_t i = DIM + 1; i < num_planes; i++) {
             internal::cut(*this, m_root, i);
         }
     }
 
-    void set_planes(const std::vector<Plane<Scalar, DIM>>& planes)
+    void set_planes()
     {
-        const size_t num_cutting_planes = planes.size();
-        m_planes.clear();
-        m_planes.reserve(num_cutting_planes + DIM + 1);
+        const size_t num_cutting_planes = m_planes.size();
         if constexpr (DIM == 2) {
-            m_planes.push_back({1, 0, 0});
-            m_planes.push_back({0, 1, 0});
-            m_planes.push_back({0, 0, 1});
+            m_simplex_planes[0] = {1, 0, 0};
+            m_simplex_planes[1] = {0, 1, 0};
+            m_simplex_planes[2] = {0, 0, 1};
             register_vertex({1, 2}, 0);
             register_vertex({0, 2}, 1);
             register_vertex({0, 1}, 2);
             m_vertex_count = 3;
         } else {
-            m_planes.push_back({1, 0, 0, 0});
-            m_planes.push_back({0, 1, 0, 0});
-            m_planes.push_back({0, 0, 1, 0});
-            m_planes.push_back({0, 0, 0, 1});
+            m_simplex_planes[0] = {1, 0, 0, 0};
+            m_simplex_planes[1] = {0, 1, 0, 0};
+            m_simplex_planes[2] = {0, 0, 1, 0};
+            m_simplex_planes[3] = {0, 0, 0, 1};
             register_vertex({1, 2, 3}, 0);
             register_vertex({0, 2, 3}, 1);
             register_vertex({0, 1, 3}, 2);
             register_vertex({0, 1, 2}, 3);
             m_vertex_count = 4;
         }
-        m_planes.insert(m_planes.end(), planes.begin(), planes.end());
         m_vertex_index_map.reserve(num_cutting_planes * 4);
         m_coplanar_planes.init(num_cutting_planes + DIM + 1);
     }
 
-    /**
-     * Return the set of planes including the initial DIM planes that form the
-     * boundary of the simplex.
-     */
-    const auto& get_planes() const { return m_planes; }
+    const Plane<Scalar, DIM>& get_plane(size_t i) const {
+        if (i <= DIM) {
+            return m_simplex_planes[i];
+        } else {
+            return m_planes[i - DIM - 1];
+        }
+    }
 
-    size_t get_num_planes() const { return m_planes.size(); }
+    size_t get_num_planes() const { return m_planes.size() + DIM + 1; }
 
     const BSPNode<DIM>& get_root() const { return m_root; }
 
@@ -153,7 +144,8 @@ private:
     }
 
 private:
-    std::vector<Plane<Scalar, DIM>> m_planes;
+    std::array<Plane<Scalar, DIM>, DIM+1> m_simplex_planes;
+    const std::vector<Plane<Scalar, DIM>>& m_planes;
     utils::DisjointSets m_coplanar_planes;
     absl::flat_hash_map<Point<DIM>, size_t> m_vertex_index_map;
     BSPNode<DIM> m_root;

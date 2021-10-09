@@ -74,7 +74,7 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangement<Scalar, 2>& arrangem
                 std::vector<bool> orientations(num_planes);
                 for (size_t i = 0; i < num_planes; i++) {
                     orientations[i] = is_plane_consistently_oriented<Scalar, 2>(
-                        arrangement.get_planes()[planes[0]], arrangement.get_planes()[planes[i]]);
+                        arrangement.get_plane(planes[0]), arrangement.get_plane(planes[i]));
                 }
                 coplanar_plane_orientations.push_back(std::move(orientations));
             }
@@ -208,7 +208,7 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangement<Scalar, 3>& arrangem
                 std::vector<bool> orientations(num_planes);
                 for (size_t i = 0; i < num_planes; i++) {
                     orientations[i] = is_plane_consistently_oriented<Scalar, 3>(
-                        arrangement.get_planes()[planes[0]], arrangement.get_planes()[planes[i]]);
+                        arrangement.get_plane(planes[0]), arrangement.get_plane(planes[i]));
                 }
                 coplanar_plane_orientations.push_back(std::move(orientations));
             }

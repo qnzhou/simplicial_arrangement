@@ -1,6 +1,6 @@
+#include "cut.h"
 #include "BSPNode.h"
 #include "SimplicialArrangement.h"
-#include "cut.h"
 
 #include <implicit_predicates/implicit_predicates.h>
 
@@ -49,9 +49,8 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
     const Face<3>& face)
 {
     const size_t num_edges = face.edge_planes.size();
-    const auto& planes = arrangement.get_planes();
-    const auto& cut_plane = planes[cut_plane_index];
-    const auto& supporting_plane = planes[face.supporting_plane];
+    const auto& cut_plane = arrangement.get_plane(cut_plane_index);
+    const auto& supporting_plane = arrangement.get_plane(face.supporting_plane);
 
     std::vector<implicit_predicates::Orientation> orientations;
     orientations.reserve(num_edges);
@@ -62,11 +61,10 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
 
     for (size_t i = 0; i < num_edges; i++) {
         const size_t prev_edge = (i + num_edges - 1) % num_edges;
-        orientations.push_back(
-            implicit_predicates::orient3d(planes[face.edge_planes[prev_edge]].data(),
-                supporting_plane.data(),
-                planes[face.edge_planes[i]].data(),
-                cut_plane.data()));
+        const auto& prev_plane = arrangement.get_plane(face.edge_planes[prev_edge]);
+        const auto& curr_plane = arrangement.get_plane(face.edge_planes[i]);
+        orientations.push_back(implicit_predicates::orient3d(
+            prev_plane.data(), supporting_plane.data(), curr_plane.data(), cut_plane.data()));
         assert(orientations.back() != implicit_predicates::INVALID);
         non_negative = non_negative && orientations.back() >= 0;
         non_positive = non_positive && orientations.back() <= 0;
@@ -379,13 +377,12 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(SimplicialArrangement<Scalar, 2>&
     std::vector<implicit_predicates::Orientation> orientations;
     const size_t num_edges = cell.edges.size();
     orientations.reserve(num_edges);
-    const auto& planes = arrangement.get_planes();
-    const auto& cut_plane = planes[cut_plane_index];
+    const auto& cut_plane = arrangement.get_plane(cut_plane_index);
 
     for (size_t i = 0; i < num_edges; i++) {
         const size_t prev_i = (i + num_edges - 1) % num_edges;
-        const auto& prev_plane = planes[cell.edges[prev_i]];
-        const auto& curr_plane = planes[cell.edges[i]];
+        const auto& prev_plane = arrangement.get_plane(cell.edges[prev_i]);
+        const auto& curr_plane = arrangement.get_plane(cell.edges[i]);
         orientations.push_back(
             implicit_predicates::orient2d(prev_plane.data(), curr_plane.data(), cut_plane.data()));
         assert(orientations.back() != implicit_predicates::INVALID);

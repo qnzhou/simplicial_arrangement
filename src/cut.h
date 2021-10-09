@@ -1,5 +1,7 @@
 #pragma once
 
+#include "common.h"
+
 namespace simplicial_arrangement {
 // Forward declarations.
 template <typename Scalar, int DIM>
