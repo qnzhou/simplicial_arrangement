@@ -329,18 +329,27 @@ std::optional<std::array<Cell<3>, 2>> cut_cell(SimplicialArrangement<Scalar, 3>&
     Face<3> cut_face;
     cut_face.supporting_plane = cut_plane_index;
     cut_face.edge_planes.reserve(num_cut_edges);
+    std::vector<size_t> vertex_loop;
+    vertex_loop.reserve(num_cut_edges);
     size_t curr_vertex = start_vertex;
-    size_t curr_edge;
-    size_t count = 0;
+    size_t curr_edge = 0;
     do {
         auto itr = next_map.find(curr_vertex);
         assert(itr != next_map.end());
+        vertex_loop.push_back(curr_vertex);
         std::tie(curr_vertex, curr_edge) = itr->second;
         cut_face.edge_planes.push_back(curr_edge);
-        count++;
-        assert(count <= num_cut_edges);
+        assert(cut_face.edge_planes.size() <= num_cut_edges);
     } while (curr_vertex != start_vertex);
     assert(cut_face.edge_planes.size() == num_cut_edges);
+
+    // Ensure all vertices around the face are registered.
+    for (size_t i = 0; i < num_cut_edges; i++) {
+        const size_t curr_edge = cut_face.edge_planes[i];
+        const size_t prev_edge = cut_face.edge_planes[(i + num_cut_edges - 1) % num_cut_edges];
+        arrangement.register_vertex(
+            {curr_edge, prev_edge, cut_face.supporting_plane}, vertex_loop[i]);
+    }
 
     Face<3> cut_face_reversed = cut_face;
     std::reverse(cut_face_reversed.edge_planes.begin(), cut_face_reversed.edge_planes.end());

@@ -4,6 +4,7 @@
 #include <simplicial_arrangement/DisjointSets.h>
 #include <simplicial_arrangement/common.h>
 #include <simplicial_arrangement/cut.h>
+#include <simplicial_arrangement/extract_arrangement.h>
 
 #include <absl/container/flat_hash_map.h>
 
@@ -89,7 +90,12 @@ public:
     void register_vertex(Point<DIM> v, size_t index)
     {
         this->sort(v);
-        m_vertex_index_map[std::move(v)] = index;
+        auto itr = m_vertex_index_map.find(v);
+        if (itr == m_vertex_index_map.end()) {
+            m_vertex_index_map.insert({std::move(v), index});
+        } else {
+            assert(itr->second == index);
+        }
     }
 
     bool has_vertex(Point<DIM> v) const
@@ -111,15 +117,33 @@ public:
     size_t get_vertex_count() const { return m_vertex_count; }
     void bump_vertex_count() { m_vertex_count++; }
 
+    std::vector<Point<DIM>> extract_vertices() const
+    {
+        std::vector<Point<DIM>> vertices(m_vertex_count);
+        for (auto& entry : m_vertex_index_map) {
+            assert(entry.second < m_vertex_count);
+            vertices[entry.second] = entry.first;
+        }
+        return vertices;
+    }
+
     void register_coplanar_planes(size_t p0, size_t p1) { m_coplanar_planes.merge(p0, p1); }
 
-    std::vector<std::vector<size_t>> extract_coplanar_planes() {
+    std::vector<std::vector<size_t>> extract_coplanar_planes()
+    {
         return m_coplanar_planes.extract_disjoint_sets();
     }
 
-    size_t get_num_unique_planes() {
-        return extract_coplanar_planes().size();
+    size_t get_num_unique_planes() { return extract_coplanar_planes().size(); }
+
+    std::tuple<std::vector<size_t>, size_t> get_unique_plane_indices() {
+        std::vector<size_t> indices;
+        size_t num_unique_planes = m_coplanar_planes.extract_disjoint_set_indices(indices);
+        assert(indices.size() == m_planes.size());
+        return {indices, num_unique_planes};
     }
+
+    Arrangement<DIM> extract_arrangement() { return internal::extract_arrangement(*this); }
 
 private:
     inline void sort(Point<DIM>& p) const
