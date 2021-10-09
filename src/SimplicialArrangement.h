@@ -23,7 +23,6 @@ public:
         "Only double and 128bit int are supported as Scalar.");
 
 public:
-    SimplicialArrangement() = default;
     SimplicialArrangement(const std::vector<Plane<Scalar, DIM>>& planes) {
         initialize(planes);
     }

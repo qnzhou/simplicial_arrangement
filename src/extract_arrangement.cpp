@@ -74,7 +74,7 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangement<Scalar, 2>& arrangem
                 std::vector<bool> orientations(num_planes);
                 for (size_t i = 0; i < num_planes; i++) {
                     orientations[i] = is_plane_consistently_oriented<Scalar, 2>(
-                        arrangement.get_planes()[0], arrangement.get_planes()[i]);
+                        arrangement.get_planes()[planes[0]], arrangement.get_planes()[planes[i]]);
                 }
                 coplanar_plane_orientations.push_back(std::move(orientations));
             }
@@ -107,11 +107,15 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangement<Scalar, 2>& arrangem
             // that positive side of the supporting plane is on the right side
             // of the edge.
             if (cell_on_positive_side_of_supporting_plane) {
-                if (reversed) out_face.vertices = {v0, v1};
-                else out_face.vertices = {v1, v0};
+                if (reversed)
+                    out_face.vertices = {v0, v1};
+                else
+                    out_face.vertices = {v1, v0};
             } else {
-                if (reversed) out_face.vertices = {v1, v0};
-                else out_face.vertices = {v0, v1};
+                if (reversed)
+                    out_face.vertices = {v1, v0};
+                else
+                    out_face.vertices = {v0, v1};
             }
             r.faces.push_back(std::move(out_face));
 
@@ -204,7 +208,7 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangement<Scalar, 3>& arrangem
                 std::vector<bool> orientations(num_planes);
                 for (size_t i = 0; i < num_planes; i++) {
                     orientations[i] = is_plane_consistently_oriented<Scalar, 3>(
-                        arrangement.get_planes()[0], arrangement.get_planes()[i]);
+                        arrangement.get_planes()[planes[0]], arrangement.get_planes()[planes[i]]);
                 }
                 coplanar_plane_orientations.push_back(std::move(orientations));
             }
@@ -217,7 +221,8 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangement<Scalar, 3>& arrangem
 
 
     auto add_face = [&](const Face<3>& face,
-            bool cell_on_positive_side_of_supporting_plane) -> size_t { const size_t num_edges = face.edge_planes.size();
+                        bool cell_on_positive_side_of_supporting_plane) -> size_t {
+        const size_t num_edges = face.edge_planes.size();
         assert(num_edges >= 3);
 
         // Step 1: convert boundary edge plane loop into vertex index loop.
