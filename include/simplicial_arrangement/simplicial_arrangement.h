@@ -42,7 +42,7 @@ struct Arrangement
     using Vertex = std::array<size_t, DIM>;
 
     /**
-     * A face represents a (DIM-1)-dimentional polytope.  For 2D and 3D, its
+     * A face represents a (DIM-1)-dimensional polytope.  For 2D and 3D, its
      * orientation is uniquely defined by ordering of its boundary vertices.
      */
     struct Face
@@ -71,7 +71,7 @@ struct Arrangement
     };
 
     /**
-     * A cell is a DIM-dimentional polytope.
+     * A cell is a DIM-dimensional polytope.
      */
     struct Cell
     {

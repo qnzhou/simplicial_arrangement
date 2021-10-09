@@ -21,7 +21,7 @@ bool is_plane_consistently_oriented(const Plane<Scalar, DIM>& p1, const Plane<Sc
         if (v1 == 0 && v2 == 0) continue;
         return (v1 > 0 && v2 > 0) || (v1 < 0 && v2 < 0);
     }
-    // plane p1 and p2 are constently 0 over the cell.
+    // plane p1 and p2 are consistently 0 over the cell.
     return true;
 }
 
@@ -91,7 +91,7 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangementBuilder<Scalar, 2>& b
                         bool cell_on_positive_side_of_supporting_plane) -> size_t {
         assert(v0 != v1);
 
-        // Compute connonical ordering of the face.
+        // Compute canonical ordering of the face.
         bool reversed = v0 > v1;
         if (reversed) std::swap(v0, v1);
 
@@ -119,7 +119,7 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangementBuilder<Scalar, 2>& b
             }
             r.faces.push_back(std::move(out_face));
 
-            // Note: Always use connonical ordering of the face as the key.
+            // Note: Always use canonical ordering of the face as the key.
             edge_map.insert({{v0, v1}, fid});
 
             return fid;
@@ -193,7 +193,7 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangementBuilder<Scalar, 3>& b
     r.vertices = builder.extract_vertices();
 
     absl::flat_hash_map<std::vector<size_t>, size_t> face_map;
-    face_map.reserve(r.vertices.size() * 3); // TODO: need more accuate guess.
+    face_map.reserve(r.vertices.size() * 3); // TODO: need more accurate guess.
 
     auto extract_unique_planes = [&]() {
         auto [coplanar_planes, unique_plane_indices] = builder.extract_coplanar_planes();
@@ -236,7 +236,7 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangementBuilder<Scalar, 3>& b
             assert(vertex_indices.back() < builder.get_vertex_count());
         }
 
-        // Step 2: reorder vertex indices such that a face alwasys starts
+        // Step 2: reorder vertex indices such that a face always starts
         // from the vertex with the smallest index, and the next vertex
         // is the smaller of the two neighboring vertices.  Together, they
         // uniquely determine the starting point and ordering of the boundary
