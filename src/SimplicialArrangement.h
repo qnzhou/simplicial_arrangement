@@ -1,10 +1,10 @@
 #pragma once
 
-#include <simplicial_arrangement/BSPNode.h>
-#include <simplicial_arrangement/DisjointSets.h>
-#include <simplicial_arrangement/common.h>
-#include <simplicial_arrangement/cut.h>
-#include <simplicial_arrangement/extract_arrangement.h>
+#include "BSPNode.h"
+#include "DisjointSets.h"
+#include "common.h"
+#include "cut.h"
+#include "extract_arrangement.h"
 
 #include <absl/container/flat_hash_map.h>
 
@@ -23,6 +23,11 @@ public:
         "Only double and 128bit int are supported as Scalar.");
 
 public:
+    SimplicialArrangement() = default;
+    SimplicialArrangement(const std::vector<Plane<Scalar, DIM>>& planes) {
+        initialize(planes);
+    }
+
     /**
      * Initialize the arrangement induced by a set of planes.
      */
@@ -129,18 +134,9 @@ public:
 
     void register_coplanar_planes(size_t p0, size_t p1) { m_coplanar_planes.merge(p0, p1); }
 
-    std::vector<std::vector<size_t>> extract_coplanar_planes()
+    std::tuple<std::vector<std::vector<size_t>>, std::vector<size_t>> extract_coplanar_planes()
     {
         return m_coplanar_planes.extract_disjoint_sets();
-    }
-
-    size_t get_num_unique_planes() { return extract_coplanar_planes().size(); }
-
-    std::tuple<std::vector<size_t>, size_t> get_unique_plane_indices() {
-        std::vector<size_t> indices;
-        size_t num_unique_planes = m_coplanar_planes.extract_disjoint_set_indices(indices);
-        assert(indices.size() == m_planes.size());
-        return {indices, num_unique_planes};
     }
 
     Arrangement<DIM> extract_arrangement() { return internal::extract_arrangement(*this); }

@@ -1,29 +1,36 @@
 #include <catch2/catch.hpp>
 
-#include <simplicial_arrangement/SimplicialArrangement.h>
+#include <simplicial_arrangement/simplicial_arrangement.h>
 
 namespace {
 
-template <typename Scalar, int DIM>
-void validate_arrangement(simplicial_arrangement::SimplicialArrangement<Scalar, DIM>& arrangement)
+template <int DIM>
+void validate_arrangement(simplicial_arrangement::Arrangement<DIM>& r)
 {
     using namespace simplicial_arrangement;
-    auto r = arrangement.extract_arrangement();
-    REQUIRE(r.vertices.size() == arrangement.get_vertex_count());
 
     size_t num_faces = r.faces.size();
     for (size_t i = 0; i < num_faces; i++) {
         const auto& face = r.faces[i];
         if constexpr (DIM == 2) {
             REQUIRE(face.vertices.size() == 2);
+        } else {
+            REQUIRE(face.vertices.size() >= 3);
         }
-        REQUIRE(face.supporting_planes.size() > 0);
-        REQUIRE(face.supporting_planes.size() == face.supporting_plane_orientations.size());
+        REQUIRE(face.supporting_plane != Arrangement<DIM>::None);
+        REQUIRE(face.supporting_plane < r.unique_plane_indices.size());
+
+        const size_t unique_plane_index = r.unique_plane_indices[face.supporting_plane];
+        REQUIRE(unique_plane_index < r.unique_planes.size());
+        const auto& supporting_planes = r.unique_planes[unique_plane_index];
+        REQUIRE(supporting_planes.size() >= 1);
+
+        auto itr =
+            std::find(supporting_planes.begin(), supporting_planes.end(), face.supporting_plane);
+        REQUIRE(itr != supporting_planes.end());
+
         for (size_t vid : face.vertices) {
             REQUIRE(vid < r.vertices.size());
-        }
-        for (size_t pid : face.supporting_planes) {
-            REQUIRE(pid < arrangement.get_num_planes());
         }
     }
 
@@ -43,12 +50,22 @@ void validate_arrangement(simplicial_arrangement::SimplicialArrangement<Scalar, 
 
             if (face.positive_cell == Arrangement<DIM>::None ||
                 face.negative_cell == Arrangement<DIM>::None) {
-                auto itr =
-                    std::min_element(face.supporting_planes.begin(), face.supporting_planes.end());
+                const auto& supporting_planes =
+                    r.unique_planes[r.unique_plane_indices[face.supporting_plane]];
+                auto itr = std::min_element(supporting_planes.begin(), supporting_planes.end());
                 REQUIRE(*itr <= DIM);
 
-                size_t k = itr - face.supporting_planes.begin();
-                REQUIRE(cell.face_orientations[j] == face.supporting_plane_orientations[k]);
+                size_t k = itr - supporting_planes.begin();
+                itr = std::find(
+                    supporting_planes.begin(), supporting_planes.end(), face.supporting_plane);
+                REQUIRE(itr != supporting_planes.end());
+                size_t l = itr - supporting_planes.begin();
+
+                if (r.unique_plane_orientations[k] == r.unique_plane_orientations[l]) {
+                    REQUIRE(cell.face_orientations[j]);
+                } else {
+                    REQUIRE(!cell.face_orientations[j]);
+                }
             }
         }
     }
@@ -59,35 +76,23 @@ void test_2D()
 {
     using namespace simplicial_arrangement;
 
-    std::function<size_t(const BSPNode<2>&)> count_num_cells;
-    count_num_cells = [&](const BSPNode<2>& root) -> size_t {
-        if (root.negative != nullptr && root.positive != nullptr) {
-            return count_num_cells(*root.negative) + count_num_cells(*root.positive);
-        } else {
-            return 1;
+    auto count_num_halfedges = [](Arrangement<2>& arrangement) {
+        size_t count = 0;
+        for (const auto& cell : arrangement.cells) {
+            count += cell.faces.size();
         }
+        return count;
     };
 
-    std::function<size_t(const BSPNode<2>&)> count_num_edges;
-    count_num_edges = [&](const BSPNode<2>& root) -> size_t {
-        if (root.negative != nullptr && root.positive != nullptr) {
-            return count_num_edges(*root.negative) + count_num_edges(*root.positive);
-        } else {
-            return root.cell.edges.size();
-        }
-    };
-
-    SimplicialArrangement<Scalar, 2> arrangement;
     std::vector<Plane<Scalar, 2>> planes;
 
     SECTION("0 implicit")
     {
-        arrangement.initialize({});
-        REQUIRE(arrangement.get_planes().size() == 3);
-        REQUIRE(count_num_cells(arrangement.get_root()) == 1);
-        REQUIRE(count_num_edges(arrangement.get_root()) == 3);
-        REQUIRE(arrangement.get_vertex_count() == 3);
-        REQUIRE(arrangement.get_num_unique_planes() == 3);
+        auto arrangement = compute_arrangement(planes);
+        REQUIRE(arrangement.cells.size() == 1);
+        REQUIRE(count_num_halfedges(arrangement) == 3);
+        REQUIRE(arrangement.vertices.size() == 3);
+        REQUIRE(arrangement.unique_planes.size() == 3);
         validate_arrangement(arrangement);
     }
 
@@ -96,50 +101,50 @@ void test_2D()
         SECTION("normal case")
         {
             planes.push_back({1, -1, -1});
-            arrangement.initialize(planes);
-            REQUIRE(arrangement.get_planes().size() == 4);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 2);
-            REQUIRE(count_num_edges(arrangement.get_root()) == 7);
-            REQUIRE(arrangement.get_vertex_count() == 5);
-            REQUIRE(arrangement.get_num_unique_planes() == 4);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(arrangement.unique_plane_indices.size() == 4);
+            REQUIRE(arrangement.cells.size() == 2);
+            REQUIRE(count_num_halfedges(arrangement) == 7);
+            REQUIRE(arrangement.vertices.size() == 5);
+            REQUIRE(arrangement.unique_planes.size() == 4);
             validate_arrangement(arrangement);
         }
         SECTION("passing through one corner")
         {
             planes.push_back({1, -1, 0});
-            arrangement.initialize(planes);
-            REQUIRE(arrangement.get_planes().size() == 4);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 2);
-            REQUIRE(count_num_edges(arrangement.get_root()) == 6);
-            REQUIRE(arrangement.get_vertex_count() == 4);
-            REQUIRE(arrangement.get_num_unique_planes() == 4);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(arrangement.unique_plane_indices.size() == 4);
+            REQUIRE(arrangement.cells.size() == 2);
+            REQUIRE(count_num_halfedges(arrangement) == 6);
+            REQUIRE(arrangement.vertices.size() == 4);
+            REQUIRE(arrangement.unique_planes.size() == 4);
             validate_arrangement(arrangement);
         }
         SECTION("passing through two corners")
         {
             planes.push_back({1, 0, 0});
-            arrangement.initialize(planes);
-            REQUIRE(arrangement.get_planes().size() == 4);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 1);
-            REQUIRE(count_num_edges(arrangement.get_root()) == 3);
-            REQUIRE(arrangement.get_vertex_count() == 3);
-            REQUIRE(arrangement.get_num_unique_planes() == 3);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(arrangement.unique_plane_indices.size() == 4);
+            REQUIRE(arrangement.cells.size() == 1);
+            REQUIRE(count_num_halfedges(arrangement) == 3);
+            REQUIRE(arrangement.vertices.size() == 3);
+            REQUIRE(arrangement.unique_planes.size() == 3);
             validate_arrangement(arrangement);
         }
     }
 
     SECTION("2 implicits")
     {
-        logger().set_level(spdlog::level::info);
         SECTION("not intersecting")
         {
             planes.push_back({1, -1, -1});
             planes.push_back({2, -1, -1});
-            arrangement.initialize(planes);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 3);
-            REQUIRE(count_num_edges(arrangement.get_root()) == 11);
-            REQUIRE(arrangement.get_vertex_count() == 7);
-            REQUIRE(arrangement.get_num_unique_planes() == 5);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(arrangement.unique_plane_indices.size() == 5);
+            REQUIRE(arrangement.cells.size() == 3);
+            REQUIRE(count_num_halfedges(arrangement) == 11);
+            REQUIRE(arrangement.vertices.size() == 7);
+            REQUIRE(arrangement.unique_planes.size() == 5);
             validate_arrangement(arrangement);
         }
 
@@ -147,11 +152,12 @@ void test_2D()
         {
             planes.push_back({1, -1, -1});
             planes.push_back({-1, 2, -1});
-            arrangement.initialize(planes);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 4);
-            REQUIRE(count_num_edges(arrangement.get_root()) == 15);
-            REQUIRE(arrangement.get_vertex_count() == 8);
-            REQUIRE(arrangement.get_num_unique_planes() == 5);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(arrangement.unique_plane_indices.size() == 5);
+            REQUIRE(arrangement.cells.size() == 4);
+            REQUIRE(count_num_halfedges(arrangement) == 15);
+            REQUIRE(arrangement.vertices.size() == 8);
+            REQUIRE(arrangement.unique_planes.size() == 5);
             validate_arrangement(arrangement);
         }
 
@@ -159,11 +165,12 @@ void test_2D()
         {
             planes.push_back({1, -1, -1});
             planes.push_back({-1, 1, -1});
-            arrangement.initialize(planes);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 3);
-            REQUIRE(count_num_edges(arrangement.get_root()) == 10);
-            REQUIRE(arrangement.get_vertex_count() == 6);
-            REQUIRE(arrangement.get_num_unique_planes() == 5);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(arrangement.unique_plane_indices.size() == 5);
+            REQUIRE(arrangement.cells.size() == 3);
+            REQUIRE(count_num_halfedges(arrangement) == 10);
+            REQUIRE(arrangement.vertices.size() == 6);
+            REQUIRE(arrangement.unique_planes.size() == 5);
             validate_arrangement(arrangement);
         }
 
@@ -171,11 +178,12 @@ void test_2D()
         {
             planes.push_back({1, -1, -1});
             planes.push_back({1, -1, -1});
-            arrangement.initialize(planes);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 2);
-            REQUIRE(count_num_edges(arrangement.get_root()) == 7);
-            REQUIRE(arrangement.get_vertex_count() == 5);
-            REQUIRE(arrangement.get_num_unique_planes() == 4);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(arrangement.unique_plane_indices.size() == 5);
+            REQUIRE(arrangement.cells.size() == 2);
+            REQUIRE(count_num_halfedges(arrangement) == 7);
+            REQUIRE(arrangement.vertices.size() == 5);
+            REQUIRE(arrangement.unique_planes.size() == 4);
             validate_arrangement(arrangement);
         }
     }
@@ -186,11 +194,12 @@ void test_2D()
             planes.push_back({1, -1, -1});
             planes.push_back({2, -1, -1});
             planes.push_back({3, -1, -1});
-            arrangement.initialize(planes);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 4);
-            REQUIRE(count_num_edges(arrangement.get_root()) == 15);
-            REQUIRE(arrangement.get_vertex_count() == 9);
-            REQUIRE(arrangement.get_num_unique_planes() == 6);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(arrangement.unique_plane_indices.size() == 6);
+            REQUIRE(arrangement.cells.size() == 4);
+            REQUIRE(count_num_halfedges(arrangement) == 15);
+            REQUIRE(arrangement.vertices.size() == 9);
+            REQUIRE(arrangement.unique_planes.size() == 6);
             validate_arrangement(arrangement);
         }
 
@@ -201,11 +210,12 @@ void test_2D()
                 planes.push_back({3, -1, -1});
                 planes.push_back({-1, 3, -1});
                 planes.push_back({-1, -1, 3});
-                arrangement.initialize(planes);
-                REQUIRE(count_num_cells(arrangement.get_root()) == 7);
-                REQUIRE(count_num_edges(arrangement.get_root()) == 27);
-                REQUIRE(arrangement.get_vertex_count() == 12);
-                REQUIRE(arrangement.get_num_unique_planes() == 6);
+                auto arrangement = compute_arrangement(planes);
+                REQUIRE(arrangement.unique_plane_indices.size() == 6);
+                REQUIRE(arrangement.cells.size() == 7);
+                REQUIRE(count_num_halfedges(arrangement) == 27);
+                REQUIRE(arrangement.vertices.size() == 12);
+                REQUIRE(arrangement.unique_planes.size() == 6);
                 validate_arrangement(arrangement);
             }
 
@@ -214,11 +224,12 @@ void test_2D()
                 planes.push_back({2, -1, -1});
                 planes.push_back({-1, 2, -1});
                 planes.push_back({-1, -1, 2});
-                arrangement.initialize(planes);
-                REQUIRE(count_num_cells(arrangement.get_root()) == 6);
-                REQUIRE(count_num_edges(arrangement.get_root()) == 21);
-                REQUIRE(arrangement.get_vertex_count() == 10);
-                REQUIRE(arrangement.get_num_unique_planes() == 6);
+                auto arrangement = compute_arrangement(planes);
+                REQUIRE(arrangement.unique_plane_indices.size() == 6);
+                REQUIRE(arrangement.cells.size() == 6);
+                REQUIRE(count_num_halfedges(arrangement) == 21);
+                REQUIRE(arrangement.vertices.size() == 10);
+                REQUIRE(arrangement.unique_planes.size() == 6);
                 validate_arrangement(arrangement);
             }
 
@@ -227,11 +238,12 @@ void test_2D()
                 planes.push_back({1, -1, -1});
                 planes.push_back({-1, 1, -1});
                 planes.push_back({-1, -1, 1});
-                arrangement.initialize(planes);
-                REQUIRE(count_num_cells(arrangement.get_root()) == 4);
-                REQUIRE(count_num_edges(arrangement.get_root()) == 12);
-                REQUIRE(arrangement.get_vertex_count() == 6);
-                REQUIRE(arrangement.get_num_unique_planes() == 6);
+                auto arrangement = compute_arrangement(planes);
+                REQUIRE(arrangement.unique_plane_indices.size() == 6);
+                REQUIRE(arrangement.cells.size() == 4);
+                REQUIRE(count_num_halfedges(arrangement) == 12);
+                REQUIRE(arrangement.vertices.size() == 6);
+                REQUIRE(arrangement.unique_planes.size() == 6);
                 validate_arrangement(arrangement);
             }
 
@@ -240,11 +252,12 @@ void test_2D()
                 planes.push_back({1, -2, -2});
                 planes.push_back({-2, 1, -2});
                 planes.push_back({-2, -2, 1});
-                arrangement.initialize(planes);
-                REQUIRE(count_num_cells(arrangement.get_root()) == 4);
-                REQUIRE(count_num_edges(arrangement.get_root()) == 15);
-                REQUIRE(arrangement.get_vertex_count() == 9);
-                REQUIRE(arrangement.get_num_unique_planes() == 6);
+                auto arrangement = compute_arrangement(planes);
+                REQUIRE(arrangement.unique_plane_indices.size() == 6);
+                REQUIRE(arrangement.cells.size() == 4);
+                REQUIRE(count_num_halfedges(arrangement) == 15);
+                REQUIRE(arrangement.vertices.size() == 9);
+                REQUIRE(arrangement.unique_planes.size() == 6);
                 validate_arrangement(arrangement);
             }
 
@@ -253,11 +266,12 @@ void test_2D()
                 planes.push_back({3, -1, -1});
                 planes.push_back({-1, 3, -1});
                 planes.push_back({-1, -1, 2});
-                arrangement.initialize(planes);
-                REQUIRE(count_num_cells(arrangement.get_root()) == 7);
-                REQUIRE(count_num_edges(arrangement.get_root()) == 27);
-                REQUIRE(arrangement.get_vertex_count() == 12);
-                REQUIRE(arrangement.get_num_unique_planes() == 6);
+                auto arrangement = compute_arrangement(planes);
+                REQUIRE(arrangement.unique_plane_indices.size() == 6);
+                REQUIRE(arrangement.cells.size() == 7);
+                REQUIRE(count_num_halfedges(arrangement) == 27);
+                REQUIRE(arrangement.vertices.size() == 12);
+                REQUIRE(arrangement.unique_planes.size() == 6);
                 validate_arrangement(arrangement);
             }
 
@@ -266,11 +280,12 @@ void test_2D()
                 planes.push_back({3, -1, -1});
                 planes.push_back({-3, 1, 1});
                 planes.push_back({-1, -1, 2});
-                arrangement.initialize(planes);
-                REQUIRE(count_num_cells(arrangement.get_root()) == 4);
-                REQUIRE(count_num_edges(arrangement.get_root()) == 15);
-                REQUIRE(arrangement.get_vertex_count() == 8);
-                REQUIRE(arrangement.get_num_unique_planes() == 5);
+                auto arrangement = compute_arrangement(planes);
+                REQUIRE(arrangement.unique_plane_indices.size() == 6);
+                REQUIRE(arrangement.cells.size() == 4);
+                REQUIRE(count_num_halfedges(arrangement) == 15);
+                REQUIRE(arrangement.vertices.size() == 8);
+                REQUIRE(arrangement.unique_planes.size() == 5);
                 validate_arrangement(arrangement);
             }
         }
@@ -282,48 +297,36 @@ void test_3D()
 {
     using namespace simplicial_arrangement;
 
-    std::function<size_t(const BSPNode<3>&)> count_num_cells;
-    count_num_cells = [&](const BSPNode<3>& root) -> size_t {
-        if (root.negative != nullptr && root.positive != nullptr) {
-            return count_num_cells(*root.negative) + count_num_cells(*root.positive);
-        } else {
-            return 1;
+    auto count_num_cells = [](auto& arrangement) { return arrangement.cells.size(); };
+
+    auto count_num_half_faces = [](auto& arrangement) {
+        size_t count = 0;
+        for (const auto& cell : arrangement.cells) {
+            count += cell.faces.size();
         }
+        return count;
     };
 
-    std::function<size_t(const BSPNode<3>&)> count_num_faces;
-    count_num_faces = [&](const BSPNode<3>& root) -> size_t {
-        if (root.negative != nullptr && root.positive != nullptr) {
-            return count_num_faces(*root.negative) + count_num_faces(*root.positive);
-        } else {
-            return root.cell.faces.size();
+    auto count_num_half_edges = [](auto& arrangement) {
+        size_t count = 0;
+        for (const auto& cell : arrangement.cells) {
+            for (const auto fid : cell.faces) {
+                count += arrangement.faces[fid].vertices.size();
+            }
         }
+        return count;
     };
 
-    std::function<size_t(const BSPNode<3>&)> count_num_half_edges;
-    count_num_half_edges = [&](const BSPNode<3>& root) -> size_t {
-        if (root.negative != nullptr && root.positive != nullptr) {
-            return count_num_half_edges(*root.negative) + count_num_half_edges(*root.positive);
-        } else {
-            size_t num_half_edges = 0;
-            std::for_each(root.cell.faces.begin(), root.cell.faces.end(), [&](const auto& face) {
-                num_half_edges += face.edge_planes.size();
-            });
-            return num_half_edges;
-        }
-    };
-
-    SimplicialArrangement<Scalar, 3> arrangement;
     std::vector<Plane<Scalar, 3>> planes;
 
     SECTION("0 implicit")
     {
-        arrangement.initialize(planes);
-        REQUIRE(count_num_cells(arrangement.get_root()) == 1);
-        REQUIRE(count_num_faces(arrangement.get_root()) == 4);
-        REQUIRE(count_num_half_edges(arrangement.get_root()) == 12);
-        REQUIRE(arrangement.get_vertex_count() == 4);
-        REQUIRE(arrangement.get_num_unique_planes() == 4);
+        auto arrangement = compute_arrangement(planes);
+        REQUIRE(count_num_cells(arrangement) == 1);
+        REQUIRE(count_num_half_faces(arrangement) == 4);
+        REQUIRE(count_num_half_edges(arrangement) == 12);
+        REQUIRE(arrangement.vertices.size() == 4);
+        REQUIRE(arrangement.unique_planes.size() == 4);
         validate_arrangement(arrangement);
     }
 
@@ -332,132 +335,132 @@ void test_3D()
         SECTION("quad cross section")
         {
             planes.push_back({1, 1, -1, -1});
-            arrangement.initialize(planes);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 2);
-            REQUIRE(count_num_faces(arrangement.get_root()) == 10);
-            REQUIRE(count_num_half_edges(arrangement.get_root()) == 36);
-            REQUIRE(arrangement.get_vertex_count() == 8);
-            REQUIRE(arrangement.get_num_unique_planes() == 5);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 2);
+            REQUIRE(count_num_half_faces(arrangement) == 10);
+            REQUIRE(count_num_half_edges(arrangement) == 36);
+            REQUIRE(arrangement.vertices.size() == 8);
+            REQUIRE(arrangement.unique_planes.size() == 5);
             validate_arrangement(arrangement);
         }
         SECTION("tri cross section")
         {
             planes.push_back({1, -1, -1, -1});
-            arrangement.initialize(planes);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 2);
-            REQUIRE(count_num_faces(arrangement.get_root()) == 9);
-            REQUIRE(count_num_half_edges(arrangement.get_root()) == 30);
-            REQUIRE(arrangement.get_vertex_count() == 7);
-            REQUIRE(arrangement.get_num_unique_planes() == 5);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 2);
+            REQUIRE(count_num_half_faces(arrangement) == 9);
+            REQUIRE(count_num_half_edges(arrangement) == 30);
+            REQUIRE(arrangement.vertices.size() == 7);
+            REQUIRE(arrangement.unique_planes.size() == 5);
             validate_arrangement(arrangement);
         }
         SECTION("cut through a vertex")
         {
             planes.push_back({0, -1, -1, 1});
-            arrangement.initialize(planes);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 2);
-            REQUIRE(count_num_faces(arrangement.get_root()) == 9);
-            REQUIRE(count_num_half_edges(arrangement.get_root()) == 28);
-            REQUIRE(arrangement.get_vertex_count() == 6);
-            REQUIRE(arrangement.get_num_unique_planes() == 5);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 2);
+            REQUIRE(count_num_half_faces(arrangement) == 9);
+            REQUIRE(count_num_half_edges(arrangement) == 28);
+            REQUIRE(arrangement.vertices.size() == 6);
+            REQUIRE(arrangement.unique_planes.size() == 5);
             validate_arrangement(arrangement);
         }
         SECTION("cut through an edge")
         {
             planes.push_back({0, 0, -1, 1});
-            arrangement.initialize(planes);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 2);
-            REQUIRE(count_num_faces(arrangement.get_root()) == 8);
-            REQUIRE(count_num_half_edges(arrangement.get_root()) == 24);
-            REQUIRE(arrangement.get_vertex_count() == 5);
-            REQUIRE(arrangement.get_num_unique_planes() == 5);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 2);
+            REQUIRE(count_num_half_faces(arrangement) == 8);
+            REQUIRE(count_num_half_edges(arrangement) == 24);
+            REQUIRE(arrangement.vertices.size() == 5);
+            REQUIRE(arrangement.unique_planes.size() == 5);
             validate_arrangement(arrangement);
         }
         SECTION("cut through a face")
         {
             planes.push_back({0, 0, 0, 1});
-            arrangement.initialize(planes);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 1);
-            REQUIRE(count_num_faces(arrangement.get_root()) == 4);
-            REQUIRE(count_num_half_edges(arrangement.get_root()) == 12);
-            REQUIRE(arrangement.get_vertex_count() == 4);
-            REQUIRE(arrangement.get_num_unique_planes() == 4);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 1);
+            REQUIRE(count_num_half_faces(arrangement) == 4);
+            REQUIRE(count_num_half_edges(arrangement) == 12);
+            REQUIRE(arrangement.vertices.size() == 4);
+            REQUIRE(arrangement.unique_planes.size() == 4);
             validate_arrangement(arrangement);
         }
     }
 
-    SECTION("2 implicits")
+     SECTION("2 implicits")
     {
         SECTION("not intersecting cuts")
         {
             planes.push_back({1, -2, -2, -2});
             planes.push_back({-2, 1, -2, -2});
-            arrangement.initialize(planes);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 3);
-            REQUIRE(count_num_faces(arrangement.get_root()) == 14);
-            REQUIRE(count_num_half_edges(arrangement.get_root()) == 48);
-            REQUIRE(arrangement.get_vertex_count() == 10);
-            REQUIRE(arrangement.get_num_unique_planes() == 6);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 3);
+            REQUIRE(count_num_half_faces(arrangement) == 14);
+            REQUIRE(count_num_half_edges(arrangement) == 48);
+            REQUIRE(arrangement.vertices.size() == 10);
+            REQUIRE(arrangement.unique_planes.size() == 6);
             validate_arrangement(arrangement);
         }
         SECTION("crossing")
         {
             planes.push_back({2, -1, -1, -1});
             planes.push_back({-1, 2, -1, -1});
-            arrangement.initialize(planes);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 4);
-            REQUIRE(count_num_faces(arrangement.get_root()) == 20);
-            REQUIRE(count_num_half_edges(arrangement.get_root()) == 72);
-            REQUIRE(arrangement.get_vertex_count() == 12);
-            REQUIRE(arrangement.get_num_unique_planes() == 6);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 4);
+            REQUIRE(count_num_half_faces(arrangement) == 20);
+            REQUIRE(count_num_half_edges(arrangement) == 72);
+            REQUIRE(arrangement.vertices.size() == 12);
+            REQUIRE(arrangement.unique_planes.size() == 6);
             validate_arrangement(arrangement);
         }
         SECTION("touching")
         {
             planes.push_back({1, -1, -1, -1});
             planes.push_back({-1, 1, -1, -1});
-            arrangement.initialize(planes);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 3);
-            REQUIRE(count_num_faces(arrangement.get_root()) == 14);
-            REQUIRE(count_num_half_edges(arrangement.get_root()) == 46);
-            REQUIRE(arrangement.get_vertex_count() == 9);
-            REQUIRE(arrangement.get_num_unique_planes() == 6);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 3);
+            REQUIRE(count_num_half_faces(arrangement) == 14);
+            REQUIRE(count_num_half_edges(arrangement) == 46);
+            REQUIRE(arrangement.vertices.size() == 9);
+            REQUIRE(arrangement.unique_planes.size() == 6);
             validate_arrangement(arrangement);
         }
         SECTION("duplicated cuts")
         {
             planes.push_back({1, 1, -1, -1});
             planes.push_back({2, 2, -2, -2});
-            arrangement.initialize(planes);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 2);
-            REQUIRE(count_num_faces(arrangement.get_root()) == 10);
-            REQUIRE(count_num_half_edges(arrangement.get_root()) == 36);
-            REQUIRE(arrangement.get_vertex_count() == 8);
-            REQUIRE(arrangement.get_num_unique_planes() == 5);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 2);
+            REQUIRE(count_num_half_faces(arrangement) == 10);
+            REQUIRE(count_num_half_edges(arrangement) == 36);
+            REQUIRE(arrangement.vertices.size() == 8);
+            REQUIRE(arrangement.unique_planes.size() == 5);
             validate_arrangement(arrangement);
         }
         SECTION("2 cuts through the same vertex")
         {
             planes.push_back({0, 0, 1, -1});
             planes.push_back({0, 2, -2, 0});
-            arrangement.initialize(planes);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 4);
-            REQUIRE(count_num_faces(arrangement.get_root()) == 17);
-            REQUIRE(count_num_half_edges(arrangement.get_root()) == 52);
-            REQUIRE(arrangement.get_vertex_count() == 7);
-            REQUIRE(arrangement.get_num_unique_planes() == 6);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 4);
+            REQUIRE(count_num_half_faces(arrangement) == 17);
+            REQUIRE(count_num_half_edges(arrangement) == 52);
+            REQUIRE(arrangement.vertices.size() == 7);
+            REQUIRE(arrangement.unique_planes.size() == 6);
             validate_arrangement(arrangement);
         }
         SECTION("2 cuts through faces")
         {
             planes.push_back({0, 0, 0, 1});
             planes.push_back({0, 0, 0, 2});
-            arrangement.initialize(planes);
-            REQUIRE(count_num_cells(arrangement.get_root()) == 1);
-            REQUIRE(count_num_faces(arrangement.get_root()) == 4);
-            REQUIRE(count_num_half_edges(arrangement.get_root()) == 12);
-            REQUIRE(arrangement.get_vertex_count() == 4);
-            REQUIRE(arrangement.get_num_unique_planes() == 4);
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 1);
+            REQUIRE(count_num_half_faces(arrangement) == 4);
+            REQUIRE(count_num_half_edges(arrangement) == 12);
+            REQUIRE(arrangement.vertices.size() == 4);
+            REQUIRE(arrangement.unique_planes.size() == 4);
             validate_arrangement(arrangement);
         }
     }

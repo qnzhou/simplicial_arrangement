@@ -1,6 +1,6 @@
 #pragma once
 
-#include <absl/numeric/int128.h>
+#include <simplicial_arrangement/simplicial_arrangement.h>
 #include <spdlog/spdlog.h>
 
 #include <array>
@@ -9,21 +9,9 @@
 
 namespace simplicial_arrangement {
 
-using Int = absl::int128;
-
 constexpr size_t INVALID = std::numeric_limits<size_t>::max();
 
 spdlog::logger& logger();
-
-/**
- * A plane is defined by the barycentric plane equation:
- *     f0 * b0 + f1 * b1 + f2 * b2 + f3 * b3 = 0 // For 3D
- *     f0 * b0 + f1 * b1 + f2 * b2 = 0           // For 2D
- * where the b's are the barycentric variables, and f's are the
- * plane equation coefficients.  We store the f's for each plane.
- */
-template <typename Scalar, int DIM>
-using Plane = std::array<Scalar, DIM + 1>;
 
 /**
  * A point is represented as the intersection of planes.  We store the index

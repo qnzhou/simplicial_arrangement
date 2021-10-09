@@ -1,8 +1,31 @@
 #pragma once
 
+#include <absl/numeric/int128.h>
+
+#include <array>
 #include <vector>
 
 namespace simplicial_arrangement {
+
+using Int = absl::int128;
+
+/**
+ * A plane is defined by the barycentric plane equation:
+ *     f0 * b0 + f1 * b1 + f2 * b2 + f3 * b3 = 0 // For 3D
+ *     f0 * b0 + f1 * b1 + f2 * b2 = 0           // For 2D
+ * where the b's are the barycentric variables, and f's are the
+ * plane equation coefficients.  We store the f's for each plane.
+ */
+template <typename Scalar, int DIM>
+using Plane = std::array<Scalar, DIM + 1>;
+
+template <int DIM>
+struct Arrangement;
+
+Arrangement<2> compute_arrangement(const std::vector<Plane<double, 2>>& planes);
+Arrangement<2> compute_arrangement(const std::vector<Plane<Int, 2>>& planes);
+Arrangement<3> compute_arrangement(const std::vector<Plane<double, 3>>& planes);
+Arrangement<3> compute_arrangement(const std::vector<Plane<Int, 3>>& planes);
 
 /**
  * A self-contained data structure for 2D or 3D arrangement representation.
@@ -25,21 +48,20 @@ struct Arrangement
     struct Face
     {
         /**
-         * An ordered list of boundary vertices.  The ordering determines the
-         * face orientation.
+         * An ordered list of boundary vertices.
+         *
+         * In 3D, the face is always oriented ccw when viewed from the positive
+         * side of the plane.
+         *
+         * In 2D, the face (aka edge) is oriented such that the positive side of
+         * the plane is on the right.
          */
         std::vector<size_t> vertices;
 
         /**
-         * A set of supporing plane indices for this face.
+         * Plane index of the supporting plane.
          */
-        std::vector<size_t> supporting_planes;
-
-        /**
-         * Whether this face is consistently orirented with each supporting
-         * plane.
-         */
-        std::vector<bool> supporting_plane_orientations;
+        size_t supporting_plane = None;
 
         /**
          * The cell index on the positive and negative side of this face.
@@ -69,6 +91,10 @@ struct Arrangement
     std::vector<Vertex> vertices;
     std::vector<Face> faces;
     std::vector<Cell> cells;
+
+    std::vector<size_t> unique_plane_indices;
+    std::vector<std::vector<size_t>> unique_planes;
+    std::vector<std::vector<bool>> unique_plane_orientations;
 };
 
 } // namespace simplicial_arrangement

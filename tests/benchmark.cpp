@@ -1,4 +1,4 @@
-#include <simplicial_arrangement/SimplicialArrangement.h>
+#include <simplicial_arrangement/simplicial_arrangement.h>
 
 #include <catch2/catch.hpp>
 #include <random>
@@ -18,6 +18,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 
         std::mt19937 gen(7);
         std::uniform_int_distribution<> distrib(-(1 << 12), 1 << 12);
+        std::uniform_int_distribution<> rand_index(0, N);
 
         for (size_t i = 0; i < N; i++) {
             Int v0, v1, v2;
@@ -29,50 +30,41 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
                 {static_cast<double>(v0), static_cast<double>(v1), static_cast<double>(v2)});
         }
 
-        std::function<size_t(const BSPNode<2>&)> count_num_cells;
-        count_num_cells = [&](const BSPNode<2>& root) -> size_t {
-            if (root.negative != nullptr && root.positive != nullptr) {
-                return count_num_cells(*root.negative) + count_num_cells(*root.positive);
-            } else {
-                return 1;
-            }
-        };
-
-        BENCHMARK("2D arrangement (int, 3 planes)", i)
+        BENCHMARK_ADVANCED("2D arrangement (int, 3 planes)")(Catch::Benchmark::Chronometer meter)
         {
-            SimplicialArrangement<Int, 2> int_arrangement;
-            i = i % (N - 3);
-            int_arrangement.initialize({int_data[i], int_data[i + 1], int_data[i + 2]});
-            return int_arrangement;
-        };
+            std::vector<Plane<Int, 2>> planes;
+            planes.reserve(3);
+            planes.push_back(int_data[rand_index(gen)]);
+            planes.push_back(int_data[rand_index(gen)]);
+            planes.push_back(int_data[rand_index(gen)]);
 
-        BENCHMARK("2D arrangement (double, 3 planes)", i)
-        {
-            SimplicialArrangement<double, 2> double_arrangement;
-            i = i % (N - 3);
-            double_arrangement.initialize({double_data[i], double_data[i + 1], double_data[i + 2]});
-            return double_arrangement;
+            meter.measure([&]() { return compute_arrangement(planes); });
         };
-
-        BENCHMARK_ADVANCED("2D arrangement (int, 100 planes)")(Catch::Benchmark::Chronometer meter)
+        BENCHMARK_ADVANCED("2D arrangement (double, 3 planes)")(Catch::Benchmark::Chronometer meter)
         {
-            SimplicialArrangement<Int, 2> int_arrangement;
-            int_arrangement.set_planes(int_data);
-            meter.measure([&]() { int_arrangement.initialize(); });
-            REQUIRE(count_num_cells(int_arrangement.get_root()) == 1035);
+            std::vector<Plane<double, 2>> planes;
+            planes.reserve(3);
+            planes.push_back(double_data[rand_index(gen)]);
+            planes.push_back(double_data[rand_index(gen)]);
+            planes.push_back(double_data[rand_index(gen)]);
+
+            meter.measure([&]() { return compute_arrangement(planes); });
         };
-
-        BENCHMARK_ADVANCED("2D arrangement (double, 100 planes)")
-        (Catch::Benchmark::Chronometer meter)
+        BENCHMARK("2D arrangement (int, 100 planes)")
         {
-            SimplicialArrangement<double, 2> double_arrangement;
-            double_arrangement.set_planes(double_data);
-            meter.measure([&]() { double_arrangement.initialize(); });
-            REQUIRE(count_num_cells(double_arrangement.get_root()) == 1035);
+            auto r = compute_arrangement(int_data);
+            REQUIRE(r.cells.size() == 1035);
+            return r;
+        };
+        BENCHMARK("2D arrangement (double, 100 planes)")
+        {
+            auto r = compute_arrangement(double_data);
+            REQUIRE(r.cells.size() == 1035);
+            return r;
         };
     }
 
-    SECTION("3D")
+     SECTION("3D")
     {
         constexpr size_t N = 1e2;
         std::vector<Plane<Int, 3>> int_data;
@@ -82,6 +74,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 
         std::mt19937 gen(7);
         std::uniform_int_distribution<> distrib(-(1 << 12), 1 << 12);
+        std::uniform_int_distribution<> rand_index(0, N);
 
         for (size_t i = 0; i < N; i++) {
             Int v0, v1, v2, v3;
@@ -96,46 +89,37 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
                 static_cast<double>(v3)});
         }
 
-        std::function<size_t(const BSPNode<3>&)> count_num_cells;
-        count_num_cells = [&](const BSPNode<3>& root) -> size_t {
-            if (root.negative != nullptr && root.positive != nullptr) {
-                return count_num_cells(*root.negative) + count_num_cells(*root.positive);
-            } else {
-                return 1;
-            }
-        };
-
-        BENCHMARK("3D arrangement (int, 3 planes)", i)
+        BENCHMARK_ADVANCED("3D arrangement (int, 3 planes)")(Catch::Benchmark::Chronometer meter)
         {
-            SimplicialArrangement<Int, 3> int_arrangement;
-            i = i % (N - 3);
-            int_arrangement.initialize({int_data[i], int_data[i + 1], int_data[i + 2]});
-            return int_arrangement;
-        };
+            std::vector<Plane<Int, 3>> planes;
+            planes.reserve(3);
+            planes.push_back(int_data[rand_index(gen)]);
+            planes.push_back(int_data[rand_index(gen)]);
+            planes.push_back(int_data[rand_index(gen)]);
 
-        BENCHMARK("3D arrangement (double, 3 planes)", i)
-        {
-            SimplicialArrangement<double, 3> double_arrangement;
-            i = i % (N - 3);
-            double_arrangement.initialize({double_data[i], double_data[i + 1], double_data[i + 2]});
-            return double_arrangement;
+            meter.measure([&]() { return compute_arrangement(planes); });
         };
-
-        BENCHMARK_ADVANCED("3D arrangement (int, 100 planes)")(Catch::Benchmark::Chronometer meter)
+        BENCHMARK_ADVANCED("3D arrangement (double, 3 planes)")(Catch::Benchmark::Chronometer meter)
         {
-            SimplicialArrangement<Int, 3> int_arrangement;
-            int_arrangement.set_planes(int_data);
-            meter.measure([&]() { int_arrangement.initialize(); });
-            REQUIRE(count_num_cells(int_arrangement.get_root()) == 19750);
+            std::vector<Plane<double, 3>> planes;
+            planes.reserve(3);
+            planes.push_back(double_data[rand_index(gen)]);
+            planes.push_back(double_data[rand_index(gen)]);
+            planes.push_back(double_data[rand_index(gen)]);
+
+            meter.measure([&]() { return compute_arrangement(planes); });
         };
-
-        BENCHMARK_ADVANCED("3D arrangement (double, 100 planes)")
-        (Catch::Benchmark::Chronometer meter)
+        BENCHMARK("3D arrangement (int, 100 planes)")
         {
-            SimplicialArrangement<double, 3> double_arrangement;
-            double_arrangement.set_planes(double_data);
-            meter.measure([&]() { double_arrangement.initialize(); });
-            REQUIRE(count_num_cells(double_arrangement.get_root()) == 19750);
+            auto r = compute_arrangement(int_data);
+            REQUIRE(r.cells.size() == 19750);
+            return r;
+        };
+        BENCHMARK("3D arrangement (double, 100 planes)")
+        {
+            auto r = compute_arrangement(double_data);
+            REQUIRE(r.cells.size() == 19750);
+            return r;
         };
     }
 }

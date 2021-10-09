@@ -1,6 +1,6 @@
 #pragma once
 
-#include <simplicial_arrangement/common.h>
+#include "common.h"
 
 #include <memory>
 #include <vector>

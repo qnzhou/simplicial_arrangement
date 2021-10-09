@@ -31,7 +31,7 @@ public:
         return m_parent[root_j] = root_i;
     }
 
-    std::vector<std::vector<size_t>> extract_disjoint_sets();
+    std::tuple<std::vector<std::vector<size_t>>, std::vector<size_t>> extract_disjoint_sets();
     size_t extract_disjoint_set_indices(std::vector<size_t>& index_map);
 
 private:

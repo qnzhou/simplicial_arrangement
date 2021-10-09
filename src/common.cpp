@@ -1,4 +1,4 @@
-#include <simplicial_arrangement/common.h>
+#include "common.h"
 
 #include <spdlog/sinks/stdout_color_sinks.h>
 

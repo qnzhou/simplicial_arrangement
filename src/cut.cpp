@@ -1,6 +1,6 @@
-#include <simplicial_arrangement/BSPNode.h>
-#include <simplicial_arrangement/SimplicialArrangement.h>
-#include <simplicial_arrangement/cut.h>
+#include "BSPNode.h"
+#include "SimplicialArrangement.h"
+#include "cut.h"
 
 #include <implicit_predicates/implicit_predicates.h>
 

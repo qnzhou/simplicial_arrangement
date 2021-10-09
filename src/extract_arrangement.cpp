@@ -1,5 +1,5 @@
-#include <simplicial_arrangement/SimplicialArrangement.h>
-#include <simplicial_arrangement/extract_arrangement.h>
+#include "extract_arrangement.h"
+#include "SimplicialArrangement.h"
 
 #include <absl/container/flat_hash_map.h>
 
@@ -61,37 +61,72 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangement<Scalar, 2>& arrangem
     absl::flat_hash_map<std::array<size_t, 2>, size_t> edge_map;
     edge_map.reserve(num_vertices * 3); // Just a guess.
 
-    size_t num_unique_planes;
-    std::vector<size_t> unique_plane_indices;
-    std::tie(unique_plane_indices, num_unique_planes) = arrangement.get_unique_plane_indices();
-    std::vector<std::vector<size_t>> coplanar_planes = arrangement.extract_coplanar_planes();
+    auto extract_unique_planes = [&]() {
+        auto [coplanar_planes, unique_plane_indices] = arrangement.extract_coplanar_planes();
+        size_t num_unique_planes = coplanar_planes.size();
+        std::vector<std::vector<bool>> coplanar_plane_orientations;
+        coplanar_plane_orientations.reserve(num_unique_planes);
+        for (const auto& planes : coplanar_planes) {
+            if (planes.size() == 1)
+                coplanar_plane_orientations.push_back({true});
+            else {
+                size_t num_planes = planes.size();
+                std::vector<bool> orientations(num_planes);
+                for (size_t i = 0; i < num_planes; i++) {
+                    orientations[i] = is_plane_consistently_oriented<Scalar, 2>(
+                        arrangement.get_planes()[0], arrangement.get_planes()[i]);
+                }
+                coplanar_plane_orientations.push_back(std::move(orientations));
+            }
+        }
 
-    auto add_face = [&](size_t v0, size_t v1) -> std::tuple<size_t, bool> {
+        r.unique_plane_indices = std::move(unique_plane_indices);
+        r.unique_planes = std::move(coplanar_planes);
+        r.unique_plane_orientations = std::move(coplanar_plane_orientations);
+    };
+
+    auto add_face = [&](size_t v0,
+                        size_t v1,
+                        size_t supporting_plane_index,
+                        bool cell_on_positive_side_of_supporting_plane) -> size_t {
         assert(v0 != v1);
-        bool oriented = v0 > v1;
-        if (oriented) std::swap(v0, v1);
-        // oriented means the cell is on the positive side of the face.
-        // Typically, if the face is oriented to point outwards, the cell is on
-        // the negative side.
+
+        // Compute connonical ordering of the face.
+        bool reversed = v0 > v1;
+        if (reversed) std::swap(v0, v1);
 
         auto itr = edge_map.find({v0, v1});
         if (itr == edge_map.end()) {
-            Arrangement<2>::Face out_face;
-            out_face.vertices = {v0, v1};
-
             size_t fid = r.faces.size();
-            edge_map.insert({{v0, v1}, fid});
+
+            // Generate face entry.
+            Arrangement<2>::Face out_face;
+            out_face.supporting_plane = supporting_plane_index;
+            // By construction, a cell is always on the left side of the face in
+            // its original ordering.  The following converts the ordering such
+            // that positive side of the supporting plane is on the right side
+            // of the edge.
+            if (cell_on_positive_side_of_supporting_plane) {
+                if (reversed) out_face.vertices = {v0, v1};
+                else out_face.vertices = {v1, v0};
+            } else {
+                if (reversed) out_face.vertices = {v1, v0};
+                else out_face.vertices = {v0, v1};
+            }
             r.faces.push_back(std::move(out_face));
-            return {fid, oriented};
+
+            // Note: Always use connonical ordering of the face as the key.
+            edge_map.insert({{v0, v1}, fid});
+
+            return fid;
         } else {
-            return {itr->second, oriented};
+            return itr->second;
         }
     };
 
     auto add_cell = [&](const Cell<2>& cell, const std::vector<bool>& plane_orientations) {
         size_t num_cell_edges = cell.edges.size();
         const size_t cell_id = r.cells.size();
-        const auto& planes = arrangement.get_planes();
 
         Arrangement<2>::Cell out_cell;
         out_cell.faces.reserve(num_cell_edges);
@@ -109,8 +144,8 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangement<Scalar, 2>& arrangem
         for (size_t i = 0; i < num_cell_edges; i++) {
             size_t j = (i + 1) % num_cell_edges;
 
-            auto [fid, oriented] = add_face(vertex_indices[i], vertex_indices[j]);
-            // oriented == true means cell is on the positive side of the face.
+            bool oriented = plane_orientations[cell.edges[i]];
+            auto fid = add_face(vertex_indices[i], vertex_indices[j], cell.edges[i], oriented);
 
             out_cell.faces.push_back(fid);
             out_cell.face_orientations.push_back(oriented);
@@ -120,29 +155,6 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangement<Scalar, 2>& arrangem
                 out_face.positive_cell = cell_id;
             } else {
                 out_face.negative_cell = cell_id;
-            }
-
-            const size_t seed_supporting_plane = cell.edges[i];
-            bool seed_plane_orientation = plane_orientations[seed_supporting_plane];
-            // seed_plane_orientation == true means cell is on the positive side of
-            // the plane.
-            size_t unique_plane_id = unique_plane_indices[seed_supporting_plane];
-            out_face.supporting_planes.reserve(coplanar_planes[unique_plane_id].size());
-
-            out_face.supporting_planes.push_back(seed_supporting_plane);
-            out_face.supporting_plane_orientations.push_back(seed_plane_orientation == oriented);
-
-            for (auto pid : coplanar_planes[unique_plane_id]) {
-                if (pid == seed_supporting_plane) continue;
-                out_face.supporting_planes.push_back(pid);
-                if (is_plane_consistently_oriented<Scalar, 2>(
-                        planes[seed_supporting_plane], planes[pid])) {
-                    out_face.supporting_plane_orientations.push_back(
-                        out_face.supporting_plane_orientations[0]);
-                } else {
-                    out_face.supporting_plane_orientations.push_back(
-                        !out_face.supporting_plane_orientations[0]);
-                }
             }
         }
         r.cells.push_back(std::move(out_cell));
@@ -163,6 +175,8 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangement<Scalar, 2>& arrangem
             add_cell(node.cell, bounding_plane_orientations);
         }
     };
+
+    extract_unique_planes();
     depth_first_traversal(arrangement.get_root());
 
     return r;
@@ -173,19 +187,37 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangement<Scalar, 3>& arrangem
 {
     Arrangement<3> r;
     r.vertices = arrangement.extract_vertices();
-    const auto& planes = arrangement.get_planes();
 
     absl::flat_hash_map<std::vector<size_t>, size_t> face_map;
     face_map.reserve(r.vertices.size() * 3); // TODO: need more accuate guess.
 
-    size_t num_unique_planes;
-    std::vector<size_t> unique_plane_indices;
-    std::tie(unique_plane_indices, num_unique_planes) = arrangement.get_unique_plane_indices();
-    std::vector<std::vector<size_t>> coplanar_planes = arrangement.extract_coplanar_planes();
+    auto extract_unique_planes = [&]() {
+        auto [coplanar_planes, unique_plane_indices] = arrangement.extract_coplanar_planes();
+        size_t num_unique_planes = coplanar_planes.size();
+        std::vector<std::vector<bool>> coplanar_plane_orientations;
+        coplanar_plane_orientations.reserve(num_unique_planes);
+        for (const auto& planes : coplanar_planes) {
+            if (planes.size() == 1)
+                coplanar_plane_orientations.push_back({true});
+            else {
+                size_t num_planes = planes.size();
+                std::vector<bool> orientations(num_planes);
+                for (size_t i = 0; i < num_planes; i++) {
+                    orientations[i] = is_plane_consistently_oriented<Scalar, 3>(
+                        arrangement.get_planes()[0], arrangement.get_planes()[i]);
+                }
+                coplanar_plane_orientations.push_back(std::move(orientations));
+            }
+        }
+
+        r.unique_plane_indices = std::move(unique_plane_indices);
+        r.unique_planes = std::move(coplanar_planes);
+        r.unique_plane_orientations = std::move(coplanar_plane_orientations);
+    };
+
 
     auto add_face = [&](const Face<3>& face,
-                        const std::vector<bool>& plane_orientations) -> std::tuple<size_t, bool> {
-        const size_t num_edges = face.edge_planes.size();
+            bool cell_on_positive_side_of_supporting_plane) -> size_t { const size_t num_edges = face.edge_planes.size();
         assert(num_edges >= 3);
 
         // Step 1: convert boundary edge plane loop into vertex index loop.
@@ -205,9 +237,9 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangement<Scalar, 3>& arrangem
         // uniquely determine the starting point and ordering of the boundary
         // vertex loop.
 
-        // on_positive_side == true if the cell is on the positive side of the
-        // face after reordering.
-        bool on_positive_side = false;
+        // cell_on_positive_side_of_face == true if the cell is on the positive
+        // side of the face after reordering.
+        bool cell_on_positive_side_of_face = false;
         {
             auto itr = std::min_element(vertex_indices.begin(), vertex_indices.end());
             auto next_itr = cyclic_next(vertex_indices, itr);
@@ -215,11 +247,11 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangement<Scalar, 3>& arrangem
 
             if (*next_itr < *prev_itr) {
                 std::rotate(vertex_indices.begin(), itr, vertex_indices.end());
-                on_positive_side = false;
+                cell_on_positive_side_of_face = false;
             } else {
                 std::rotate(vertex_indices.begin(), next_itr, vertex_indices.end());
                 std::reverse(vertex_indices.begin(), vertex_indices.end());
-                on_positive_side = true;
+                cell_on_positive_side_of_face = true;
             }
         }
 
@@ -231,36 +263,19 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangement<Scalar, 3>& arrangem
 
             // Step 3: generate new face entry.
             Arrangement<3>::Face out_face;
-            out_face.vertices = std::move(vertex_indices);
-
-            const size_t seed_plane_index = face.supporting_plane;
-            const size_t unique_plane_id = unique_plane_indices[seed_plane_index];
-            const size_t num_coplanar_planes = coplanar_planes[unique_plane_id].size();
-
-            out_face.supporting_planes.reserve(num_coplanar_planes);
-            out_face.supporting_plane_orientations.reserve(num_coplanar_planes);
-
-            out_face.supporting_planes.push_back(seed_plane_index);
-            out_face.supporting_plane_orientations.push_back(
-                plane_orientations[seed_plane_index] == on_positive_side);
-
-            for (auto plane_index : coplanar_planes[unique_plane_id]) {
-                if (plane_index == seed_plane_index) continue;
-                out_face.supporting_planes.push_back(plane_index);
-                if (is_plane_consistently_oriented<Scalar, 3>(
-                        planes[seed_plane_index], planes[plane_index])) {
-                    out_face.supporting_plane_orientations.push_back(
-                        out_face.supporting_plane_orientations[0]);
-                } else {
-                    out_face.supporting_plane_orientations.push_back(
-                        !out_face.supporting_plane_orientations[0]);
-                }
+            out_face.supporting_plane = face.supporting_plane;
+            if (cell_on_positive_side_of_face == cell_on_positive_side_of_supporting_plane) {
+                out_face.vertices = std::move(vertex_indices);
+            } else {
+                std::reverse(vertex_indices.begin(), vertex_indices.end());
+                out_face.vertices = std::move(vertex_indices);
             }
+
             r.faces.push_back(std::move(out_face));
         } else {
             fid = itr->second;
         }
-        return {fid, on_positive_side};
+        return fid;
     };
 
     auto add_cell = [&](const Cell<3>& cell, const std::vector<bool>& plane_orientations) {
@@ -272,7 +287,8 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangement<Scalar, 3>& arrangem
         out_cell.face_orientations.reserve(num_faces);
 
         for (const auto& face : cell.faces) {
-            auto [fid, on_positive_side] = add_face(face, plane_orientations);
+            bool on_positive_side = plane_orientations[face.supporting_plane];
+            auto fid = add_face(face, on_positive_side);
             out_cell.faces.push_back(fid);
             out_cell.face_orientations.push_back(on_positive_side);
 
@@ -301,6 +317,7 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangement<Scalar, 3>& arrangem
         }
     };
 
+    extract_unique_planes();
     depth_first_traversal(arrangement.get_root());
 
     return r;

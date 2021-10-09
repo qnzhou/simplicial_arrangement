@@ -1,6 +1,6 @@
 #pragma once
 
-#include <simplicial_arrangement/Arrangement.h>
+#include "common.h"
 
 namespace simplicial_arrangement {
 // Forward declarations.
