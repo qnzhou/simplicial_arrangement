@@ -5,10 +5,6 @@
 A simplicial arrangement is defined as the arrangement over a 2 or 3 dimensional
 simplex cut by a set of hyperplanes.
 
-In this work, a hyperplane is represented implicitly by the coefficients of the
-Barycentric plane equation.  A point is represented indirectly as the
-intersection of `dim` hyperplanes, where `dim` is either 2 or 3.
-
 ## Build
 
 ```sh
@@ -22,24 +18,29 @@ make
 # Option 2: build both library and unit tests.
 cmake .. -DSIMPLICIAL_ARRANGEMENT_UNIT_TESTS=On
 make
-./simplicial_arrangement_tests
+./simplicial_arrangement_tests           # to run unit tests.
+./simplicial_arrangement_tests benchmark # to run benchmark.
 ```
 
-## Usage
+## Quick start
+This library provides a single function `compute_arrangement` and the
+corresponding arrangement data structures.
 
 ```c++
 #include <simplicial_arrangement/simplicial_arrangement.h>
 
-// 3D with double as scalar.
-std::vector<simplicial_arrangement::Plane<double, 3>> planes;
-// Populate planes.
-auto arrangement = simplicial_arrangement::compute_arrangement(planes);
+using namespace simplicial_arrangement;
+using Scalar = double;
+
+std::vector<Plane<Scalar, 3>> cut_planes;
+// ... populate cut_planes ...
+
+auto arrangement = compute_arrangement(cut_planes);
 ```
 
 The output `arrangement` object contains information of vertices, faces and
-cells as well as the cell adjacency information.  Please see
-[simplicial_arrangement.h](include/simplicial_arrangement/simplicial_arrangement.h)
-for more details.
+cells as well as the cell adjacency information.  Please see [data
+structure](#data-structure) section for more details.
 
 ## Data structures
 
