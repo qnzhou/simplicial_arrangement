@@ -67,8 +67,8 @@ A point is represented implicitly as the intersection of `dim` planes, where
 `dim` is either 2 or 3:
 
 ```c++
-Point<2> p_2d{0, 1};    ///< 2D intersection of plane 0 and 1.
-Point<3> p_3d{0, 1, 2}; ///< 3D intersection of plane 0, 1, and 2.
+Point<2> point_2d{0, 1};    ///< 2D intersection of plane 0 and 1.
+Point<3> point_3d{0, 1, 2}; ///< 3D intersection of plane 0, 1, and 2.
 ```
 
 ### Arrangement
@@ -78,7 +78,7 @@ the arrangement induced by the input planes within a `DIM`-dimensional simplex.
 
 Note that within `Arrangement<DIM>` structure, we use the convention that the
 first `DIM+1` planes are the boundary planes of the simplex.  The `i`th user
-provided cut plane will be off index `DIM+1+i`.
+provided cut plane will have index `DIM+1+i`.
 
 #### Vertices
 The `vertices` of an arrangement include all intersection points as well as the
@@ -102,7 +102,7 @@ In 3D, a face is a convex polygon.
   corresponding cell on the positive and negative side of the supporting plane
   <sup>[2](#boundary_face)</sup>.
 
-**Guarantee**:
+**Guarantees**:
 1. In 2D, `Face::vertices` are ordered such that the positive side
 of the `Face::supporting_plane` is on the right side of the edge.
 2. In 3D, `Face::vertices` are in counterclockwise order when viewed from the positive
