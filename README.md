@@ -37,10 +37,10 @@ std::vector<Plane<Scalar, 3>> cut_planes;
 
 auto arrangement = compute_arrangement(cut_planes);
 ```
-
-The output `arrangement` object contains information of vertices, faces and
-cells as well as the cell adjacency information.  Please see [data
-structure](#data-structure) section for more details.
+The output `arrangement` object represents the arrangement induced by the cut
+planes within a simplex.  It contains information of vertices, faces and cells
+as well as the cell adjacency and coplanar planes. Please see [data
+structures](#data-structures) section for more details.
 
 ## Data structures
 
@@ -107,7 +107,8 @@ In 3D, a face is a convex polygon.
 of the `Face::supporting_plane` is on the right side of the edge.
 2. In 3D, `Face::vertices` are in counterclockwise order when viewed from the positive
 side of the supporting plane.
-3. There is no duplicate faces regardless of the orientation.
+3. There is no duplicate faces regardless of the orientation.  I.e. no 2 faces
+   are coplanar.
 
 <a name="coplanar_planes">**Note<sup>1</sup>**</a>:
 If there are multiple planes containing a face, `Face::supporting_plane` can be
