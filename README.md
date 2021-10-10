@@ -44,7 +44,7 @@ for more details.
 ## Data structures
 
 ### Plane
-A plane is represented implicitly as the coefficents of the barycentric plane
+A plane is represented implicitly as the coefficients of the barycentric plane
 equation:
 
 ```c++
@@ -80,46 +80,70 @@ first `DIM+1` planes are the boundary planes of the simplex.  The `i`th user
 provided cut plane will be off index `DIM+1+i`.
 
 #### Vertices
-The `vertices` of the arrangement include all intersection points as well as the
+The `vertices` of an arrangement include all intersection points as well as the
 corners of the simplex.  They are represented as an array of `Point<DIM>`s.
 
 **Guarantee**: the arrangement vertices contain no duplicates.
 
 #### Faces
-The `faces` of the arrangement represents a set of (`DIM-1`)-dimensional
+The `faces` of an arrangement represents a set of (`DIM-1`)-dimensional
 polytopes induced by the cut planes within the simplex.  Each face is
 represented by the inner `Face` data structure.
 
-##### 2D
 In 2D, a face is simply an edge.
-
-* `Face::vertices` represents the end points of the 2D edge.
-* `Face::supporting_plane` is a line that contains the 2D edge.
-* `Face::positive_cell` and `Face::negative_cell` are cell indices to the
-  corresponding cell on the positive and negative side of the supporting plane
-  <sup>[1](#boundary_face)</sup>.
-
-**Guarantee**: `Face::vertices` are ordered such that the positive side of the
-`Face::supporting_plane` is on the right side of the edge.
-
-##### 3D
-
 In 3D, a face is a convex polygon.
 
-* `Face::vertices` represents the vertex loop that forms the polygon boundary.
-* `Face::supporting_plane` is a plane that contains the polygon.
+* `Face::vertices` represents the end points of the 2D edge or the boundary
+  vertex loop of a 3D polygon.
+* `Face::supporting_plane` is a plane that contains the face
+  <sup>[1](#coplanar_planes)</sup>.
 * `Face::positive_cell` and `Face::negative_cell` are cell indices to the
   corresponding cell on the positive and negative side of the supporting plane
-  <sup>[1](#boundary_face)</sup>.
+  <sup>[2](#boundary_face)</sup>.
 
-**Guarantee**: `Face::vertices` are in counterclockwise order when viewed from
-the positive side of the supporting plane.
+**Guarantee**:
+1. In 2D, `Face::vertices` are ordered such that the positive side
+of the `Face::supporting_plane` is on the right side of the edge.
+2. In 3D, `Face::vertices` are in counterclockwise order when viewed from the positive
+side of the supporting plane.
+3. There is no duplicate faces regardless of the orientation.
 
-<a name="boundary_face">**Note<sup>1</sup>**</a>:
+<a name="coplanar_planes">**Note<sup>1</sup>**</a>:
+If there are multiple planes containing a face, `Face::supporting_plane` can be
+any of these planes.  Please see the [unique planes section](#unique-planes) for
+data that allow one to recover all planes that are coplanar with this face.
+
+<a name="boundary_face">**Note<sup>2</sup>**</a>:
 If a face is on the boundary of the simplex, the value of
 `Face::positive_cell` or `Face::negative_cell` may be `None`.
 
 #### Cells
+The `cells` of an arrangement represents a set of `DIM`-dimensional convex
+polytopes.  Each cell is represented by the inner `Cell` data structure.
+
+* `Cell::faces` is a list of faces that form the boundary of this cell.  In 2D,
+  they in counterclockwise order.  In 3D, they are unordered.
+* `Cell::face_orientations` is a list of orientations of the faces relative to
+  the cell.  I.e. `face_orientations[i] == true` means the cell is on the
+  positive side of the `i`th face.
 
 #### Unique planes
+If the input cut planes contain coplanar planes, their information is stored in
+three lists:
+
+```c++
+// To find the unique plane index of plane i
+size_t uid = arrangement.unique_plane_indices[i];
+
+// To get the set of coplanar planes corresponding to uid
+auto coplanar_planes = arrangement.unique_planes[uid];
+
+// To check the relative orientation of jth and kth planes:
+const auto& coplanar_orientations =
+    arrangement.unique_plane_orientations[uid];
+
+if (coplanar_orientations[j] == coplanar_orientations[k]) {
+    // coplanar_planes[j] and coplanar_planes[k] have the same orientation.
+}
+```
 
