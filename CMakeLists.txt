@@ -17,7 +17,9 @@ target_link_libraries(simplicial_arrangement
     PUBLIC absl::numeric absl::flat_hash_map
     PRIVATE implicit_predicates::implicit_predicates spdlog::spdlog)
 target_compile_features(simplicial_arrangement PRIVATE cxx_std_17)
-target_compile_options(simplicial_arrangement PRIVATE "-Wall" "-Werror")
+if (NOT MSVC)
+    target_compile_options(simplicial_arrangement PRIVATE "-Wall" "-Werror")
+endif()
 add_library(simplicial_arrangement::simplicial_arrangement ALIAS
     simplicial_arrangement)
 
