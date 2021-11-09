@@ -3,7 +3,6 @@
 #include <catch2/catch.hpp>
 #include <random>
 #include <vector>
-#include <iostream>
 
 TEST_CASE("benchmark", "[arrangement][.benchmark]")
 {
@@ -26,9 +25,6 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
             v0 = distrib(gen);
             v1 = distrib(gen);
             v2 = distrib(gen);
-            if (i == 0) {
-                std::cout << v0 << ", " << v1 << ", " << v2 << std::endl;
-            }
             int_data.push_back({v0, v1, v2});
             double_data.push_back(
                 {static_cast<double>(v0), static_cast<double>(v1), static_cast<double>(v2)});
@@ -54,16 +50,24 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 
             meter.measure([&]() { return compute_arrangement(planes); });
         };
+
+        size_t num_vertices = 0;
+        size_t num_faces = 0;
+        size_t num_cells = 0;
         BENCHMARK("2D arrangement (int, 100 planes)")
         {
             auto r = compute_arrangement(int_data);
-            REQUIRE(r.cells.size() == 1035);
+            num_vertices = r.vertices.size();
+            num_faces = r.faces.size();
+            num_cells = r.cells.size();
             return r;
         };
         BENCHMARK("2D arrangement (double, 100 planes)")
         {
             auto r = compute_arrangement(double_data);
-            REQUIRE(r.cells.size() == 1035);
+            REQUIRE(r.vertices.size() == num_vertices);
+            REQUIRE(r.faces.size() == num_faces);
+            REQUIRE(r.cells.size() == num_cells);
             return r;
         };
     }
