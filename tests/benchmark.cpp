@@ -3,6 +3,7 @@
 #include <catch2/catch.hpp>
 #include <random>
 #include <vector>
+#include <iostream>
 
 TEST_CASE("benchmark", "[arrangement][.benchmark]")
 {
@@ -25,6 +26,9 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
             v0 = distrib(gen);
             v1 = distrib(gen);
             v2 = distrib(gen);
+            if (i == 0) {
+                std::cout << v0 << ", " << v1 << ", " << v2 << std::endl;
+            }
             int_data.push_back({v0, v1, v2});
             double_data.push_back(
                 {static_cast<double>(v0), static_cast<double>(v1), static_cast<double>(v2)});
