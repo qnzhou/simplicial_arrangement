@@ -117,16 +117,24 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 
             meter.measure([&]() { return compute_arrangement(planes); });
         };
+
+        size_t num_vertices = 0;
+        size_t num_faces = 0;
+        size_t num_cells = 0;
         BENCHMARK("3D arrangement (int, 100 planes)")
         {
             auto r = compute_arrangement(int_data);
-            REQUIRE(r.cells.size() == 19750);
+            num_vertices = r.vertices.size();
+            num_faces = r.faces.size();
+            num_cells = r.cells.size();
             return r;
         };
         BENCHMARK("3D arrangement (double, 100 planes)")
         {
             auto r = compute_arrangement(double_data);
-            REQUIRE(r.cells.size() == 19750);
+            REQUIRE(r.vertices.size() == num_vertices);
+            REQUIRE(r.faces.size() == num_faces);
+            REQUIRE(r.cells.size() == num_cells);
             return r;
         };
     }
