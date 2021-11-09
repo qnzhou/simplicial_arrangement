@@ -1,5 +1,8 @@
 #include "DisjointSets.h"
 
+#include <limits>
+#include <tuple>
+
 namespace simplicial_arrangement::utils {
 
 size_t DisjointSets::find(size_t i)
