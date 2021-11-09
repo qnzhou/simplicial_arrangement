@@ -18,7 +18,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 
         std::mt19937 gen(7);
         std::uniform_int_distribution<> distrib(-(1 << 12), 1 << 12);
-        std::uniform_int_distribution<> rand_index(0, N);
+        std::uniform_int_distribution<> rand_index(0, N-1);
 
         for (size_t i = 0; i < N; i++) {
             Int v0, v1, v2;
@@ -72,7 +72,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
         };
     }
 
-     SECTION("3D")
+    SECTION("3D")
     {
         constexpr size_t N = 1e2;
         std::vector<Plane<Int, 3>> int_data;
@@ -82,7 +82,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 
         std::mt19937 gen(7);
         std::uniform_int_distribution<> distrib(-(1 << 12), 1 << 12);
-        std::uniform_int_distribution<> rand_index(0, N);
+        std::uniform_int_distribution<> rand_index(0, N-1);
 
         for (size_t i = 0; i < N; i++) {
             Int v0, v1, v2, v3;
@@ -117,16 +117,24 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 
             meter.measure([&]() { return compute_arrangement(planes); });
         };
+
+        size_t num_vertices = 0;
+        size_t num_faces = 0;
+        size_t num_cells = 0;
         BENCHMARK("3D arrangement (int, 100 planes)")
         {
             auto r = compute_arrangement(int_data);
-            REQUIRE(r.cells.size() == 19750);
+            num_vertices = r.vertices.size();
+            num_faces = r.faces.size();
+            num_cells = r.cells.size();
             return r;
         };
         BENCHMARK("3D arrangement (double, 100 planes)")
         {
             auto r = compute_arrangement(double_data);
-            REQUIRE(r.cells.size() == 19750);
+            REQUIRE(r.vertices.size() == num_vertices);
+            REQUIRE(r.faces.size() == num_faces);
+            REQUIRE(r.cells.size() == num_cells);
             return r;
         };
     }
