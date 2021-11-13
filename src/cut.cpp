@@ -345,8 +345,7 @@ std::optional<std::array<Cell<3>, 2>> cut_cell(SimplicialArrangementBuilder<Scal
     for (size_t i = 0; i < num_cut_edges; i++) {
         const size_t curr_edge = cut_face.edge_planes[i];
         const size_t prev_edge = cut_face.edge_planes[(i + num_cut_edges - 1) % num_cut_edges];
-        builder.register_vertex(
-            {curr_edge, prev_edge, cut_face.supporting_plane}, vertex_loop[i]);
+        builder.register_vertex({curr_edge, prev_edge, cut_face.supporting_plane}, vertex_loop[i]);
     }
 
     Face<3> cut_face_reversed = cut_face;
@@ -523,6 +522,133 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(SimplicialArrangementBuilder<Scal
     return std::array<Cell<2>, 2>({std::move(negative), std::move(positive)});
 }
 
+/**
+ * Return true if and only if the cut plane intersects the 2D cell.
+ */
+template <typename Scalar>
+bool do_intersect(const SimplicialArrangementBuilder<Scalar, 2>& builder,
+    const Cell<2>& cell,
+    size_t cut_plane_index)
+{
+    const auto& cut_plane = builder.get_plane(cut_plane_index);
+
+    const size_t num_edges = cell.edges.size();
+    bool certain = false;
+    bool orientation = true;
+    for (size_t i = 0; i < num_edges; i++) {
+        size_t prev_plane_id = cell.edges[(i + num_edges - 1) % num_edges];
+        size_t curr_plane_id = cell.edges[i];
+
+        const auto& prev_plane = builder.get_plane(prev_plane_id);
+        const auto& curr_plane = builder.get_plane(curr_plane_id);
+
+        auto r =
+            implicit_predicates::orient2d(prev_plane.data(), curr_plane.data(), cut_plane.data());
+        switch (r) {
+        case implicit_predicates::POSITIVE:
+            if (!certain) {
+                certain = true;
+                orientation = true;
+            } else if (!orientation) {
+                // Cut detected!
+                return true;
+            }
+            break;
+        case implicit_predicates::NEGATIVE:
+            if (!certain) {
+                certain = true;
+                orientation = false;
+            } else if (orientation) {
+                // Cut detected!
+                return true;
+            }
+            break;
+        case implicit_predicates::ZERO:
+            // A vertex lies on the cut plane, so intersecting.
+            return true;
+        case implicit_predicates::INVALID:
+            // Impossible case.
+            logger().error("Invalid 2D intersection detected");
+            assert(false);
+            break;
+        }
+    }
+    assert(certain);
+    return false;
+}
+
+/**
+ * Return true if and only if the cut plane intersects the 3D face.
+ */
+template <typename Scalar>
+bool do_intersect(const SimplicialArrangementBuilder<Scalar, 3>& builder,
+    const Face<3>& face,
+    size_t cut_plane_index)
+{
+    const auto& cut_plane = builder.get_plane(cut_plane_index);
+    const auto& supporting_plane = builder.get_plane(face.supporting_plane);
+
+    const size_t num_edges = face.edge_planes.size();
+    bool certain = false;
+    bool orientation = true;
+
+    for (size_t i = 0; i < num_edges; i++) {
+        size_t prev_plane_id = face.edge_planes[(i + num_edges - 1) % num_edges];
+        size_t curr_plane_id = face.edge_planes[i];
+
+        const auto& prev_plane = builder.get_plane(prev_plane_id);
+        const auto& curr_plane = builder.get_plane(curr_plane_id);
+
+        auto r = implicit_predicates::orient3d(
+            supporting_plane.data(), prev_plane.data(), curr_plane.data(), cut_plane.data());
+        switch (r) {
+        case implicit_predicates::POSITIVE:
+            if (!certain) {
+                certain = true;
+                orientation = true;
+            } else if (!orientation) {
+                // Cut detected!
+                return true;
+            }
+            break;
+        case implicit_predicates::NEGATIVE:
+            if (!certain) {
+                certain = true;
+                orientation = false;
+            } else if (orientation) {
+                // Cut detected!
+                return true;
+            }
+            break;
+        case implicit_predicates::ZERO:
+            // A vertex lies on the cut plane, so intersecting.
+            return true;
+        case implicit_predicates::INVALID:
+            // Impossible case.
+            logger().error("Invalid 3D intersection detected");
+            assert(false);
+            break;
+        }
+    }
+
+    assert(certain);
+    return false;
+}
+
+/**
+ * Return true if and only if the cut plane intersects the 3D cell.
+ */
+template <typename Scalar>
+bool do_intersect(const SimplicialArrangementBuilder<Scalar, 3>& builder,
+    const Cell<3>& cell,
+    size_t cut_plane_index)
+{
+    for (const auto& f : cell.faces) {
+        if (do_intersect(builder, f, cut_plane_index)) return true;
+    }
+    return false;
+}
+
 template <typename Scalar, int DIM>
 void cut(SimplicialArrangementBuilder<Scalar, DIM>& builder,
     EdgeIndexMap& edge_map,
@@ -541,8 +667,12 @@ void cut(SimplicialArrangementBuilder<Scalar, DIM>& builder,
     } else {
         assert(root.negative != nullptr);
         assert(root.positive != nullptr);
-        cut(builder, edge_map, *root.negative, cut_plane_index);
-        cut(builder, edge_map, *root.positive, cut_plane_index);
+        if (do_intersect(builder, root.negative->cell, cut_plane_index)) {
+            cut(builder, edge_map, *root.negative, cut_plane_index);
+        }
+        if (do_intersect(builder, root.positive->cell, cut_plane_index)) {
+            cut(builder, edge_map, *root.positive, cut_plane_index);
+        }
     }
 }
 
