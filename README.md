@@ -128,6 +128,9 @@ polytopes.  Each cell is represented by the inner `Cell` data structure.
 * `Cell::face_orientations` is a list of orientations of the faces relative to
   the cell.  I.e. `face_orientations[i] == true` means the cell is on the
   positive side of the `i`th face.
+* `Cell::plane_orientations` is a list of orientations of the cell with respect
+  to all input planes.  I.e. `plane_orientation[i] == true` means the cell is on
+  the positive side of the `i`th plane.
 
 #### Unique planes
 If the input cut planes contain coplanar planes, their information is stored in
