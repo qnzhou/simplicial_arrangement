@@ -32,7 +32,8 @@ if (SIMPLICIAL_ARRANGEMENT_UNIT_TESTS)
     file(GLOB TEST_FILES "${CMAKE_SOURCE_DIR}/tests/*.cpp")
     add_executable(simplicial_arrangement_tests ${TEST_FILES})
     target_link_libraries(simplicial_arrangement_tests PRIVATE
-        simplicial_arrangement::simplicial_arrangement Catch2::Catch2)
+        simplicial_arrangement::simplicial_arrangement
+        implicit_predicates::implicit_predicates Catch2::Catch2)
     target_compile_features(simplicial_arrangement_tests PRIVATE cxx_std_17)
     if (NOT MSVC)
         target_compile_options(simplicial_arrangement_tests PRIVATE "-Wall" "-Werror")

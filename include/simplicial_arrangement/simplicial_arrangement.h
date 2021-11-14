@@ -52,11 +52,11 @@ struct Arrangement
         /**
          * An ordered list of boundary vertices.
          *
-         * In 3D, the face is always oriented ccw when viewed from the positive
-         * side of the plane.
+         * In 3D, the face is always oriented counterclockwise when viewed from
+         * the positive side of the supporting plane.
          *
          * In 2D, the face (aka edge) is oriented such that the positive side of
-         * the plane is on the right.
+         * the supporting plane (aka line) is on the right.
          */
         std::vector<size_t> vertices;
 
@@ -88,6 +88,14 @@ struct Arrangement
          * side of face i.
          */
         std::vector<bool> face_orientations;
+
+        /**
+         * The orientation with respect to all planes.  `signs[i] == true` means this
+         * cell is on the positive side of plane i.
+         * TODO: This field contains an super set of the data stored in
+         * `face_orientations`.  We probably should just keep one of them.
+         */
+        std::vector<bool> plane_orientations;
     };
 
     std::vector<Point<DIM>> vertices;
@@ -96,7 +104,7 @@ struct Arrangement
 
     std::vector<size_t> unique_plane_indices;
     std::vector<std::vector<size_t>> unique_planes;
-    std::vector<std::vector<bool>> unique_plane_orientations;
+    std::vector<bool> unique_plane_orientations;
 };
 
 } // namespace simplicial_arrangement
