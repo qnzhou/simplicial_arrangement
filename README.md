@@ -140,12 +140,10 @@ size_t uid = arrangement.unique_plane_indices[i];
 // To get the set of coplanar planes corresponding to uid
 auto coplanar_planes = arrangement.unique_planes[uid];
 
-// To check the relative orientation of jth and kth planes:
-const auto& coplanar_orientations =
-    arrangement.unique_plane_orientations[uid];
-
-if (coplanar_orientations[j] == coplanar_orientations[k]) {
-    // coplanar_planes[j] and coplanar_planes[k] have the same orientation.
+// Assume plane j and k are coplanar, to check the relative orientation of
+// jth and kth planes:
+if (arrangement.plane_orientations[j] == arrangement.plane_orientations[k]) {
+    // plane j and k have the same orientation.
 }
 ```
 
