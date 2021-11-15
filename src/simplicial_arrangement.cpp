@@ -1,4 +1,5 @@
 #include "SimplicialArrangementBuilder.h"
+#include <implicit_predicates/implicit_predicates.h> 
 
 namespace simplicial_arrangement {
 
@@ -26,7 +27,101 @@ Arrangement<3> compute_arrangement(const std::vector<Plane<double, 3>>& planes)
 
 Arrangement<3> compute_arrangement(const std::vector<Plane<Int, 3>>& planes)
 {
-    return compute_arrangement_impl<Int, 3>(planes);
+    switch (planes.size()) {
+        case 1: 
+            return compute_arrangement_1_plane<Int>(planes);
+            break;
+        case 2: 
+            return compute_arrangement_2_planes<Int>(planes);
+            break;
+        default: 
+            return compute_arrangement_impl<Int, 3>(planes);
+    }
 }
+
+template <typename Scalar>
+Arrangement<3> compute_arrangement_1_plane(const std::vector<Plane<Scalar, 3>>& planes)
+{
+    const Plane<Scalar, 3>& plane = planes[0];
+    bool has_zero = false;
+    size_t index = 0;
+    for (size_t i = 0; i < 4; i++) {
+        index <<= 1;
+        if (plane[i] > 0) {
+            index += 1;
+        } else if (plane[i] == 0) {
+            has_zero = true;
+            break;
+        }
+    }
+
+    if (has_zero) {
+        return compute_arrangement_impl<Scalar, 3>(planes);
+    } else {  // return index-th entry of the look up table
+        
+    }
+ }
+
+template <typename Scalar>
+Arrangement<3> compute_arrangement_2_planes(const std::vector<Plane<Scalar, 3>>& planes)
+{
+    const Plane<Scalar, 3>& plane1 = planes[0];
+    const Plane<Scalar, 3>& plane2 = planes[1];
+
+    bool has_zero = false;
+    size_t index1 = 0;
+    for (size_t i = 0; i < 4; i++) {
+        index1 <<= 1;
+        if (plane1[i] > 0) {
+            index1 += 1;
+        } else if (plane1[i] == 0) {
+            has_zero = true;
+            break;
+        }
+    }
+    if (has_zero) {
+        return compute_arrangement_impl<Scalar, 3>(planes);
+    }
+
+    size_t index2 = 0;
+    for (size_t i = 0; i < 4; i++) {
+        index2 <<= 1;
+        if (plane2[i] > 0) {
+            index2 += 1;
+        } else if (plane2[i] == 0) {
+            has_zero = true;
+            break;
+        }
+    }
+    if (has_zero) {
+        return compute_arrangement_impl<Scalar, 3>(planes);
+    }
+
+    //
+    size_t index = index1<<4 + index2;
+    const std::vector<std::pair<int, int>>& to_test_edges;   // look up in the to_test_edges table
+
+    size_t e_index = 0;
+    for (const auto& edge : to_test_edges) {
+        e_index <<= 1;
+        auto orient = implicit_predicates::orient1d(
+            {plane1[edge.first], plane1[edge.second]}, {plane2[edge.first], plane2[edge.second]});
+        if (orient == implicit_predicates::POSITIVE) {
+            e_index += 1;
+        } else if (orient == implicit_predicates::ZERO) {
+            has_zero = true;
+            break;
+        }
+    }
+    if (has_zero) {
+        return compute_arrangement_impl<Scalar, 3>(planes);
+    }
+
+    // take result from look-up table   [index][e_index]
+
+        
+ }
+
+
 
 } // namespace simplicial_arrangement
