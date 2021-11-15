@@ -128,6 +128,9 @@ polytopes.  Each cell is represented by the inner `Cell` data structure.
 * `Cell::face_orientations` is a list of orientations of the faces relative to
   the cell.  I.e. `face_orientations[i] == true` means the cell is on the
   positive side of the `i`th face.
+* `Cell::plane_orientations` is a list of orientations of the cell with respect
+  to all input planes.  I.e. `plane_orientation[i] == true` means the cell is on
+  the positive side of the `i`th plane.
 
 #### Unique planes
 If the input cut planes contain coplanar planes, their information is stored in
@@ -140,12 +143,10 @@ size_t uid = arrangement.unique_plane_indices[i];
 // To get the set of coplanar planes corresponding to uid
 auto coplanar_planes = arrangement.unique_planes[uid];
 
-// To check the relative orientation of jth and kth planes:
-const auto& coplanar_orientations =
-    arrangement.unique_plane_orientations[uid];
-
-if (coplanar_orientations[j] == coplanar_orientations[k]) {
-    // coplanar_planes[j] and coplanar_planes[k] have the same orientation.
+// Assume plane j and k are coplanar, to check the relative orientation of
+// jth and kth planes:
+if (arrangement.plane_orientations[j] == arrangement.plane_orientations[k]) {
+    // plane j and k have the same orientation.
 }
 ```
 
