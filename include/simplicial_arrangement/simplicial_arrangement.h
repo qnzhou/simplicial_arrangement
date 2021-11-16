@@ -85,13 +85,15 @@ struct Arrangement
         /**
          * The orientation of each boundary face with respect to this cell.
          * `face_orientations[i] == true` means this cell is on the positive
-         * side of face i.
+         * side of faces[i].
          */
         std::vector<bool> face_orientations;
 
         /**
-         * The orientation with respect to all planes.  `signs[i] == true` means this
-         * cell is on the positive side of plane i.
+         * The orientation with respect to all planes.
+         * `plane_orientations[i] == true` means this cell is on the positive
+         * side of plane i.
+         *
          * TODO: This field contains an super set of the data stored in
          * `face_orientations`.  We probably should just keep one of them.
          */

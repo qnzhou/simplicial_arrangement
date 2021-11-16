@@ -129,7 +129,7 @@ polytopes.  Each cell is represented by the inner `Cell` data structure.
   the cell.  I.e. `face_orientations[i] == true` means the cell is on the
   positive side of the `i`th face.
 * `Cell::plane_orientations` is a list of orientations of the cell with respect
-  to all input planes.  I.e. `plane_orientation[i] == true` means the cell is on
+  to all planes.  I.e. `plane_orientation[i] == true` means the cell is on
   the positive side of the `i`th plane.
 
 #### Unique planes
@@ -145,7 +145,7 @@ auto coplanar_planes = arrangement.unique_planes[uid];
 
 // Assume plane j and k are coplanar, to check the relative orientation of
 // jth and kth planes:
-if (arrangement.plane_orientations[j] == arrangement.plane_orientations[k]) {
+if (arrangement.unique_plane_orientations[j] == arrangement.unique_plane_orientations[k]) {
     // plane j and k have the same orientation.
 }
 ```
