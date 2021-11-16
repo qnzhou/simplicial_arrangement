@@ -34,6 +34,11 @@ Arrangement<2> compute_arrangement(const std::vector<Plane<Int, 2>>& planes);
 Arrangement<3> compute_arrangement(const std::vector<Plane<double, 3>>& planes);
 Arrangement<3> compute_arrangement(const std::vector<Plane<Int, 3>>& planes);
 
+Arrangement<2> compute_material_interface(const std::vector<Plane<double, 2>>& planes);
+Arrangement<2> compute_material_interface(const std::vector<Plane<Int, 2>>& planes);
+Arrangement<3> compute_material_interface(const std::vector<Plane<double, 3>>& planes);
+Arrangement<3> compute_material_interface(const std::vector<Plane<Int, 3>>& planes);
+
 /**
  * A self-contained data structure for 2D or 3D arrangement representation.
  */
