@@ -6,6 +6,7 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 include(absl)
 include(implicit_predicates)
 include(spdlog)
+include(nlohmann-json)
 
 file(GLOB INC_FILES ${CMAKE_CURRENT_LIST_DIR}/include/*.h)
 file(GLOB SRC_FILES ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp)
@@ -15,7 +16,7 @@ target_include_directories(simplicial_arrangement PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/include)
 target_link_libraries(simplicial_arrangement
     PUBLIC absl::numeric absl::flat_hash_map
-    PRIVATE implicit_predicates::implicit_predicates spdlog::spdlog)
+    PRIVATE implicit_predicates::implicit_predicates spdlog::spdlog nlohmann_json::nlohmann_json)
 target_compile_features(simplicial_arrangement PRIVATE cxx_std_17)
 if (NOT MSVC)
     target_compile_options(simplicial_arrangement PRIVATE "-Wall" "-Werror")
@@ -51,3 +52,7 @@ if (SIMPLICIAL_ARRANGEMENT_UNIT_TESTS)
         endif()
     endif()
 endif()
+
+
+set(LOOKUP_TABLE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lookup_table")
+target_compile_definitions(simplicial_arrangement PUBLIC -DLOOKUP_TABLE_PATH="${LOOKUP_TABLE_PATH}")
