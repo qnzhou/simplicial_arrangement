@@ -1,4 +1,5 @@
 #include <simplicial_arrangement/simplicial_arrangement.h>
+//#include "look_up_table.h"
 
 #include <catch2/catch.hpp>
 #include <random>
@@ -7,6 +8,7 @@
 TEST_CASE("benchmark", "[arrangement][.benchmark]")
 {
     using namespace simplicial_arrangement;
+    //load_lookup_table();
 
     SECTION("2D")
     {
@@ -96,6 +98,42 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
                 static_cast<double>(v2),
                 static_cast<double>(v3)});
         }
+
+        BENCHMARK_ADVANCED("3D arrangement (int, 1 planes)")(Catch::Benchmark::Chronometer meter)
+        {
+            std::vector<Plane<Int, 3>> planes;
+            planes.reserve(1);
+            planes.push_back(int_data[rand_index(gen)]);
+
+            meter.measure([&]() { return compute_arrangement(planes); });
+        };
+        BENCHMARK_ADVANCED("3D arrangement (double, 1 planes)")(Catch::Benchmark::Chronometer meter)
+        {
+            std::vector<Plane<double, 3>> planes;
+            planes.reserve(1);
+            planes.push_back(double_data[rand_index(gen)]);
+
+            meter.measure([&]() { return compute_arrangement(planes); });
+        };
+
+        BENCHMARK_ADVANCED("3D arrangement (int, 2 planes)")(Catch::Benchmark::Chronometer meter)
+        {
+            std::vector<Plane<Int, 3>> planes;
+            planes.reserve(2);
+            planes.push_back(int_data[rand_index(gen)]);
+            planes.push_back(int_data[rand_index(gen)]);
+
+            meter.measure([&]() { return compute_arrangement(planes); });
+        };
+        BENCHMARK_ADVANCED("3D arrangement (double, 2 planes)")(Catch::Benchmark::Chronometer meter)
+        {
+            std::vector<Plane<double, 3>> planes;
+            planes.reserve(2);
+            planes.push_back(double_data[rand_index(gen)]);
+            planes.push_back(double_data[rand_index(gen)]);
+
+            meter.measure([&]() { return compute_arrangement(planes); });
+        };
 
         BENCHMARK_ADVANCED("3D arrangement (int, 3 planes)")(Catch::Benchmark::Chronometer meter)
         {
