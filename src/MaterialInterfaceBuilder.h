@@ -3,6 +3,9 @@
 #include "BSPNode.h"
 #include "DisjointSets.h"
 #include "common.h"
+#include "add_material.h"
+
+#include <simplicial_arrangement/material_interface.h>
 
 #include <absl/container/flat_hash_map.h>
 
@@ -19,101 +22,129 @@ public:
     static_assert(DIM == 2 || DIM == 3, "Only 2D and 3D material interface are supported");
     static_assert(std::is_same<Scalar, double>::value || std::is_same<Scalar, Int>::value,
         "Only double and 128bit int are supported as Scalar.");
+    static constexpr Scalar INFINITE = std::numeric_limits<Scalar>::max();
 
 public:
-    MaterialInterfaceBuilder(const std::vector<Plane<Scalar, DIM>>& planes)
+    MaterialInterfaceBuilder(const std::vector<Material<Scalar, DIM>>& materials)
+        : m_materials(materials)
     {
-        set_planes(planes);
+        const size_t num_materials = m_materials.size();
+        if (num_materials < 1) {
+            logger().error(
+                "At least one material is needed to generate a valid material interface");
+            throw std::runtime_error("Insufficient materials!");
+        }
+        m_unique_materials.init(num_materials);
+
+        initialize_simplex_boundary();
+        initialize_material_interface();
+
+        for (size_t i = 1; i < num_materials; i++) {
+            internal::add_material(*this, i + DIM + 1);
+        }
     }
 
-    void set_planes(const std::vector<Plane<Scalar, DIM>>& planes)
+    const Material<Scalar, DIM>& get_material(size_t index) const
     {
-        //const size_t num_cutting_planes = m_planes.size();
-        //if constexpr (DIM == 2) {
-        //    m_simplex_planes[0] = {1, 0, 0};
-        //    m_simplex_planes[1] = {0, 1, 0};
-        //    m_simplex_planes[2] = {0, 0, 1};
-        //    register_vertex({1, 2}, 0);
-        //    register_vertex({0, 2}, 1);
-        //    register_vertex({0, 1}, 2);
-        //    m_vertex_count = 3;
-        //} else {
-        //    m_simplex_planes[0] = {1, 0, 0, 0};
-        //    m_simplex_planes[1] = {0, 1, 0, 0};
-        //    m_simplex_planes[2] = {0, 0, 1, 0};
-        //    m_simplex_planes[3] = {0, 0, 0, 1};
-        //    register_vertex({1, 2, 3}, 0);
-        //    register_vertex({0, 2, 3}, 1);
-        //    register_vertex({0, 1, 3}, 2);
-        //    register_vertex({0, 1, 2}, 3);
-        //    m_vertex_count = 4;
-        //}
-        //m_vertex_index_map.reserve(num_cutting_planes * 4);
-        //m_coplanar_planes.init(num_cutting_planes + DIM + 1);
+        if (index < DIM + 1) {
+            return m_simplex_boundary[index];
+        } else {
+            return m_materials[index - DIM - 1];
+        }
     }
 
-    //void register_vertex(Point<DIM> v, size_t index)
-    //{
-    //    this->sort(v);
-    //    auto itr = m_vertex_index_map.find(v);
-    //    if (itr == m_vertex_index_map.end()) {
-    //        m_vertex_index_map.insert({std::move(v), index});
-    //    } else {
-    //        assert(itr->second == index);
-    //    }
-    //}
+    const MaterialInterface<DIM>& get_material_interface() const {
+        return m_material_interface;
+    }
 
-    //bool has_vertex(Point<DIM> v) const
-    //{
-    //    this->sort(v);
-    //    return m_vertex_index_map.contains(v);
-    //}
-
-    //size_t get_vertex_index(Point<DIM> v) const
-    //{
-    //    this->sort(v);
-    //    auto itr = m_vertex_index_map.find(v);
-    //    if (itr == m_vertex_index_map.end())
-    //        return INVALID;
-    //    else
-    //        return itr->second;
-    //}
-
-    //size_t get_vertex_count() const { return m_vertex_count; }
-    //void bump_vertex_count() { m_vertex_count++; }
-
-    //std::vector<Point<DIM>> extract_vertices() const
-    //{
-    //    std::vector<Point<DIM>> vertices(m_vertex_count);
-    //    for (auto& entry : m_vertex_index_map) {
-    //        assert(entry.second < m_vertex_count);
-    //        vertices[entry.second] = entry.first;
-    //    }
-    //    return vertices;
-    //}
-
-    Arrangement<DIM> extract_material_interface() {
-        // TODO.
-        return Arrangement<DIM>();
+    MaterialInterface<DIM>& get_material_interface() {
+        return m_material_interface;
     }
 
 private:
-    inline void sort(Point<DIM>& p) const
+    void initialize_simplex_boundary()
+    {
+        // We use psudo-material to represent simplex boundary.  They should not
+        // be used in math computations directly.
+        m_simplex_boundary.resize(DIM + 1);
+        if constexpr (DIM == 2) {
+            m_simplex_boundary[0] = {INFINITE, 0, 0};
+            m_simplex_boundary[1] = {0, INFINITE, 0};
+            m_simplex_boundary[2] = {0, 0, INFINITE};
+        } else {
+            m_simplex_boundary[0] = {INFINITE, 0, 0, 0};
+            m_simplex_boundary[1] = {0, INFINITE, 0, 0};
+            m_simplex_boundary[2] = {0, 0, INFINITE, 0};
+            m_simplex_boundary[3] = {0, 0, 0, INFINITE};
+        }
+    }
+
+    void initialize_material_interface()
+    {
+        // Initialize a valid material interface using the first material.
+        m_material_interface.vertices.resize(DIM + 1);
+        m_material_interface.faces.resize(DIM + 1);
+        m_material_interface.cells.resize(1);
+        m_material_interface.cells[0].material_label = DIM + 1;
+
+        if constexpr (DIM == 2) {
+            m_material_interface.vertices[0] = {1, 2, 3};
+            m_material_interface.vertices[1] = {2, 0, 3};
+            m_material_interface.vertices[2] = {0, 1, 3};
+
+            m_material_interface.faces[0].vertices = {1, 2};
+            m_material_interface.faces[1].vertices = {2, 0};
+            m_material_interface.faces[2].vertices = {0, 1};
+
+            m_material_interface.faces[0].positive_cell = 0;
+            m_material_interface.faces[0].negative_cell = 3;
+            m_material_interface.faces[1].positive_cell = 1;
+            m_material_interface.faces[1].negative_cell = 3;
+            m_material_interface.faces[2].positive_cell = 2;
+            m_material_interface.faces[2].negative_cell = 3;
+        } else {
+            m_material_interface.vertices[0] = {1, 2, 3, 4};
+            m_material_interface.vertices[1] = {0, 2, 3, 4};
+            m_material_interface.vertices[2] = {0, 1, 3, 4};
+            m_material_interface.vertices[2] = {0, 1, 2, 4};
+
+            m_material_interface.faces[0].vertices = {1, 2, 3};
+            m_material_interface.faces[1].vertices = {0, 3, 2};
+            m_material_interface.faces[2].vertices = {0, 1, 3};
+            m_material_interface.faces[3].vertices = {0, 2, 1};
+
+            m_material_interface.faces[0].positive_cell = 0;
+            m_material_interface.faces[0].negative_cell = 4;
+            m_material_interface.faces[1].positive_cell = 1;
+            m_material_interface.faces[1].negative_cell = 4;
+            m_material_interface.faces[2].positive_cell = 2;
+            m_material_interface.faces[2].negative_cell = 4;
+            m_material_interface.faces[3].positive_cell = 3;
+            m_material_interface.faces[3].negative_cell = 4;
+        }
+    }
+
+    inline void sort(Joint<DIM>& p) const
     {
         if constexpr (DIM == 2) {
             if (p[0] > p[1]) std::swap(p[0], p[1]);
+            if (p[0] > p[2]) std::swap(p[0], p[2]);
+            if (p[1] > p[2]) std::swap(p[1], p[2]);
         } else if (DIM == 3) {
             if (p[0] > p[1]) std::swap(p[0], p[1]);
             if (p[0] > p[2]) std::swap(p[0], p[2]);
+            if (p[0] > p[3]) std::swap(p[0], p[3]);
             if (p[1] > p[2]) std::swap(p[1], p[2]);
+            if (p[1] > p[3]) std::swap(p[1], p[3]);
+            if (p[2] > p[3]) std::swap(p[2], p[3]);
         }
     }
 
 private:
-    std::vector<Plane<Scalar, DIM+1>> m_planes;
-    utils::DisjointSets m_coplanar_planes;
-    absl::flat_hash_map<Point<DIM+1>, size_t> m_vertex_index_map;
-    size_t m_vertex_count = 0;
+    std::vector<Material<Scalar, DIM>> m_simplex_boundary;
+    const std::vector<Material<Scalar, DIM>>& m_materials;
+    utils::DisjointSets m_unique_materials;
+    MaterialInterface<DIM> m_material_interface;
 };
 
 } // namespace simplicial_arrangement
