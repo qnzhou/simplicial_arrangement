@@ -150,7 +150,48 @@ void validate_arrangement(simplicial_arrangement::Arrangement<DIM>& r,
             }
         }
     }
-};
+}
+
+template <int DIM>
+void assert_equivalent(const simplicial_arrangement::Arrangement<DIM>& r1,
+    const simplicial_arrangement::Arrangement<DIM>& r2)
+{
+    using namespace simplicial_arrangement;
+
+    REQUIRE(r1.vertices.size() == r2.vertices.size());
+    REQUIRE(r1.faces.size() == r2.faces.size());
+    REQUIRE(r1.cells.size() == r2.cells.size());
+    REQUIRE(r1.unique_planes.size() == r2.unique_planes.size());
+
+    const size_t num_unique_planes = r1.unique_planes.size();
+    std::vector<size_t> r1_support_vertex_count(num_unique_planes, 0);
+    std::vector<size_t> r2_support_vertex_count(num_unique_planes, 0);
+    for (const auto& v : r1.vertices) {
+        for (auto i : v) {
+            size_t uid = r1.unique_plane_indices[i];
+            r1_support_vertex_count[uid]++;
+        }
+    }
+    for (const auto& v : r2.vertices) {
+        for (auto i : v) {
+            size_t uid = r2.unique_plane_indices[i];
+            r2_support_vertex_count[uid]++;
+        }
+    }
+    CHECK(r1_support_vertex_count == r2_support_vertex_count);
+
+    std::vector<size_t> r1_support_face_count(num_unique_planes, 0);
+    std::vector<size_t> r2_support_face_count(num_unique_planes, 0);
+    for (const auto& f : r1.faces) {
+        size_t uid = r1.unique_plane_indices[f.supporting_plane];
+        r1_support_face_count[uid]++;
+    }
+    for (const auto& f : r2.faces) {
+        size_t uid = r2.unique_plane_indices[f.supporting_plane];
+        r2_support_face_count[uid]++;
+    }
+    CHECK(r1_support_face_count == r2_support_face_count);
+}
 
 template <typename Scalar>
 void test_2D()
@@ -678,4 +719,137 @@ TEST_CASE("Lookup 3D", "[lookup][3D]")
 
     SECTION("Int") { test_3D<Int>(); }
     SECTION("double") { test_3D<double>(); }
+
+    SECTION("Consistency check")
+    {
+        SECTION("1 cut")
+        {
+            using Scalar = double;
+            constexpr Scalar EPS = std::numeric_limits<Scalar>::epsilon();
+            std::vector<Plane<Scalar, 3>> planes;
+
+            SECTION("Case 1")
+            {
+                planes.push_back({EPS, -EPS, EPS, -EPS});
+
+                enable_lookup_table();
+                auto r1 = compute_arrangement(planes);
+                disable_lookup_table();
+                auto r2 = compute_arrangement(planes);
+
+                assert_equivalent(r1, r2);
+            }
+            SECTION("Case 2")
+            {
+                planes.push_back({EPS, EPS, EPS, -EPS});
+
+                enable_lookup_table();
+                auto r1 = compute_arrangement(planes);
+                disable_lookup_table();
+                auto r2 = compute_arrangement(planes);
+
+                assert_equivalent(r1, r2);
+            }
+            SECTION("Case 3")
+            {
+                planes.push_back({EPS, EPS, EPS, 0});
+
+                enable_lookup_table();
+                auto r1 = compute_arrangement(planes);
+                disable_lookup_table();
+                auto r2 = compute_arrangement(planes);
+
+                assert_equivalent(r1, r2);
+            }
+            SECTION("Case 4")
+            {
+                planes.push_back({EPS, -EPS, 0, 0});
+
+                enable_lookup_table();
+                auto r1 = compute_arrangement(planes);
+                disable_lookup_table();
+                auto r2 = compute_arrangement(planes);
+
+                assert_equivalent(r1, r2);
+            }
+            SECTION("Case 5")
+            {
+                planes.push_back({EPS, 0, 0, 0});
+
+                enable_lookup_table();
+                auto r1 = compute_arrangement(planes);
+                disable_lookup_table();
+                auto r2 = compute_arrangement(planes);
+
+                assert_equivalent(r1, r2);
+            }
+            SECTION("Case 6")
+            {
+                planes.push_back({EPS, EPS, EPS, EPS});
+
+                enable_lookup_table();
+                auto r1 = compute_arrangement(planes);
+                disable_lookup_table();
+                auto r2 = compute_arrangement(planes);
+
+                assert_equivalent(r1, r2);
+            }
+        }
+        SECTION("2 cut")
+        {
+            using Scalar = double;
+            constexpr Scalar EPS = std::numeric_limits<Scalar>::epsilon();
+            constexpr Scalar l = 1e12;
+            std::vector<Plane<Scalar, 3>> planes;
+
+            SECTION("Case 1")
+            {
+                planes.push_back({EPS, EPS, EPS, l});
+                planes.push_back({-EPS, -EPS, -EPS, -l});
+
+                enable_lookup_table();
+                auto r1 = compute_arrangement(planes);
+                disable_lookup_table();
+                auto r2 = compute_arrangement(planes);
+
+                assert_equivalent(r1, r2);
+            }
+            SECTION("Case 1")
+            {
+                planes.push_back({EPS, -EPS, 0, 0});
+                planes.push_back({-l, l, 0, 0});
+
+                enable_lookup_table();
+                auto r1 = compute_arrangement(planes);
+                disable_lookup_table();
+                auto r2 = compute_arrangement(planes);
+
+                assert_equivalent(r1, r2);
+            }
+            SECTION("Case 2")
+            {
+                planes.push_back({EPS, -EPS, 1, 0});
+                planes.push_back({0, l, 2*l, -l});
+
+                enable_lookup_table();
+                auto r1 = compute_arrangement(planes);
+                disable_lookup_table();
+                auto r2 = compute_arrangement(planes);
+
+                assert_equivalent(r1, r2);
+            }
+            SECTION("Case 3")
+            {
+                planes.push_back({EPS, EPS, EPS, -l});
+                planes.push_back({-l, -l, -l, EPS});
+
+                enable_lookup_table();
+                auto r1 = compute_arrangement(planes);
+                disable_lookup_table();
+                auto r2 = compute_arrangement(planes);
+
+                assert_equivalent(r1, r2);
+            }
+        }
+    }
 }
