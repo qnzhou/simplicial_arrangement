@@ -7,6 +7,7 @@ include(absl)
 include(implicit_predicates)
 include(spdlog)
 include(nlohmann-json)
+include(sanitizers)
 
 file(GLOB INC_FILES ${CMAKE_CURRENT_LIST_DIR}/include/*.h)
 file(GLOB SRC_FILES ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp)

@@ -4,7 +4,6 @@
 
 #include <implicit_predicates/implicit_predicates.h>
 
-
 namespace {
 
 template <typename Scalar, int DIM>
@@ -166,6 +165,9 @@ void assert_equivalent(const simplicial_arrangement::Arrangement<DIM>& r1,
     const size_t num_unique_planes = r1.unique_planes.size();
     std::vector<size_t> r1_support_vertex_count(num_unique_planes, 0);
     std::vector<size_t> r2_support_vertex_count(num_unique_planes, 0);
+    std::vector<size_t> r1_support_face_count(num_unique_planes, 0);
+    std::vector<size_t> r2_support_face_count(num_unique_planes, 0);
+
     for (const auto& v : r1.vertices) {
         for (auto i : v) {
             size_t uid = r1.unique_plane_indices[i];
@@ -178,10 +180,6 @@ void assert_equivalent(const simplicial_arrangement::Arrangement<DIM>& r1,
             r2_support_vertex_count[uid]++;
         }
     }
-    CHECK(r1_support_vertex_count == r2_support_vertex_count);
-
-    std::vector<size_t> r1_support_face_count(num_unique_planes, 0);
-    std::vector<size_t> r2_support_face_count(num_unique_planes, 0);
     for (const auto& f : r1.faces) {
         size_t uid = r1.unique_plane_indices[f.supporting_plane];
         r1_support_face_count[uid]++;
@@ -190,7 +188,21 @@ void assert_equivalent(const simplicial_arrangement::Arrangement<DIM>& r1,
         size_t uid = r2.unique_plane_indices[f.supporting_plane];
         r2_support_face_count[uid]++;
     }
-    CHECK(r1_support_face_count == r2_support_face_count);
+
+    const size_t num_planes = r1.unique_plane_indices.size();
+    for (size_t i = 0; i < num_planes; i++) {
+        size_t r1_uid = r1.unique_plane_indices[i];
+        size_t r2_uid = r2.unique_plane_indices[i];
+        CAPTURE(r1.unique_plane_indices,
+            r2.unique_plane_indices,
+            r1_support_vertex_count,
+            r2_support_vertex_count,
+            r1_support_face_count,
+            r2_support_face_count);
+        CHECK(r1.unique_planes[r1_uid].size() == r1.unique_planes[r2_uid].size());
+        CHECK(r1_support_vertex_count[r1_uid] == r2_support_vertex_count[r2_uid]);
+        CHECK(r1_support_face_count[r1_uid] == r2_support_face_count[r2_uid]);
+    }
 }
 
 template <typename Scalar>
@@ -829,7 +841,7 @@ TEST_CASE("Lookup 3D", "[lookup][3D]")
             SECTION("Case 2")
             {
                 planes.push_back({EPS, -EPS, 1, 0});
-                planes.push_back({0, l, 2*l, -l});
+                planes.push_back({0, l, 2 * l, -l});
 
                 enable_lookup_table();
                 auto r1 = compute_arrangement(planes);
