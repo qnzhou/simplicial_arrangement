@@ -1,6 +1,6 @@
+#include <implicit_predicates/implicit_predicates.h>
+#include <simplicial_arrangement/look_up_table.h>
 #include "SimplicialArrangementBuilder.h"
-#include <implicit_predicates/implicit_predicates.h> 
-#include "look_up_table.h"
 
 namespace simplicial_arrangement {
 
@@ -77,7 +77,7 @@ Arrangement<3> compute_arrangement_2_planes(const std::vector<Plane<Scalar, 3>>&
     for (const auto& edge : test_edges) {
         e_index <<= 1;
         Scalar vals1[2] = {plane1[edge.first], plane1[edge.second]};
-        Scalar vals2[2] = {plane2[edge.first], plane2[edge.second]};        
+        Scalar vals2[2] = {plane2[edge.first], plane2[edge.second]};
         auto orient = implicit_predicates::orient1d(vals1, vals2);
         if (orient == implicit_predicates::POSITIVE) {
             e_index += 1;
@@ -130,10 +130,6 @@ Arrangement<3> compute_arrangement(const std::vector<Plane<Int, 3>>& planes)
     }
     return compute_arrangement_impl<Int, 3>(planes);
 }
-
-
-
-
 
 
 } // namespace simplicial_arrangement

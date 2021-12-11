@@ -1,7 +1,8 @@
-#include "look_up_table.h"
-#include <nlohmann/json.hpp>
+#include <simplicial_arrangement/look_up_table.h>
+
 #include <fstream>
 #include <iostream>
+#include <nlohmann/json.hpp>
 
 namespace simplicial_arrangement {
 
@@ -10,7 +11,8 @@ std::unique_ptr<std::vector<std::vector<std::pair<int, int>>>> to_check_edge_tab
 std::unique_ptr<std::vector<std::vector<Arrangement<3>>>> two_func_lookup_table;
 bool use_lookup_table;
 
-bool load_lookup_table() {
+bool load_lookup_table()
+{
     use_lookup_table = false;
 #ifndef LOOKUP_TABLE_PATH
     return false;
@@ -24,7 +26,7 @@ bool load_lookup_table() {
     if (!load_to_check_edge_table(to_check_edge_table_file)) return false;
 
     std::string two_func_table_file = lookup_table_path + "/2_func_lookup_table.json";
-    if(!load_two_func_lookup_table(two_func_table_file)) return false;
+    if (!load_two_func_lookup_table(two_func_table_file)) return false;
 
     use_lookup_table = true;
     return true;
@@ -47,7 +49,7 @@ bool load_one_func_lookup_table(const std::string& filename)
     size_t num_entry = 16; // 2^4
     one_func_lookup_table = std::make_unique<std::vector<Arrangement<3>>>(num_entry);
     for (size_t i = 0; i < num_entry; i++) {
-        auto &arrangement = (*one_func_lookup_table)[i];
+        auto& arrangement = (*one_func_lookup_table)[i];
         load_arrangement(arrangement, input[i]);
     }
     return true;
@@ -97,8 +99,7 @@ bool load_two_func_lookup_table(const std::string& filename)
 
     // populate the lookup table
     size_t num_entry = 256; // 2^(4+4)
-    two_func_lookup_table =
-        std::make_unique<std::vector<std::vector<Arrangement<3>>>>(num_entry);
+    two_func_lookup_table = std::make_unique<std::vector<std::vector<Arrangement<3>>>>(num_entry);
     for (size_t i = 0; i < num_entry; i++) {
         size_t n_sub_entry = input[i].size();
         auto& arrangements = (*two_func_lookup_table)[i];
@@ -107,13 +108,13 @@ bool load_two_func_lookup_table(const std::string& filename)
             if (input[i][j].size() > 0) {
                 load_arrangement(arrangements[j], input[i][j]);
             }
-            
-        } 
+        }
     }
     return true;
 }
 
-void load_arrangement(Arrangement<3>& arrangement, const nlohmann::json& data) {
+void load_arrangement(Arrangement<3>& arrangement, const nlohmann::json& data)
+{
     //
     auto& vertices = arrangement.vertices;
     vertices.resize(data[0].size());
@@ -137,14 +138,15 @@ void load_arrangement(Arrangement<3>& arrangement, const nlohmann::json& data) {
         auto& cell = cells[j];
         load_vector(cell.faces, data[5][j]);
         load_vector(cell.face_orientations, data[6][j]);
-        // the first 4 planes are tet boundary, and the tet lies on the positive side of its boundary
-        cell.plane_orientations = std::vector<bool>(4,true);
+        // the first 4 planes are tet boundary, and the tet lies on the positive side of its
+        // boundary
+        cell.plane_orientations = std::vector<bool>(4, true);
         std::vector<bool> cell_input_plane_orientations;
         load_vector(cell_input_plane_orientations, data[7][j]);
         for (bool orient : cell_input_plane_orientations) {
             cell.plane_orientations.push_back(orient);
         }
-        //load_vector(cell.plane_orientations, data[7][j]);
+        // load_vector(cell.plane_orientations, data[7][j]);
     }
     //
     load_vector(arrangement.unique_plane_indices, data[8]);
@@ -154,7 +156,7 @@ void load_arrangement(Arrangement<3>& arrangement, const nlohmann::json& data) {
         load_vector(unique_planes[j], data[9][j]);
     }
     load_vector(arrangement.unique_plane_orientations, data[10]);
-    //done
+    // done
 }
 
-}
+} // namespace simplicial_arrangement

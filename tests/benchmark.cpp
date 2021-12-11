@@ -1,5 +1,5 @@
 #include <simplicial_arrangement/simplicial_arrangement.h>
-#include "look_up_table.h"
+#include <simplicial_arrangement/look_up_table.h>
 
 #include <catch2/catch.hpp>
 #include <random>
