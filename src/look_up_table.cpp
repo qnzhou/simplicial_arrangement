@@ -127,8 +127,8 @@ void load_arrangement(Arrangement<3>& arrangement, const nlohmann::json& data) {
         auto& face = faces[j];
         load_vector(face.vertices, data[1][j]);
         face.supporting_plane = data[2][j];
-        face.positive_cell = data[3][j] < 0 ? Arrangement<3>::None : data[3][j];
-        face.negative_cell = data[4][j] < 0 ? Arrangement<3>::None : data[4][j];
+        face.positive_cell = data[3][j] < 0 ? Arrangement<3>::None : data[3][j].get<size_t>();
+        face.negative_cell = data[4][j] < 0 ? Arrangement<3>::None : data[4][j].get<size_t>();
     }
     //
     auto& cells = arrangement.cells;

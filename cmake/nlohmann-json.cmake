@@ -1,27 +1,3 @@
-#[[
-if(TARGET nlohmann_json::nlohmann_json)
-    return()
-endif()
-
-set(NLOHMANNJSON_VERSION "v3.10.4")
-
-include(FetchContent)
-FetchContent_Declare(
-  nlohmann_json
-  GIT_REPOSITORY https://github.com/ArthurSonzogni/nlohmann_json_cmake_fetchcontent
-  GIT_TAG v3.10.4)
-#FetchContent_MakeAvailable(nlohmann_json)
-
-FetchContent_GetProperties(nlohmann_json)
-if(NOT json_POPULATED)
-  FetchContent_Populate(nlohmann_json)
-  add_subdirectory(${nlohmann_json_SOURCE_DIR} ${nlohmann_json_BINARY_DIR} EXCLUDE_FROM_ALL)
-endif()
-
-FetchContent_MakeAvailable(nlohmann_json)
-
-]]
-
 #
 # Copyright 2020 Adobe. All rights reserved.
 # This file is licensed to you under the Apache License, Version 2.0 (the "License");
