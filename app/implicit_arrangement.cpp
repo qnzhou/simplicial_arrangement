@@ -11,6 +11,7 @@ bool load_tet_mesh(const std::string& filename,
     std::vector<std::vector<size_t>>& tets)
 {
     //todo
+    return true;
 }
 
 double sphere_function(const std::vector<double> center, double r, const std::vector<double> p) {
