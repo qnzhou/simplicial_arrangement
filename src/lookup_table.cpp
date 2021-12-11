@@ -23,7 +23,7 @@ void load_vector(std::vector<T>& vec, const nlohmann::json& data)
 std::unique_ptr<std::vector<Arrangement<3>>> one_func_lookup_table;
 std::unique_ptr<std::vector<std::vector<std::pair<int, int>>>> to_check_edge_table;
 std::unique_ptr<std::vector<std::vector<Arrangement<3>>>> two_func_lookup_table;
-bool use_lookup_table;
+bool use_lookup_table = false;
 
 // Forward declarations.
 bool load_one_func_lookup_table(const std::string& filename);
