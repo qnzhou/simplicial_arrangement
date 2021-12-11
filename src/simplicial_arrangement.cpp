@@ -125,7 +125,7 @@ Arrangement<3> compute_arrangement(const std::vector<Plane<double, 3>>& planes)
 
 Arrangement<3> compute_arrangement(const std::vector<Plane<Int, 3>>& planes)
 {
-    if (two_func_lookup_table) {
+    if (use_lookup_table && two_func_lookup_table) {
         return compute_arrangement_lookup<Int>(planes);
     }
     return compute_arrangement_impl<Int, 3>(planes);
