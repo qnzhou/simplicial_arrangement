@@ -1,5 +1,5 @@
 #include <simplicial_arrangement/simplicial_arrangement.h>
-#include <simplicial_arrangement/look_up_table.h>
+#include <simplicial_arrangement/lookup_table.h>
 
 #include <stdlib.h>
 #include <iostream>

@@ -1,5 +1,5 @@
 #include <implicit_predicates/implicit_predicates.h>
-#include <simplicial_arrangement/look_up_table.h>
+#include <simplicial_arrangement/lookup_table.h>
 
 #include "SimplicialArrangementBuilder.h"
 #include "lookup_table_forward_declarations.h"

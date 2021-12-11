@@ -57,8 +57,5 @@ endif()
 set(LOOKUP_TABLE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lookup_table")
 target_compile_definitions(simplicial_arrangement PUBLIC -DLOOKUP_TABLE_PATH="${LOOKUP_TABLE_PATH}")
 
-add_executable(test_lookup_table "app/test_lookup_table.cpp")
-target_link_libraries(test_lookup_table simplicial_arrangement::simplicial_arrangement implicit_predicates::implicit_predicates nlohmann_json::nlohmann_json)
-
 add_executable(impl_arrangement "app/implicit_arrangement.cpp")
-target_link_libraries(impl_arrangement simplicial_arrangement::simplicial_arrangement implicit_predicates::implicit_predicates nlohmann_json::nlohmann_json)
+target_link_libraries(impl_arrangement simplicial_arrangement::simplicial_arrangement)
