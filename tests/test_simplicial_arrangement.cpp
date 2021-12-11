@@ -957,7 +957,6 @@ TEST_CASE("Lookup 3D", "[lookup][3D]")
     using namespace simplicial_arrangement;
     bool loaded = load_lookup_table();
     REQUIRE(loaded == true);
-    REQUIRE(use_lookup_table == true);
 
     SECTION("Int") { test_lookup_3D<Int>(); }
     SECTION("double") { test_lookup_3D<double>(); }

@@ -1,4 +1,5 @@
 #include <simplicial_arrangement/look_up_table.h>
+#include <simplicial_arrangement/simplicial_arrangement.h>
 
 #include <fstream>
 #include <iostream>
@@ -6,10 +7,32 @@
 
 namespace simplicial_arrangement {
 
+namespace {
+
+template <typename T>
+void load_vector(std::vector<T>& vec, const nlohmann::json& data)
+{
+    vec.resize(data.size());
+    for (size_t i = 0; i < vec.size(); i++) {
+        vec[i] = data[i].get<T>();
+    }
+}
+
+} // namespace
+
 std::unique_ptr<std::vector<Arrangement<3>>> one_func_lookup_table;
 std::unique_ptr<std::vector<std::vector<std::pair<int, int>>>> to_check_edge_table;
 std::unique_ptr<std::vector<std::vector<Arrangement<3>>>> two_func_lookup_table;
 bool use_lookup_table;
+
+// Forward declarations.
+bool load_one_func_lookup_table(const std::string& filename);
+bool load_to_check_edge_table(const std::string& filename);
+bool load_two_func_lookup_table(const std::string& filename);
+void load_arrangement(Arrangement<3>& arrangement, const nlohmann::json& data);
+
+void enable_lookup_table() { use_lookup_table = true; }
+void disable_lookup_table() { use_lookup_table = false; }
 
 bool load_lookup_table()
 {
