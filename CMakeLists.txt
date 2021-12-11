@@ -15,8 +15,8 @@ add_library(simplicial_arrangement STATIC ${SRC_FILES} ${INC_FILES})
 target_include_directories(simplicial_arrangement PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/include)
 target_link_libraries(simplicial_arrangement
-    PUBLIC absl::numeric absl::flat_hash_map
-    PRIVATE implicit_predicates::implicit_predicates spdlog::spdlog nlohmann_json::nlohmann_json)
+    PUBLIC absl::numeric absl::flat_hash_map nlohmann_json::nlohmann_json
+    PRIVATE implicit_predicates::implicit_predicates spdlog::spdlog)
 target_compile_features(simplicial_arrangement PRIVATE cxx_std_17)
 if (NOT MSVC)
     target_compile_options(simplicial_arrangement PRIVATE "-Wall" "-Werror")
@@ -56,3 +56,9 @@ endif()
 
 set(LOOKUP_TABLE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lookup_table")
 target_compile_definitions(simplicial_arrangement PUBLIC -DLOOKUP_TABLE_PATH="${LOOKUP_TABLE_PATH}")
+
+add_executable(test_lookup_table "app/test_lookup_table.cpp")
+target_link_libraries(test_lookup_table simplicial_arrangement::simplicial_arrangement implicit_predicates::implicit_predicates nlohmann_json::nlohmann_json)
+
+add_executable(impl_arrangement "app/implicit_arrangement.cpp")
+target_link_libraries(impl_arrangement simplicial_arrangement::simplicial_arrangement implicit_predicates::implicit_predicates nlohmann_json::nlohmann_json)
