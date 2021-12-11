@@ -104,7 +104,10 @@ bool load_two_func_lookup_table(const std::string& filename)
         auto& arrangements = (*two_func_lookup_table)[i];
         arrangements.resize(n_sub_entry);
         for (size_t j = 0; j < n_sub_entry; j++) {
-            load_arrangement(arrangements[j], input[i][j]);
+            if (input[i][j].size() > 0) {
+                load_arrangement(arrangements[j], input[i][j]);
+            }
+            
         } 
     }
     return true;
@@ -134,7 +137,14 @@ void load_arrangement(Arrangement<3>& arrangement, const nlohmann::json& data) {
         auto& cell = cells[j];
         load_vector(cell.faces, data[5][j]);
         load_vector(cell.face_orientations, data[6][j]);
-        load_vector(cell.plane_orientations, data[7][j]);
+        // the first 4 planes are tet boundary, and the tet lies on the positive side of its boundary
+        cell.plane_orientations = std::vector<bool>(4,true);
+        std::vector<bool> cell_input_plane_orientations;
+        load_vector(cell_input_plane_orientations, data[7][j]);
+        for (bool orient : cell_input_plane_orientations) {
+            cell.plane_orientations.push_back(orient);
+        }
+        //load_vector(cell.plane_orientations, data[7][j]);
     }
     //
     load_vector(arrangement.unique_plane_indices, data[8]);
