@@ -3,6 +3,8 @@
 
 #include <implicit_predicates/implicit_predicates.h>
 
+#include <look_up_table.h>
+
 namespace {
 
 template <typename Scalar, int DIM>
@@ -652,6 +654,288 @@ void test_3D()
     }
 }
 
+
+template <typename Scalar>
+void test_lookup_3D()
+{
+    using namespace simplicial_arrangement;
+
+    auto count_num_cells = [](auto& arrangement) { return arrangement.cells.size(); };
+
+    auto count_num_half_faces = [](auto& arrangement) {
+        size_t count = 0;
+        for (const auto& cell : arrangement.cells) {
+            count += cell.faces.size();
+        }
+        return count;
+    };
+
+    auto count_num_half_edges = [](auto& arrangement) {
+        size_t count = 0;
+        for (const auto& cell : arrangement.cells) {
+            for (const auto fid : cell.faces) {
+                count += arrangement.faces[fid].vertices.size();
+            }
+        }
+        return count;
+    };
+
+    std::vector<Plane<Scalar, 3>> planes;
+
+    SECTION("0 implicit")
+    {
+        auto arrangement = compute_arrangement(planes);
+        REQUIRE(count_num_cells(arrangement) == 1);
+        REQUIRE(count_num_half_faces(arrangement) == 4);
+        REQUIRE(count_num_half_edges(arrangement) == 12);
+        REQUIRE(arrangement.vertices.size() == 4);
+        REQUIRE(arrangement.unique_planes.size() == 4);
+        validate_arrangement(arrangement, planes);
+    }
+
+    SECTION("1 implicit")
+    {
+        SECTION("quad cross section")
+        {
+            planes.push_back({1, 1, -1, -1});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 2);
+            REQUIRE(count_num_half_faces(arrangement) == 10);
+            REQUIRE(count_num_half_edges(arrangement) == 36);
+            REQUIRE(arrangement.vertices.size() == 8);
+            REQUIRE(arrangement.unique_planes.size() == 5);
+            validate_arrangement(arrangement, planes);
+        }
+        SECTION("tri cross section")
+        {
+            planes.push_back({1, -1, -1, -1});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 2);
+            REQUIRE(count_num_half_faces(arrangement) == 9);
+            REQUIRE(count_num_half_edges(arrangement) == 30);
+            REQUIRE(arrangement.vertices.size() == 7);
+            REQUIRE(arrangement.unique_planes.size() == 5);
+            validate_arrangement(arrangement, planes);
+        }
+        SECTION("cut through a vertex")
+        {
+            planes.push_back({0, -1, -1, 1});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 2);
+            REQUIRE(count_num_half_faces(arrangement) == 9);
+            REQUIRE(count_num_half_edges(arrangement) == 28);
+            REQUIRE(arrangement.vertices.size() == 6);
+            REQUIRE(arrangement.unique_planes.size() == 5);
+            validate_arrangement(arrangement, planes);
+        }
+        SECTION("cut through an edge")
+        {
+            planes.push_back({0, 0, -1, 1});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 2);
+            REQUIRE(count_num_half_faces(arrangement) == 8);
+            REQUIRE(count_num_half_edges(arrangement) == 24);
+            REQUIRE(arrangement.vertices.size() == 5);
+            REQUIRE(arrangement.unique_planes.size() == 5);
+            validate_arrangement(arrangement, planes);
+        }
+        SECTION("cut through a face")
+        {
+            planes.push_back({0, 0, 0, 1});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 1);
+            REQUIRE(count_num_half_faces(arrangement) == 4);
+            REQUIRE(count_num_half_edges(arrangement) == 12);
+            REQUIRE(arrangement.vertices.size() == 4);
+            REQUIRE(arrangement.unique_planes.size() == 4);
+            validate_arrangement(arrangement, planes);
+        }
+    }
+
+    SECTION("2 implicits")
+    {
+        SECTION("not intersecting cuts")
+        {
+            planes.push_back({1, -2, -2, -2});
+            planes.push_back({-2, 1, -2, -2});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 3);
+            REQUIRE(count_num_half_faces(arrangement) == 14);
+            REQUIRE(count_num_half_edges(arrangement) == 48);
+            REQUIRE(arrangement.vertices.size() == 10);
+            REQUIRE(arrangement.unique_planes.size() == 6);
+            validate_arrangement(arrangement, planes);
+        }
+        SECTION("crossing")
+        {
+            planes.push_back({2, -1, -1, -1});
+            planes.push_back({-1, 2, -1, -1});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 4);
+            REQUIRE(count_num_half_faces(arrangement) == 20);
+            REQUIRE(count_num_half_edges(arrangement) == 72);
+            REQUIRE(arrangement.vertices.size() == 12);
+            REQUIRE(arrangement.unique_planes.size() == 6);
+            validate_arrangement(arrangement, planes);
+        }
+        SECTION("touching")
+        {
+            planes.push_back({1, -1, -1, -1});
+            planes.push_back({-1, 1, -1, -1});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 3);
+            REQUIRE(count_num_half_faces(arrangement) == 14);
+            REQUIRE(count_num_half_edges(arrangement) == 46);
+            REQUIRE(arrangement.vertices.size() == 9);
+            REQUIRE(arrangement.unique_planes.size() == 6);
+            validate_arrangement(arrangement, planes);
+        }
+        SECTION("duplicated cuts")
+        {
+            planes.push_back({1, 1, -1, -1});
+            planes.push_back({2, 2, -2, -2});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 2);
+            REQUIRE(count_num_half_faces(arrangement) == 10);
+            REQUIRE(count_num_half_edges(arrangement) == 36);
+            REQUIRE(arrangement.vertices.size() == 8);
+            REQUIRE(arrangement.unique_planes.size() == 5);
+            validate_arrangement(arrangement, planes);
+        }
+        SECTION("2 cuts through the same vertex")
+        {
+            planes.push_back({0, 0, 1, -1});
+            planes.push_back({0, 2, -2, 0});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 4);
+            REQUIRE(count_num_half_faces(arrangement) == 17);
+            REQUIRE(count_num_half_edges(arrangement) == 52);
+            REQUIRE(arrangement.vertices.size() == 7);
+            REQUIRE(arrangement.unique_planes.size() == 6);
+            validate_arrangement(arrangement, planes);
+        }
+        SECTION("2 cuts through faces")
+        {
+            planes.push_back({0, 0, 0, 1});
+            planes.push_back({0, 0, 0, 2});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 1);
+            REQUIRE(count_num_half_faces(arrangement) == 4);
+            REQUIRE(count_num_half_edges(arrangement) == 12);
+            REQUIRE(arrangement.vertices.size() == 4);
+            REQUIRE(arrangement.unique_planes.size() == 4);
+            validate_arrangement(arrangement, planes);
+        }
+    }
+    SECTION("3 implicits")
+    {
+        SECTION("3 duplicated cuts")
+        {
+            planes.push_back({1, 1, 1, -1});
+            planes.push_back({3, 3, 3, -3});
+            planes.push_back({-3, -3, -3, 3});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 2);
+            REQUIRE(count_num_half_faces(arrangement) == 9);
+            REQUIRE(count_num_half_edges(arrangement) == 30);
+            REQUIRE(arrangement.vertices.size() == 7);
+            REQUIRE(arrangement.unique_planes.size() == 5);
+            validate_arrangement(arrangement, planes);
+        }
+        SECTION("3 tangent cuts")
+        {
+            planes.push_back({1, 0, 0, 0});
+            planes.push_back({0, 0, 0, -3});
+            planes.push_back({0, 0, -30, 0});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 1);
+            REQUIRE(count_num_half_faces(arrangement) == 4);
+            REQUIRE(count_num_half_edges(arrangement) == 12);
+            REQUIRE(arrangement.vertices.size() == 4);
+            REQUIRE(arrangement.unique_planes.size() == 4);
+            validate_arrangement(arrangement, planes);
+        }
+        SECTION("3 parallel cuts")
+        {
+            planes.push_back({-1, 4, 4, 4});
+            planes.push_back({-2, 4, 4, 4});
+            planes.push_back({-3, 4, 4, 4});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 4);
+            REQUIRE(count_num_half_faces(arrangement) == 19);
+            REQUIRE(count_num_half_edges(arrangement) == 66);
+            REQUIRE(arrangement.vertices.size() == 13);
+            REQUIRE(arrangement.unique_planes.size() == 7);
+            validate_arrangement(arrangement, planes);
+        }
+        SECTION("3 cuts intersect at a line")
+        {
+            planes.push_back({-1, 1, 0, 0});
+            planes.push_back({-2, 0, 2, 0});
+            planes.push_back({0, -4, 4, 0});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 6);
+            REQUIRE(count_num_half_faces(arrangement) == 24);
+            REQUIRE(count_num_half_edges(arrangement) == 72);
+            REQUIRE(arrangement.vertices.size() == 8);
+            REQUIRE(arrangement.unique_planes.size() == 7);
+            validate_arrangement(arrangement, planes);
+        }
+        SECTION("3 cuts non-intersecting")
+        {
+            planes.push_back({1, -10, -10, -10});
+            planes.push_back({-10, 1, -10, -10});
+            planes.push_back({-10, -10, 1, -10});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 4);
+            REQUIRE(count_num_half_faces(arrangement) == 19);
+            REQUIRE(count_num_half_edges(arrangement) == 66);
+            REQUIRE(arrangement.vertices.size() == 13);
+            REQUIRE(arrangement.unique_planes.size() == 7);
+            validate_arrangement(arrangement, planes);
+        }
+        SECTION("3 cuts intersect at a point")
+        {
+            planes.push_back({10, -1, -1, -1});
+            planes.push_back({-1, 10, -1, -1});
+            planes.push_back({-1, -1, 10, -1});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 8);
+            REQUIRE(count_num_half_faces(arrangement) == 43);
+            REQUIRE(count_num_half_edges(arrangement) == 162);
+            REQUIRE(arrangement.vertices.size() == 20);
+            REQUIRE(arrangement.unique_planes.size() == 7);
+            validate_arrangement(arrangement, planes);
+        }
+        SECTION("3 cuts intersect at a vertex")
+        {
+            planes.push_back({1, -1, -1, 0});
+            planes.push_back({-1, 1, -1, 0});
+            planes.push_back({-1, -1, 1, 0});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 4);
+            REQUIRE(count_num_half_faces(arrangement) == 16);
+            REQUIRE(count_num_half_edges(arrangement) == 48);
+            REQUIRE(arrangement.vertices.size() == 7);
+            REQUIRE(arrangement.unique_planes.size() == 7);
+            validate_arrangement(arrangement, planes);
+        }
+        SECTION("3 cuts intersect at an edge")
+        {
+            planes.push_back({1, -1, -1, -1});
+            planes.push_back({-1, 1, -2, -2});
+            planes.push_back({1, -1, 3, 3});
+            auto arrangement = compute_arrangement(planes);
+            REQUIRE(count_num_cells(arrangement) == 4);
+            REQUIRE(count_num_half_faces(arrangement) == 19);
+            REQUIRE(count_num_half_edges(arrangement) == 62);
+            REQUIRE(arrangement.vertices.size() == 11);
+            REQUIRE(arrangement.unique_planes.size() == 7);
+            validate_arrangement(arrangement, planes);
+        }
+    }
+}
+
 } // namespace
 
 TEST_CASE("Arrangement 2D", "[arrangement][2D]")
@@ -666,4 +950,15 @@ TEST_CASE("Arrangement 3D", "[arrangement][3d]")
     using namespace simplicial_arrangement;
     SECTION("Int") { test_3D<Int>(); }
     SECTION("double") { test_3D<double>(); }
+}
+
+TEST_CASE("Lookup 3D", "[lookup][3D]") 
+{
+    using namespace simplicial_arrangement;
+    bool loaded = load_lookup_table();
+    REQUIRE(loaded == true);
+    REQUIRE(use_lookup_table == true);
+
+    SECTION("Int") { test_lookup_3D<Int>(); }
+    SECTION("double") { test_lookup_3D<double>(); }
 }
