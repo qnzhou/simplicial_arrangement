@@ -1,7 +1,7 @@
 #ifndef LOOK_UP_TABLE_H
 #define LOOK_UP_TABLE_H
 
-#include "common.h"
+#include <simplicial_arrangement/simplicial_arrangement.h>
 #include <nlohmann/json.hpp>
 
 namespace simplicial_arrangement {
