@@ -12,6 +12,11 @@ extern std::unique_ptr<std::vector<std::vector<Arrangement<3>>>> two_func_lookup
 
 TEST_CASE("Lookup table", "[lookup]")
 {
-    bool loaded = simplicial_arrangement::load_lookup_table();
+    using namespace simplicial_arrangement;
+
+    bool loaded = load_lookup_table();
     REQUIRE(loaded);
+
+    REQUIRE(one_func_lookup_table->size() == 16);
+    REQUIRE(two_func_lookup_table->size() == 256);
 }
