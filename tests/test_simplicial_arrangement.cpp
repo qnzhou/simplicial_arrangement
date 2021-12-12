@@ -163,23 +163,9 @@ void assert_equivalent(const simplicial_arrangement::Arrangement<DIM>& r1,
     REQUIRE(r1.unique_planes.size() == r2.unique_planes.size());
 
     const size_t num_unique_planes = r1.unique_planes.size();
-    std::vector<size_t> r1_support_vertex_count(num_unique_planes, 0);
-    std::vector<size_t> r2_support_vertex_count(num_unique_planes, 0);
     std::vector<size_t> r1_support_face_count(num_unique_planes, 0);
     std::vector<size_t> r2_support_face_count(num_unique_planes, 0);
 
-    for (const auto& v : r1.vertices) {
-        for (auto i : v) {
-            size_t uid = r1.unique_plane_indices[i];
-            r1_support_vertex_count[uid]++;
-        }
-    }
-    for (const auto& v : r2.vertices) {
-        for (auto i : v) {
-            size_t uid = r2.unique_plane_indices[i];
-            r2_support_vertex_count[uid]++;
-        }
-    }
     for (const auto& f : r1.faces) {
         size_t uid = r1.unique_plane_indices[f.supporting_plane];
         r1_support_face_count[uid]++;
@@ -195,12 +181,9 @@ void assert_equivalent(const simplicial_arrangement::Arrangement<DIM>& r1,
         size_t r2_uid = r2.unique_plane_indices[i];
         CAPTURE(r1.unique_plane_indices,
             r2.unique_plane_indices,
-            r1_support_vertex_count,
-            r2_support_vertex_count,
             r1_support_face_count,
             r2_support_face_count);
         CHECK(r1.unique_planes[r1_uid].size() == r1.unique_planes[r2_uid].size());
-        CHECK(r1_support_vertex_count[r1_uid] == r2_support_vertex_count[r2_uid]);
         CHECK(r1_support_face_count[r1_uid] == r2_support_face_count[r2_uid]);
     }
 }
@@ -826,7 +809,7 @@ TEST_CASE("Lookup 3D", "[lookup][3D]")
 
                 assert_equivalent(r1, r2);
             }
-            SECTION("Case 1")
+            SECTION("Case 2")
             {
                 planes.push_back({EPS, -EPS, 0, 0});
                 planes.push_back({-l, l, 0, 0});
@@ -838,7 +821,7 @@ TEST_CASE("Lookup 3D", "[lookup][3D]")
 
                 assert_equivalent(r1, r2);
             }
-            SECTION("Case 2")
+            SECTION("Case 3")
             {
                 planes.push_back({EPS, -EPS, 1, 0});
                 planes.push_back({0, l, 2 * l, -l});
@@ -850,7 +833,7 @@ TEST_CASE("Lookup 3D", "[lookup][3D]")
 
                 assert_equivalent(r1, r2);
             }
-            SECTION("Case 3")
+            SECTION("Case 4")
             {
                 planes.push_back({EPS, EPS, EPS, -l});
                 planes.push_back({-l, -l, -l, EPS});
