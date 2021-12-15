@@ -20,12 +20,24 @@ struct IsoFace
     std::vector<std::pair<size_t, size_t>> tet_face_indices;
 };
 
-// vertex of isosurface: a pair of indices (tet_id, tet_vert_id)
-typedef std::pair<size_t, size_t> IsoVert;
+// vertex of isosurface
+struct IsoVert
+{
+    // the tet containing the IsoVert
+    size_t tet_index;
+    // the index of IsoVert in tet.vertices
+    size_t tet_vert_index;
+    // minimal simplex that contains the IsoVert
+    size_t simplex_size; // 1: point, 2: edge, 3: triangle, 4: tetrahedron
+    // index into a list of tet vertices
+    std::array<size_t, 4> simplex_vert_indices;
+    // list of implicit functions whose isosurfaces pass IsoVert (indexed into a global list of implicit functions)
+    std::array<size_t, 3> func_indices;
+};
 
-bool load_tet_mesh(const std::string& filename,
-    std::vector<std::vector<double>>& pts,
-    std::vector<std::vector<size_t>>& tets)
+bool load_tet_mesh(const std::string& filename, 
+    std::vector<std::array<double, 3>> &pts,
+    std::vector<std::array<size_t, 4>> &tets)
 {
     using json = nlohmann::json;
     std::ifstream fin(filename.c_str());
@@ -39,7 +51,6 @@ bool load_tet_mesh(const std::string& filename,
     //
     pts.resize(data[0].size());
     for (size_t j = 0; j < pts.size(); j++) {
-        pts[j].resize(3);
         for (size_t k = 0; k < 3; k++) {
             pts[j][k] = data[0][j][k].get<double>();
         }
@@ -47,7 +58,6 @@ bool load_tet_mesh(const std::string& filename,
     //
     tets.resize(data[1].size());
     for (size_t j = 0; j < tets.size(); j++) {
-        tets[j].resize(4);
         for (size_t k = 0; k < 4; k++) {
             tets[j][k] = data[1][j][k].get<size_t>();
         }
@@ -55,10 +65,35 @@ bool load_tet_mesh(const std::string& filename,
     return true;
 }
 
+bool save_iso_mesh(const std::string& filename, const std::vector<std::array<double, 3>>& iso_pts,
+    const std::vector<IsoFace>& iso_faces)
+{
+    using json = nlohmann::json;
+    std::ofstream fout(filename.c_str());
+    //
+    json jPts;
+    for (size_t i = 0; i < iso_pts.size(); i++) {
+        jPts.push_back(json(iso_pts[i]));
+    }
+    //
+    json jFaces;
+    for (size_t i = 0; i < iso_faces.size(); i++) {
+        jFaces.push_back(json(iso_faces[i].vert_indices));
+    }
+    //
+    json jMesh;
+    jMesh.push_back(jPts);
+    jMesh.push_back(jFaces);
+    
+    fout << jMesh << std::endl;
+    fout.close();
+    return true;
+}
+
 void extract_iso_mesh(const std::vector<bool>& has_isosurface,
     const std::vector<Arrangement<3>> &cut_results,
     const std::vector<std::vector<size_t>> &func_in_tet,
-    const std::vector<std::vector<size_t>>& tets,
+    const std::vector<std::array<size_t, 4>>& tets,
     std::vector<IsoVert>& iso_verts,
     std::vector<IsoFace>& iso_faces) {
     // hash table for vertices on the boundary of tetrahedron
@@ -150,10 +185,16 @@ void extract_iso_mesh(const std::vector<bool>& has_isosurface,
                         std::array<size_t, 3> key = {vId1, vId2, implicit_pIds[0]};
                         auto iter_inserted = vert_on_tetEdge.try_emplace(key, num_iso_vert);
                         if (iter_inserted.second) {
-                            iso_verts[num_iso_vert] = std::make_pair(i, j);
-                            iso_vId_of_vert[j] = num_iso_vert;
+                            auto& iso_vert = iso_verts[num_iso_vert];
+                            iso_vert.tet_index = i;
+                            iso_vert.tet_vert_index = j;
+                            iso_vert.simplex_size = 2;
+                            iso_vert.simplex_vert_indices[0] = vId1;
+                            iso_vert.simplex_vert_indices[1] = vId2;
+                            iso_vert.func_indices[0] = implicit_pIds[0];
                             ++num_iso_vert;
                         }
+                        iso_vId_of_vert[j] = iter_inserted.first->second;
                         break;
                     }
                     case 1: // on tet face
@@ -172,17 +213,32 @@ void extract_iso_mesh(const std::vector<bool>& has_isosurface,
                             vIds[0], vIds[1], vIds[2], implicit_pIds[0], implicit_pIds[1]};
                         auto iter_inserted = vert_on_tetFace.try_emplace(key, num_iso_vert);
                         if (iter_inserted.second) {
-                            iso_verts[num_iso_vert] = std::make_pair(i, j);
-                            iso_vId_of_vert[j] = num_iso_vert;
+                            auto& iso_vert = iso_verts[num_iso_vert];
+                            iso_vert.tet_index = i;
+                            iso_vert.tet_vert_index = j;
+                            iso_vert.simplex_size = 3;
+                            iso_vert.simplex_vert_indices[0] = vIds[0];
+                            iso_vert.simplex_vert_indices[1] = vIds[1];
+                            iso_vert.simplex_vert_indices[2] = vIds[2];
+                            iso_vert.func_indices[0] = implicit_pIds[0];
+                            iso_vert.func_indices[1] = implicit_pIds[1];
                             ++num_iso_vert;
                         }
+                        iso_vId_of_vert[j] = iter_inserted.first->second;
                         break;
                     }
                     case 0: // in tet cell
-                        iso_verts[num_iso_vert] = std::make_pair(i,j);
+                    {
+                        auto& iso_vert = iso_verts[num_iso_vert];
+                        iso_vert.tet_index = i;
+                        iso_vert.tet_vert_index = j;
+                        iso_vert.simplex_size = 4;
+                        iso_vert.simplex_vert_indices = tets[i];
+                        iso_vert.func_indices = implicit_pIds;
                         iso_vId_of_vert[j] = num_iso_vert;
                         ++num_iso_vert;
                         break;
+                    }
                     case 3: // on tet vertex
                     {
                         std::vector<bool> used_pId(4, false);
@@ -199,10 +255,14 @@ void extract_iso_mesh(const std::vector<bool>& has_isosurface,
                         auto key = tets[i][vId];
                         auto iter_inserted = vert_on_tetVert.try_emplace(key, num_iso_vert);
                         if (iter_inserted.second) {
-                            iso_verts[num_iso_vert] = std::make_pair(i, j);
-                            iso_vId_of_vert[j] = num_iso_vert;
+                            auto& iso_vert = iso_verts[num_iso_vert];
+                            iso_vert.tet_index = i;
+                            iso_vert.tet_vert_index = j;
+                            iso_vert.simplex_size = 1;
+                            iso_vert.simplex_vert_indices[0] = tets[i][vId];
                             ++num_iso_vert;
                         }
+                        iso_vId_of_vert[j] = iter_inserted.first->second;
                         break;
                     }
                     default: break;
@@ -255,12 +315,64 @@ void extract_iso_mesh(const std::vector<bool>& has_isosurface,
     iso_faces.resize(num_iso_face);
 }
 
-double sphere_function(const std::vector<double> &center, double r, const std::vector<double> &p) {
+// compute barycentric coordinate of Point (intersection of three planes)
+// Point in tet cell
+//template <typename Scalar>
+inline void compute_barycentric_coords(
+    const std::array<double, 4>& plane1, const std::array<double, 4>& plane2, const std::array<double, 4>& plane3,
+    std::array<double,4>& bary_coords)
+{
+    double n1 = plane1[3] * (plane2[2] * plane3[1] - plane2[1] * plane3[2]) +
+                plane1[2] * (plane2[1] * plane3[3] - plane2[3] * plane3[1]) +
+                plane1[1] * (plane2[3] * plane3[2] - plane2[2] * plane3[3]);
+    double n2 = plane1[3] * (plane2[0] * plane3[2] - plane2[2] * plane3[0]) +
+                plane1[2] * (plane2[3] * plane3[0] - plane2[0] * plane3[3]) +
+                plane1[0] * (plane2[2] * plane3[3] - plane2[3] * plane3[2]);
+    double n3 = plane1[3] * (plane2[1] * plane3[0] - plane2[0] * plane3[1]) +
+                plane1[1] * (plane2[0] * plane3[3] - plane2[3] * plane3[0]) +
+                plane1[0] * (plane2[3] * plane3[1] - plane2[1] * plane3[3]);
+    double n4 = plane1[2] * (plane2[0] * plane3[1] - plane2[1] * plane3[0]) +
+                plane1[1] * (plane2[2] * plane3[0] - plane2[0] * plane3[2]) +
+                plane1[0] * (plane2[1] * plane3[2] - plane2[2] * plane3[1]);
+    double d = n1 + n2 + n3 + n4;
+    //
+    bary_coords[0] = n1 / d;
+    bary_coords[1] = n2 / d;
+    bary_coords[2] = n3 / d;
+    bary_coords[3] = n4 / d;
+}
+
+// Point on tet face
+inline void compute_barycentric_coords(const std::array<double, 3>& plane1,
+    const std::array<double, 3>& plane2,
+    std::array<double, 3>& bary_coords)
+{
+    double n1 = plane1[2] * plane2[1] - plane1[1] * plane2[2];
+    double n2 = plane1[0] * plane2[2] - plane1[2] * plane2[0];
+    double n3 = plane1[1] * plane2[0] - plane1[0] * plane2[1];
+    double d = n1 + n2 + n3;
+    //
+    bary_coords[0] = n1 / d;
+    bary_coords[1] = n2 / d;
+    bary_coords[2] = n3 / d;
+}
+
+// Point on tet edge
+inline void compute_barycentric_coords(double f1, double f2,
+    std::array<double, 2>& bary_coords)
+{
+    bary_coords[0] = f2 / (f2 - f1);
+    bary_coords[1] = 1 - bary_coords[0];
+}
+
+
+// implicit functions
+inline double sphere_function(const std::array<double,3> &center, double r, const std::array<double,3> &p) {
     return (p[0] - center[0]) * (p[0] - center[0]) + (p[1] - center[1]) * (p[1] - center[1]) +
            (p[2] - center[2]) * (p[2] - center[2]) - r * r;
 }
 
-int sign(double x) {
+inline int sign(double x) {
     return (x > 0) ? 1 : ((x < 0) ? -1 : 0);
 }
 
@@ -274,14 +386,14 @@ int main(int argc, const char* argv[])
 
     // load tet mesh
     std::string tet_mesh_file = "D:/research/simplicial_arrangement/data/tet_mesh.json";
-    std::vector<std::vector<double>> pts;
-    std::vector<std::vector<size_t>> tets;
+    std::vector<std::array<double, 3>> pts;
+    std::vector<std::array<size_t, 4>> tets;
     load_tet_mesh(tet_mesh_file, pts, tets);
     std::cout << "tet mesh: " << pts.size() << " verts, " << tets.size() << " tets." << std::endl;
 
     // load implicit function values, or evaluate
     size_t n_func = 4;
-    std::vector<std::vector<double>> centers(n_func);
+    std::vector<std::array<double,3>> centers(n_func);
     centers[0] = {0, 0, 0};
     centers[1] = {0.5, 0, 0};
     centers[2] = {0, 0.5, 0};
@@ -356,11 +468,82 @@ int main(int argc, const char* argv[])
     std::vector<IsoVert> iso_verts;
     std::vector<IsoFace> iso_faces;
     extract_iso_mesh(has_isosurface, cut_results, func_in_tet, tets, iso_verts, iso_faces);
-    
-    // test
     std::cout << "num iso-vertices = " << iso_verts.size() << std::endl;
     std::cout << "num iso-faces = " << iso_faces.size() << std::endl;
     
+    // compute xyz of iso-vertices
+    std::vector<std::array<double, 3>> iso_pts(iso_verts.size());
+    for (size_t i = 0; i < iso_verts.size(); i++) {
+        const auto& iso_vert = iso_verts[i];
+        switch (iso_vert.simplex_size) {
+        case 2: // on tet edge
+        {
+            auto vId1 = iso_vert.simplex_vert_indices[0];
+            auto vId2 = iso_vert.simplex_vert_indices[1];
+            auto fId = iso_vert.func_indices[0];
+            auto f1 = funcVals[fId][vId1];
+            auto f2 = funcVals[fId][vId2];
+            std::array<double, 2> b;
+            compute_barycentric_coords(f1, f2, b);
+            iso_pts[i][0] = b[0] * pts[vId1][0] + b[1] * pts[vId2][0];
+            iso_pts[i][1] = b[0] * pts[vId1][1] + b[1] * pts[vId2][1];
+            iso_pts[i][2] = b[0] * pts[vId1][2] + b[1] * pts[vId2][2];
+            break;
+        }
+        case 3: // on tet face
+        {
+            auto vId1 = iso_vert.simplex_vert_indices[0];
+            auto vId2 = iso_vert.simplex_vert_indices[1];
+            auto vId3 = iso_vert.simplex_vert_indices[2];
+            auto fId1 = iso_vert.func_indices[0];
+            auto fId2 = iso_vert.func_indices[1];
+            std::array<double, 3> f1s = {funcVals[fId1][vId1], funcVals[fId1][vId2], funcVals[fId1][vId3]};
+            std::array<double, 3> f2s = {
+                funcVals[fId2][vId1], funcVals[fId2][vId2], funcVals[fId2][vId3]};
+            std::array<double, 3> b;
+            compute_barycentric_coords(f1s, f2s, b);
+            iso_pts[i][0] = b[0] * pts[vId1][0] + b[1] * pts[vId2][0] + b[2] * pts[vId3][0];
+            iso_pts[i][1] = b[0] * pts[vId1][1] + b[1] * pts[vId2][1] + b[2] * pts[vId3][1];
+            iso_pts[i][2] = b[0] * pts[vId1][2] + b[1] * pts[vId2][2] + b[2] * pts[vId3][2];
+            break;
+        }
+        case 4: // in tet cell
+        {
+            auto vId1 = iso_vert.simplex_vert_indices[0];
+            auto vId2 = iso_vert.simplex_vert_indices[1];
+            auto vId3 = iso_vert.simplex_vert_indices[2];
+            auto vId4 = iso_vert.simplex_vert_indices[3];
+            auto fId1 = iso_vert.func_indices[0];
+            auto fId2 = iso_vert.func_indices[1];
+            auto fId3 = iso_vert.func_indices[2];
+            std::array<double, 4> f1s = {
+                funcVals[fId1][vId1], funcVals[fId1][vId2], funcVals[fId1][vId3], funcVals[fId1][vId4]};
+            std::array<double, 4> f2s = {funcVals[fId2][vId1],
+                funcVals[fId2][vId2],
+                funcVals[fId2][vId3],
+                funcVals[fId2][vId4]};
+            std::array<double, 4> f3s = {funcVals[fId3][vId1],
+                funcVals[fId3][vId2],
+                funcVals[fId3][vId3],
+                funcVals[fId3][vId4]};
+            std::array<double, 4> b;
+            compute_barycentric_coords(f1s, f2s, f3s, b);
+            iso_pts[i][0] = b[0] * pts[vId1][0] + b[1] * pts[vId2][0] + b[2] * pts[vId3][0] + b[3] * pts[vId4][0];
+            iso_pts[i][1] = b[0] * pts[vId1][1] + b[1] * pts[vId2][1] + b[2] * pts[vId3][1] +
+                            b[3] * pts[vId4][1];
+            iso_pts[i][2] = b[0] * pts[vId1][2] + b[1] * pts[vId2][2] + b[2] * pts[vId3][2] +
+                            b[3] * pts[vId4][2];
+            break;
+        }
+        case 1: // on tet vertex
+            iso_pts[i] = pts[iso_vert.simplex_vert_indices[0]];
+            break;
+        default: break;
+        }
+    }
 
+    // export iso-mesh
+    save_iso_mesh("D:/research/simplicial_arrangement/data/iso_mesh.json", iso_pts, iso_faces);
+    
     return 0;
 }
