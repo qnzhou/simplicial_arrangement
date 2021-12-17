@@ -6,6 +6,8 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 include(absl)
 include(implicit_predicates)
 include(spdlog)
+include(nlohmann-json)
+include(sanitizers)
 
 file(GLOB INC_FILES ${CMAKE_CURRENT_LIST_DIR}/include/*.h)
 file(GLOB SRC_FILES ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp)
@@ -14,7 +16,7 @@ add_library(simplicial_arrangement STATIC ${SRC_FILES} ${INC_FILES})
 target_include_directories(simplicial_arrangement PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/include)
 target_link_libraries(simplicial_arrangement
-    PUBLIC absl::numeric absl::flat_hash_map
+    PUBLIC absl::numeric absl::flat_hash_map nlohmann_json::nlohmann_json
     PRIVATE implicit_predicates::implicit_predicates spdlog::spdlog)
 target_compile_features(simplicial_arrangement PRIVATE cxx_std_17)
 if (NOT MSVC)
@@ -49,5 +51,18 @@ if (SIMPLICIAL_ARRANGEMENT_UNIT_TESTS)
             target_compile_options(simplicial_arrangement_tests PRIVATE -fprofile-instr-generate -fcoverage-mapping)
             target_link_options(simplicial_arrangement_tests PRIVATE -fprofile-instr-generate -fcoverage-mapping)
         endif()
+    endif()
+endif()
+
+
+set(LOOKUP_TABLE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lookup_table")
+target_compile_definitions(simplicial_arrangement PUBLIC -DLOOKUP_TABLE_PATH="${LOOKUP_TABLE_PATH}")
+
+add_executable(impl_arrangement "app/implicit_arrangement.cpp")
+target_link_libraries(impl_arrangement simplicial_arrangement::simplicial_arrangement)
+if (SIMPLICIAL_ARRANGEMENT_TEST_COVERAGE)
+    if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
+        target_compile_options(impl_arrangement PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+        target_link_options(impl_arrangement PRIVATE -fprofile-instr-generate -fcoverage-mapping)
     endif()
 endif()
