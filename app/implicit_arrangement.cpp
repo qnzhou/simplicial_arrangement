@@ -4,20 +4,24 @@
 #include <stdlib.h>
 #include <iostream>
 #include <fstream>
+#include <queue>
 #include <nlohmann/json.hpp>
-
+#include "ScopedTimer.h"
 #include <absl/container/flat_hash_map.h>
+
 
 using namespace simplicial_arrangement;
 
 // a polygon from the iso-surface of implicit function
 struct IsoFace
 {
-    // a list of polygon's vertex indices (index into some global list of vertices)
+    // a list of polygon's vertex indices (index into some global list of iso-vertices)
     std::vector<size_t> vert_indices;
     // the local index of this polygon in all the tets that contains it
     // each pair is (tet_Id, tet_face_Id)
     std::vector<std::pair<size_t, size_t>> tet_face_indices;
+    // list of indices of bounding iso-edges (index into a global list of iso-edges)
+    std::vector<size_t> edge_indices;
 };
 
 // vertex of isosurface
@@ -33,6 +37,14 @@ struct IsoVert
     std::array<size_t, 4> simplex_vert_indices;
     // list of implicit functions whose isosurfaces pass IsoVert (indexed into a global list of implicit functions)
     std::array<size_t, 3> func_indices;
+};
+
+struct IsoEdge
+{
+    size_t v1;
+    size_t v2;
+    // each pair is (iso_face_Id, edge_face_Id)
+    std::vector<std::pair<size_t, size_t>> face_edge_indices;
 };
 
 bool load_tet_mesh(const std::string& filename, 
@@ -65,8 +77,10 @@ bool load_tet_mesh(const std::string& filename,
     return true;
 }
 
-bool save_iso_mesh(const std::string& filename, const std::vector<std::array<double, 3>>& iso_pts,
-    const std::vector<IsoFace>& iso_faces)
+bool save_result(const std::string& filename, const std::vector<std::array<double, 3>>& iso_pts,
+    const std::vector<IsoFace>& iso_faces, const std::vector<std::vector<size_t>> &patches,
+    const std::vector<IsoEdge>& iso_edges, const std::vector<std::vector<size_t>> &chains,
+    const std::vector<std::vector<size_t>>& non_manifold_edges_of_vert)
 {
     using json = nlohmann::json;
     std::ofstream fout(filename.c_str());
@@ -80,12 +94,38 @@ bool save_iso_mesh(const std::string& filename, const std::vector<std::array<dou
     for (size_t i = 0; i < iso_faces.size(); i++) {
         jFaces.push_back(json(iso_faces[i].vert_indices));
     }
+    // 
+    json jPatches;
+    for (size_t i = 0; i < patches.size(); i++) {
+        jPatches.push_back(json(patches[i]));
+    }
     //
-    json jMesh;
-    jMesh.push_back(jPts);
-    jMesh.push_back(jFaces);
+    json jEdges;
+    for (size_t i = 0; i < iso_edges.size(); i++) {
+        jEdges.push_back({iso_edges[i].v1, iso_edges[i].v2});
+    }
+    //
+    json jChains;
+    for (size_t i = 0; i < chains.size(); i++) {
+        jChains.push_back(json(chains[i]));
+    }
+    //
+    json jCorners;
+    for (size_t i = 0; i < non_manifold_edges_of_vert.size(); i++) {
+        if (non_manifold_edges_of_vert[i].size() > 2) {
+            jCorners.push_back(i);
+        }
+    }
+    //
+    json jOut;
+    jOut.push_back(jPts);
+    jOut.push_back(jFaces);
+    jOut.push_back(jPatches);
+    jOut.push_back(jEdges);
+    jOut.push_back(jChains);
+    jOut.push_back(jCorners);
     
-    fout << jMesh << std::endl;
+    fout << jOut << std::endl;
     fout.close();
     return true;
 }
@@ -96,6 +136,7 @@ void extract_iso_mesh(const std::vector<bool>& has_isosurface,
     const std::vector<std::array<size_t, 4>>& tets,
     std::vector<IsoVert>& iso_verts,
     std::vector<IsoFace>& iso_faces) {
+    ScopedTimer<> timer("extract iso mesh (topology only)");
     // hash table for vertices on the boundary of tetrahedron
     absl::flat_hash_map<size_t, size_t> vert_on_tetVert;
     absl::flat_hash_map<std::array<size_t, 3>, size_t> vert_on_tetEdge;
@@ -315,6 +356,135 @@ void extract_iso_mesh(const std::vector<bool>& has_isosurface,
     iso_faces.resize(num_iso_face);
 }
 
+// compute iso-edges and edge-face connectivity
+void compute_iso_edges(std::vector<IsoFace>& iso_faces, std::vector<IsoEdge>& iso_edges) 
+{
+    ScopedTimer<> timer("compute iso-edges and edge-face connectivity");
+    size_t max_num_edge = 0;
+    for (size_t i = 0; i < iso_faces.size(); i++) {
+        max_num_edge += iso_faces[i].vert_indices.size();
+    }
+    iso_edges.resize(max_num_edge);
+    size_t num_iso_edge = 0;
+    // map: (v1, v2) -> iso-edge index
+    absl::flat_hash_map<std::pair<size_t, size_t>, size_t> edge_id;
+    for (size_t i = 0; i < iso_faces.size(); i++) {
+        auto& face = iso_faces[i];
+        size_t num_edge = face.vert_indices.size();
+        face.edge_indices.resize(num_edge);
+        for (size_t j = 0; j < num_edge; j++) {
+            size_t v1 = face.vert_indices[j];
+            size_t v2 = (j+1==num_edge) ? face.vert_indices[0] : face.vert_indices[j + 1];
+            // swap if v1 > v2
+            size_t tmp = v1;
+            if (v1 > v2) {
+                v1 = v2;
+                v2 = tmp;
+            }
+            //            
+            auto iter_inserted = edge_id.try_emplace(std::make_pair(v1, v2), num_iso_edge);
+            if (iter_inserted.second) { // new iso-edge
+                iso_edges[num_iso_edge].v1 = v1;
+                iso_edges[num_iso_edge].v2 = v2;
+                iso_edges[num_iso_edge].face_edge_indices.emplace_back(i, j);
+                face.edge_indices[j] = num_iso_edge; 
+                ++num_iso_edge;                    
+            } else { // existing iso-edge
+                size_t eId = iter_inserted.first->second;
+                iso_edges[eId].face_edge_indices.emplace_back(i, j);
+                face.edge_indices[j] = eId;
+            }            
+        }
+    }
+    //
+    iso_edges.resize(num_iso_edge);
+}
+
+// group iso-faces into patches
+void compute_patches(const std::vector<IsoFace> &iso_faces, const std::vector<IsoEdge> &iso_edges,
+    std::vector<std::vector<size_t>> &patches)
+{
+    ScopedTimer<> timer("group iso-faces into patches");
+    std::vector<bool> visisted_face(iso_faces.size(), false);
+    for (size_t i = 0; i < iso_faces.size(); i++) {
+        if (!visisted_face[i]) {
+            // new patch
+            patches.emplace_back();
+            auto& patch = patches.back();
+            std::queue<size_t> Q;
+            Q.push(i);
+            patch.emplace_back(i);
+            visisted_face[i] = true;
+            while (! Q.empty()) {
+                auto fId = Q.front();
+                Q.pop();
+                for (size_t eId : iso_faces[fId].edge_indices) {
+                    if (iso_edges[eId].face_edge_indices.size() == 2) { // manifold edge                        
+                        size_t other_fId = (iso_edges[eId].face_edge_indices[0].first == fId)
+                                             ? iso_edges[eId].face_edge_indices[1].first
+                                             : iso_edges[eId].face_edge_indices[0].first;
+                        if (!visisted_face[other_fId]) {
+                            Q.push(other_fId);
+                            patch.emplace_back(other_fId);
+                            visisted_face[other_fId] = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// group non-manifold iso-edges into chains
+void compute_chains(const std::vector<IsoEdge>& iso_edges, 
+    const std::vector<std::vector<size_t>> &non_manifold_edges_of_vert, 
+    std::vector<std::vector<size_t>> &chains) 
+{
+    ScopedTimer<> timer("group non-manifold iso-edges into chains");
+    std::vector<bool> visited_edge(iso_edges.size(), false);
+    for (size_t i = 0; i < iso_edges.size(); i++) {
+        if (!visited_edge[i] && iso_edges[i].face_edge_indices.size() > 2) {
+            // unvisited non-manifold iso-edge (not a boundary edge)
+            // new chain
+            chains.emplace_back();
+            auto& chain = chains.back();
+            std::queue<size_t> Q;
+            Q.push(i);
+            chain.emplace_back(i);
+            visited_edge[i] = true;
+            while (!Q.empty()) {
+                auto eId = Q.front();
+                Q.pop();
+                // v1
+                size_t v = iso_edges[eId].v1;
+                if (non_manifold_edges_of_vert[v].size() == 2) {
+                    size_t other_eId = (non_manifold_edges_of_vert[v][0] == eId)
+                                           ? non_manifold_edges_of_vert[v][1]
+                                           : non_manifold_edges_of_vert[v][0];
+                    if (!visited_edge[other_eId]) {
+                        Q.push(other_eId);
+                        chain.emplace_back(other_eId);
+                        visited_edge[other_eId] = true;
+                    }
+                }
+                // v2
+                v = iso_edges[eId].v2;
+                if (non_manifold_edges_of_vert[v].size() == 2) {
+                    size_t other_eId = (non_manifold_edges_of_vert[v][0] == eId)
+                                           ? non_manifold_edges_of_vert[v][1]
+                                           : non_manifold_edges_of_vert[v][0];
+                    if (!visited_edge[other_eId]) {
+                        Q.push(other_eId);
+                        chain.emplace_back(other_eId);
+                        visited_edge[other_eId] = true;
+                    }
+                }                
+            }
+        }
+    }
+
+}
+
 // compute barycentric coordinate of Point (intersection of three planes)
 // Point in tet cell
 //template <typename Scalar>
@@ -401,40 +571,49 @@ int main(int argc, const char* argv[])
     double radius = 0.5;
 
     std::vector<std::vector<double>> funcVals(n_func);
-    for (size_t i = 0; i < n_func; i++) {
-        funcVals[i].resize(pts.size());
-        for (size_t j = 0; j < pts.size(); j++) {
-            funcVals[i][j] = sphere_function(centers[i], radius, pts[j]);
+    {
+        ScopedTimer<> timer("evaluate implicit functions at vertices");
+        for (size_t i = 0; i < n_func; i++) {
+            funcVals[i].resize(pts.size());
+            for (size_t j = 0; j < pts.size(); j++) {
+                funcVals[i][j] = sphere_function(centers[i], radius, pts[j]);
+            }
         }
     }
     
 
     // function signs at vertices
     std::vector<std::vector<int>> funcSigns(n_func);
-    for (size_t i = 0; i < n_func; i++) {
-        funcSigns[i].resize(pts.size());
-        for (size_t j = 0; j < pts.size(); j++) {
-            funcSigns[i][j] = sign(funcVals[i][j]);
+    {
+        ScopedTimer<> timer("compute function signs at vertices");
+        for (size_t i = 0; i < n_func; i++) {
+            funcSigns[i].resize(pts.size());
+            for (size_t j = 0; j < pts.size(); j++) {
+                funcSigns[i][j] = sign(funcVals[i][j]);
+            }
         }
     }
 
     // find functions whose iso-surfaces intersect tets
     std::vector<std::vector<size_t>> func_in_tet(tets.size());
-    for (size_t i = 0; i < tets.size(); i++) {
-        func_in_tet.reserve(n_func);
-        for (size_t j = 0; j < n_func; j++) {
-            int pos_count = 0;
-            int neg_count = 0;
-            for (const auto& vId : tets[i]) {
-                if (funcSigns[j][vId] == 1) {
-                    pos_count += 1;
-                } else if (funcSigns[j][vId] == -1) {
-                    neg_count += 1;
+    {
+        ScopedTimer<> timer("filter out intersecting implicits in each tet");
+        for (size_t i = 0; i < tets.size(); i++) {
+            func_in_tet.reserve(n_func);
+            for (size_t j = 0; j < n_func; j++) {
+                int pos_count = 0;
+                int neg_count = 0;
+                for (const auto& vId : tets[i]) {
+                    if (funcSigns[j][vId] == 1) {
+                        pos_count += 1;
+                    } else if (funcSigns[j][vId] == -1) {
+                        neg_count += 1;
+                    }
                 }
-            }
-            // tets[i].size() == 4
-            if (pos_count < 4 && neg_count < 4) {
-                func_in_tet[i].push_back(j);
+                // tets[i].size() == 4
+                if (pos_count < 4 && neg_count < 4) {
+                    func_in_tet[i].push_back(j);
+                }
             }
         }
     }
@@ -443,107 +622,151 @@ int main(int argc, const char* argv[])
     std::vector<bool> has_isosurface(tets.size(), false);
     std::vector<Arrangement<3>> cut_results(tets.size());
     size_t num_intersecting_tet = 0;
-    for (size_t i = 0; i < tets.size(); i++) {
-        const auto& func_ids = func_in_tet[i];
-        if (! func_ids.empty()) {
-            has_isosurface[i] = true;
-            ++num_intersecting_tet;
-            size_t v1 = tets[i][0];
-            size_t v2 = tets[i][1];
-            size_t v3 = tets[i][2];
-            size_t v4 = tets[i][3];
-            std::vector<Plane<double, 3>> planes(func_ids.size());
-            for (size_t j = 0; j < func_ids.size(); j++) {
-                size_t f_id = func_ids[j];
-                planes[j] = {
-                    funcVals[f_id][v1], funcVals[f_id][v2], funcVals[f_id][v3], funcVals[f_id][v4]};
+    {
+        ScopedTimer<> timer("compute arrangement in all tets");
+        for (size_t i = 0; i < tets.size(); i++) {
+            const auto& func_ids = func_in_tet[i];
+            if (!func_ids.empty()) {
+                has_isosurface[i] = true;
+                ++num_intersecting_tet;
+                size_t v1 = tets[i][0];
+                size_t v2 = tets[i][1];
+                size_t v3 = tets[i][2];
+                size_t v4 = tets[i][3];
+                std::vector<Plane<double, 3>> planes(func_ids.size());
+                for (size_t j = 0; j < func_ids.size(); j++) {
+                    size_t f_id = func_ids[j];
+                    planes[j] = {funcVals[f_id][v1],
+                        funcVals[f_id][v2],
+                        funcVals[f_id][v3],
+                        funcVals[f_id][v4]};
+                }
+                //
+                cut_results[i] = compute_arrangement(planes);
             }
-            //
-            cut_results[i] = compute_arrangement(planes);
         }
     }
-    std::cout << "num_intersecting_tet = " << num_intersecting_tet << std::endl;
+    //std::cout << "num_intersecting_tet = " << num_intersecting_tet << std::endl;
 
     // extract arrangement mesh
     std::vector<IsoVert> iso_verts;
     std::vector<IsoFace> iso_faces;
     extract_iso_mesh(has_isosurface, cut_results, func_in_tet, tets, iso_verts, iso_faces);
-    std::cout << "num iso-vertices = " << iso_verts.size() << std::endl;
-    std::cout << "num iso-faces = " << iso_faces.size() << std::endl;
+    //std::cout << "num iso-vertices = " << iso_verts.size() << std::endl;
+    //std::cout << "num iso-faces = " << iso_faces.size() << std::endl;
     
     // compute xyz of iso-vertices
     std::vector<std::array<double, 3>> iso_pts(iso_verts.size());
-    for (size_t i = 0; i < iso_verts.size(); i++) {
-        const auto& iso_vert = iso_verts[i];
-        switch (iso_vert.simplex_size) {
-        case 2: // on tet edge
-        {
-            auto vId1 = iso_vert.simplex_vert_indices[0];
-            auto vId2 = iso_vert.simplex_vert_indices[1];
-            auto fId = iso_vert.func_indices[0];
-            auto f1 = funcVals[fId][vId1];
-            auto f2 = funcVals[fId][vId2];
-            std::array<double, 2> b;
-            compute_barycentric_coords(f1, f2, b);
-            iso_pts[i][0] = b[0] * pts[vId1][0] + b[1] * pts[vId2][0];
-            iso_pts[i][1] = b[0] * pts[vId1][1] + b[1] * pts[vId2][1];
-            iso_pts[i][2] = b[0] * pts[vId1][2] + b[1] * pts[vId2][2];
-            break;
-        }
-        case 3: // on tet face
-        {
-            auto vId1 = iso_vert.simplex_vert_indices[0];
-            auto vId2 = iso_vert.simplex_vert_indices[1];
-            auto vId3 = iso_vert.simplex_vert_indices[2];
-            auto fId1 = iso_vert.func_indices[0];
-            auto fId2 = iso_vert.func_indices[1];
-            std::array<double, 3> f1s = {funcVals[fId1][vId1], funcVals[fId1][vId2], funcVals[fId1][vId3]};
-            std::array<double, 3> f2s = {
-                funcVals[fId2][vId1], funcVals[fId2][vId2], funcVals[fId2][vId3]};
-            std::array<double, 3> b;
-            compute_barycentric_coords(f1s, f2s, b);
-            iso_pts[i][0] = b[0] * pts[vId1][0] + b[1] * pts[vId2][0] + b[2] * pts[vId3][0];
-            iso_pts[i][1] = b[0] * pts[vId1][1] + b[1] * pts[vId2][1] + b[2] * pts[vId3][1];
-            iso_pts[i][2] = b[0] * pts[vId1][2] + b[1] * pts[vId2][2] + b[2] * pts[vId3][2];
-            break;
-        }
-        case 4: // in tet cell
-        {
-            auto vId1 = iso_vert.simplex_vert_indices[0];
-            auto vId2 = iso_vert.simplex_vert_indices[1];
-            auto vId3 = iso_vert.simplex_vert_indices[2];
-            auto vId4 = iso_vert.simplex_vert_indices[3];
-            auto fId1 = iso_vert.func_indices[0];
-            auto fId2 = iso_vert.func_indices[1];
-            auto fId3 = iso_vert.func_indices[2];
-            std::array<double, 4> f1s = {
-                funcVals[fId1][vId1], funcVals[fId1][vId2], funcVals[fId1][vId3], funcVals[fId1][vId4]};
-            std::array<double, 4> f2s = {funcVals[fId2][vId1],
-                funcVals[fId2][vId2],
-                funcVals[fId2][vId3],
-                funcVals[fId2][vId4]};
-            std::array<double, 4> f3s = {funcVals[fId3][vId1],
-                funcVals[fId3][vId2],
-                funcVals[fId3][vId3],
-                funcVals[fId3][vId4]};
-            std::array<double, 4> b;
-            compute_barycentric_coords(f1s, f2s, f3s, b);
-            iso_pts[i][0] = b[0] * pts[vId1][0] + b[1] * pts[vId2][0] + b[2] * pts[vId3][0] + b[3] * pts[vId4][0];
-            iso_pts[i][1] = b[0] * pts[vId1][1] + b[1] * pts[vId2][1] + b[2] * pts[vId3][1] +
-                            b[3] * pts[vId4][1];
-            iso_pts[i][2] = b[0] * pts[vId1][2] + b[1] * pts[vId2][2] + b[2] * pts[vId3][2] +
-                            b[3] * pts[vId4][2];
-            break;
-        }
-        case 1: // on tet vertex
-            iso_pts[i] = pts[iso_vert.simplex_vert_indices[0]];
-            break;
-        default: break;
+    {
+        ScopedTimer<> timer("compute xyz of iso-vertices");
+        for (size_t i = 0; i < iso_verts.size(); i++) {
+            const auto& iso_vert = iso_verts[i];
+            switch (iso_vert.simplex_size) {
+            case 2: // on tet edge
+            {
+                auto vId1 = iso_vert.simplex_vert_indices[0];
+                auto vId2 = iso_vert.simplex_vert_indices[1];
+                auto fId = iso_vert.func_indices[0];
+                auto f1 = funcVals[fId][vId1];
+                auto f2 = funcVals[fId][vId2];
+                std::array<double, 2> b;
+                compute_barycentric_coords(f1, f2, b);
+                iso_pts[i][0] = b[0] * pts[vId1][0] + b[1] * pts[vId2][0];
+                iso_pts[i][1] = b[0] * pts[vId1][1] + b[1] * pts[vId2][1];
+                iso_pts[i][2] = b[0] * pts[vId1][2] + b[1] * pts[vId2][2];
+                break;
+            }
+            case 3: // on tet face
+            {
+                auto vId1 = iso_vert.simplex_vert_indices[0];
+                auto vId2 = iso_vert.simplex_vert_indices[1];
+                auto vId3 = iso_vert.simplex_vert_indices[2];
+                auto fId1 = iso_vert.func_indices[0];
+                auto fId2 = iso_vert.func_indices[1];
+                std::array<double, 3> f1s = {
+                    funcVals[fId1][vId1], funcVals[fId1][vId2], funcVals[fId1][vId3]};
+                std::array<double, 3> f2s = {
+                    funcVals[fId2][vId1], funcVals[fId2][vId2], funcVals[fId2][vId3]};
+                std::array<double, 3> b;
+                compute_barycentric_coords(f1s, f2s, b);
+                iso_pts[i][0] = b[0] * pts[vId1][0] + b[1] * pts[vId2][0] + b[2] * pts[vId3][0];
+                iso_pts[i][1] = b[0] * pts[vId1][1] + b[1] * pts[vId2][1] + b[2] * pts[vId3][1];
+                iso_pts[i][2] = b[0] * pts[vId1][2] + b[1] * pts[vId2][2] + b[2] * pts[vId3][2];
+                break;
+            }
+            case 4: // in tet cell
+            {
+                auto vId1 = iso_vert.simplex_vert_indices[0];
+                auto vId2 = iso_vert.simplex_vert_indices[1];
+                auto vId3 = iso_vert.simplex_vert_indices[2];
+                auto vId4 = iso_vert.simplex_vert_indices[3];
+                auto fId1 = iso_vert.func_indices[0];
+                auto fId2 = iso_vert.func_indices[1];
+                auto fId3 = iso_vert.func_indices[2];
+                std::array<double, 4> f1s = {funcVals[fId1][vId1],
+                    funcVals[fId1][vId2],
+                    funcVals[fId1][vId3],
+                    funcVals[fId1][vId4]};
+                std::array<double, 4> f2s = {funcVals[fId2][vId1],
+                    funcVals[fId2][vId2],
+                    funcVals[fId2][vId3],
+                    funcVals[fId2][vId4]};
+                std::array<double, 4> f3s = {funcVals[fId3][vId1],
+                    funcVals[fId3][vId2],
+                    funcVals[fId3][vId3],
+                    funcVals[fId3][vId4]};
+                std::array<double, 4> b;
+                compute_barycentric_coords(f1s, f2s, f3s, b);
+                iso_pts[i][0] = b[0] * pts[vId1][0] + b[1] * pts[vId2][0] + b[2] * pts[vId3][0] +
+                                b[3] * pts[vId4][0];
+                iso_pts[i][1] = b[0] * pts[vId1][1] + b[1] * pts[vId2][1] + b[2] * pts[vId3][1] +
+                                b[3] * pts[vId4][1];
+                iso_pts[i][2] = b[0] * pts[vId1][2] + b[1] * pts[vId2][2] + b[2] * pts[vId3][2] +
+                                b[3] * pts[vId4][2];
+                break;
+            }
+            case 1: // on tet vertex
+                iso_pts[i] = pts[iso_vert.simplex_vert_indices[0]];
+                break;
+            default: break;
+            }
         }
     }
+    
+    //  compute iso-edges and edge-face connectivity
+    std::vector<IsoEdge> iso_edges;
+    compute_iso_edges(iso_faces, iso_edges);
+    //std::cout << "num iso-edges = " << iso_edges.size() << std::endl;
 
-    // export iso-mesh
-    save_iso_mesh("D:/research/simplicial_arrangement/data/iso_mesh.json", iso_pts, iso_faces);
+    // group iso-faces into patches
+    std::vector<std::vector<size_t>> patches;
+    compute_patches(iso_faces, iso_edges, patches);
+    //std::cout << "num patches = " << patches.size() << std::endl;    
+
+    // get incident non-manifold edges for iso-vertices
+    std::vector<std::vector<size_t>> non_manifold_edges_of_vert(iso_pts.size());
+    for (size_t i = 0; i < iso_edges.size(); i++) {
+        if (iso_edges[i].face_edge_indices.size() > 2) { // non-manifold edge (not a boundary edge)
+            // there is only one patch indicent to a boundary edge,
+            // so there is no need to figure out the "order" of patches around a boundary edge
+            non_manifold_edges_of_vert[iso_edges[i].v1].push_back(i);
+            non_manifold_edges_of_vert[iso_edges[i].v2].push_back(i);
+        }
+    }
+    
+    // group non-manifold iso-edges into chains
+    std::vector<std::vector<size_t>> chains;
+    compute_chains(iso_edges, non_manifold_edges_of_vert, chains);
+    std::cout << "num chains = " << chains.size() << std::endl;
+
+    // test: export iso-mesh, patches, chains
+    save_result("D:/research/simplicial_arrangement/data/iso_mesh.json",
+        iso_pts,
+        iso_faces,
+        patches,
+        iso_edges,
+        chains,
+        non_manifold_edges_of_vert);
     
     return 0;
 }
