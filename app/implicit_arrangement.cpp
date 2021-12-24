@@ -12,6 +12,8 @@
 
 using namespace simplicial_arrangement;
 
+
+
 // a polygon from the iso-surface of implicit function
 struct IsoFace
 {
@@ -44,6 +46,8 @@ struct IsoEdge
     size_t v1;
     size_t v2;
     // each pair is (iso_face_Id, edge_face_Id)
+    // iso_face_Id: face index in the global list of iso-faces
+    // edge_face_Id: edge index in the iso-face
     std::vector<std::pair<size_t, size_t>> face_edge_indices;
 };
 
@@ -560,6 +564,23 @@ int main(int argc, const char* argv[])
     std::vector<std::array<size_t, 4>> tets;
     load_tet_mesh(tet_mesh_file, pts, tets);
     std::cout << "tet mesh: " << pts.size() << " verts, " << tets.size() << " tets." << std::endl;
+
+    // compute face list of tet mesh and tet-face connected
+    //std::vector<std::pair<size_t, size_t>> 
+    //std::vector<std::array<size_t, 4>> tet_faces;
+
+    // compute list of incident tets for each vertex
+    std::vector<std::vector<size_t>> incident_tets_of_vert(pts.size());
+    {
+        ScopedTimer<> timer("compute vertex-tet adjacency of input tet mesh");
+        for (size_t i = 0; i < tets.size(); i++) {
+            const auto& tet = tets[i];
+            incident_tets_of_vert[tet[0]].push_back(i);
+            incident_tets_of_vert[tet[1]].push_back(i);
+            incident_tets_of_vert[tet[2]].push_back(i);
+            incident_tets_of_vert[tet[3]].push_back(i);
+        }
+    }
 
     // load implicit function values, or evaluate
     size_t n_func = 4;
