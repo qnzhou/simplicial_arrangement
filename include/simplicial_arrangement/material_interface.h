@@ -43,8 +43,8 @@ struct MaterialInterface
     struct Face
     {
         std::vector<size_t> vertices; // ordered.
-        size_t positive_cell = None;
-        size_t negative_cell = None;
+        size_t positive_material_label = None;
+        size_t negative_material_label = None;
     };
 
     struct Cell

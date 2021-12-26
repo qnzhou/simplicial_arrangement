@@ -1,15 +1,51 @@
 #include <simplicial_arrangement/material_interface.h>
+#include <spdlog/spdlog.h>
 #include <catch2/catch.hpp>
 
 #include <implicit_predicates/implicit_predicates.h>
 
 namespace {
+
+void validate(const simplicial_arrangement::MaterialInterface<2>& mi)
+{
+    const size_t num_vertices = mi.vertices.size();
+    const size_t num_faces = mi.faces.size();
+    const size_t num_cells = mi.cells.size();
+    REQUIRE(num_cells > 0);
+
+    std::vector<size_t> vertex_valence(num_vertices, 0);
+    std::vector<size_t> face_valence(num_faces, 0);
+
+    for (const auto& f : mi.faces) {
+        for (const auto vi : f.vertices) {
+            REQUIRE(vi < num_vertices);
+            vertex_valence[vi]++;
+        }
+
+        REQUIRE(f.positive_material_label != f.negative_material_label);
+    }
+    for (const auto& c : mi.cells) {
+        for (const auto fi : c.faces) {
+            REQUIRE(fi < num_faces);
+            face_valence[fi]++;
+
+            const auto& f = mi.faces[fi];
+            REQUIRE(((c.material_label == f.positive_material_label) ||
+                     (c.material_label == f.negative_material_label)));
+        }
+    }
+    REQUIRE(
+        std::all_of(vertex_valence.begin(), vertex_valence.end(), [](size_t v) { return v > 0; }));
+    REQUIRE(std::all_of(face_valence.begin(), face_valence.end(), [](size_t v) { return v > 0; }));
+}
+
 template <typename Scalar>
 void test_2D()
 {
     using namespace simplicial_arrangement;
 
     std::vector<Material<Scalar, 2>> materials;
+    spdlog::set_level(spdlog::level::info);
 
     SECTION("1 implicit")
     {
@@ -18,16 +54,98 @@ void test_2D()
         REQUIRE(mi.cells.size() == 1);
         REQUIRE(mi.faces.size() == 3);
         REQUIRE(mi.vertices.size() == 3);
+        validate(mi);
     }
 
     SECTION("2 implicits")
     {
-        materials.push_back({1, 0, 0});
-        materials.push_back({0, 1, 0});
-        auto mi = compute_material_interface(materials);
-        REQUIRE(mi.cells.size() == 2);
-        REQUIRE(mi.faces.size() == 5);
-        REQUIRE(mi.vertices.size() == 4);
+        SECTION("Case 1")
+        {
+            materials.push_back({1, 0, 0});
+            materials.push_back({0, 1, 0});
+            auto mi = compute_material_interface(materials);
+            REQUIRE(mi.cells.size() == 2);
+            REQUIRE(mi.faces.size() == 5);
+            REQUIRE(mi.vertices.size() == 4);
+            validate(mi);
+        }
+        SECTION("Case 2")
+        {
+            materials.push_back({1, 0, 0});
+            materials.push_back({0, 2, 1});
+            auto mi = compute_material_interface(materials);
+            REQUIRE(mi.cells.size() == 2);
+            REQUIRE(mi.faces.size() == 6);
+            REQUIRE(mi.vertices.size() == 5);
+            validate(mi);
+        }
+    }
+
+    SECTION("3 implicits")
+    {
+        SECTION("Case 1")
+        {
+            materials.push_back({1, 0, 0});
+            materials.push_back({0, 1, 0});
+            materials.push_back({0, 0, 1});
+            auto mi = compute_material_interface(materials);
+            REQUIRE(mi.cells.size() == 3);
+            REQUIRE(mi.faces.size() == 9);
+            REQUIRE(mi.vertices.size() == 7);
+            validate(mi);
+        }
+    }
+
+    SECTION("4 implicits")
+    {
+        SECTION("Case 1")
+        {
+            materials.push_back({6, 0, 0});
+            materials.push_back({0, 6, 0});
+            materials.push_back({0, 0, 6});
+            materials.push_back({3, 3, 3});
+            auto mi = compute_material_interface(materials);
+            REQUIRE(mi.cells.size() == 4);
+            REQUIRE(mi.faces.size() == 9);
+            REQUIRE(mi.vertices.size() == 6);
+            validate(mi);
+        }
+        SECTION("Case 2")
+        {
+            materials.push_back({12, 0, 0});
+            materials.push_back({0, 12, 0});
+            materials.push_back({0, 0, 12});
+            materials.push_back({5, 5, 5});
+            auto mi = compute_material_interface(materials);
+            REQUIRE(mi.cells.size() == 4);
+            REQUIRE(mi.faces.size() == 12);
+            REQUIRE(mi.vertices.size() == 9);
+            validate(mi);
+        }
+        SECTION("Case 3: just toucing")
+        {
+            materials.push_back({12, 0, 0});
+            materials.push_back({0, 12, 0});
+            materials.push_back({0, 0, 12});
+            materials.push_back({4, 4, 4});
+            auto mi = compute_material_interface(materials);
+            REQUIRE(mi.cells.size() == 3);
+            REQUIRE(mi.faces.size() == 9);
+            REQUIRE(mi.vertices.size() == 7);
+            validate(mi);
+        }
+        SECTION("Case 4")
+        {
+            materials.push_back({12, 0, 0});
+            materials.push_back({0, 12, 0});
+            materials.push_back({0, 0, 12});
+            materials.push_back({10, 10, 10});
+            auto mi = compute_material_interface(materials);
+            REQUIRE(mi.cells.size() == 4);
+            REQUIRE(mi.faces.size() == 12);
+            REQUIRE(mi.vertices.size() == 9);
+            validate(mi);
+        }
     }
 }
 } // namespace

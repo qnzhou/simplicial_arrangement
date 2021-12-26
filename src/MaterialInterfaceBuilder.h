@@ -96,12 +96,14 @@ private:
             m_material_interface.faces[1].vertices = {2, 0};
             m_material_interface.faces[2].vertices = {0, 1};
 
-            m_material_interface.faces[0].positive_cell = 0;
-            m_material_interface.faces[0].negative_cell = 3;
-            m_material_interface.faces[1].positive_cell = 1;
-            m_material_interface.faces[1].negative_cell = 3;
-            m_material_interface.faces[2].positive_cell = 2;
-            m_material_interface.faces[2].negative_cell = 3;
+            m_material_interface.faces[0].positive_material_label = 0;
+            m_material_interface.faces[0].negative_material_label = 3;
+            m_material_interface.faces[1].positive_material_label = 1;
+            m_material_interface.faces[1].negative_material_label = 3;
+            m_material_interface.faces[2].positive_material_label = 2;
+            m_material_interface.faces[2].negative_material_label = 3;
+
+            m_material_interface.cells[0].faces = {0, 1, 2};
         } else {
             m_material_interface.vertices[0] = {1, 2, 3, 4};
             m_material_interface.vertices[1] = {0, 2, 3, 4};
@@ -113,14 +115,16 @@ private:
             m_material_interface.faces[2].vertices = {0, 1, 3};
             m_material_interface.faces[3].vertices = {0, 2, 1};
 
-            m_material_interface.faces[0].positive_cell = 0;
-            m_material_interface.faces[0].negative_cell = 4;
-            m_material_interface.faces[1].positive_cell = 1;
-            m_material_interface.faces[1].negative_cell = 4;
-            m_material_interface.faces[2].positive_cell = 2;
-            m_material_interface.faces[2].negative_cell = 4;
-            m_material_interface.faces[3].positive_cell = 3;
-            m_material_interface.faces[3].negative_cell = 4;
+            m_material_interface.faces[0].positive_material_label = 0;
+            m_material_interface.faces[0].negative_material_label = 4;
+            m_material_interface.faces[1].positive_material_label = 1;
+            m_material_interface.faces[1].negative_material_label = 4;
+            m_material_interface.faces[2].positive_material_label = 2;
+            m_material_interface.faces[2].negative_material_label = 4;
+            m_material_interface.faces[3].positive_material_label = 3;
+            m_material_interface.faces[3].negative_material_label = 4;
+
+            m_material_interface.cells[0].faces = {0, 1, 2, 3};
         }
     }
 
