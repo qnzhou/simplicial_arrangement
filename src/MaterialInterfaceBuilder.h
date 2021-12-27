@@ -2,8 +2,10 @@
 
 #include "BSPNode.h"
 #include "DisjointSets.h"
-#include "common.h"
+#include "MIComplex.h"
 #include "add_material.h"
+#include "common.h"
+#include "extract_material_interface.h"
 
 #include <simplicial_arrangement/material_interface.h>
 
@@ -37,11 +39,12 @@ public:
         m_unique_materials.init(num_materials);
 
         initialize_simplex_boundary();
-        initialize_material_interface();
+        auto mi_complex = initialize_complex();
 
         for (size_t i = 1; i < num_materials; i++) {
-            internal::add_material(*this, i + DIM + 1);
+            internal::add_material(*this, mi_complex, i + DIM + 1);
         }
+        m_material_interface = extract_material_interface(std::move(mi_complex));
     }
 
     const Material<Scalar, DIM>& get_material(size_t index) const
@@ -53,13 +56,8 @@ public:
         }
     }
 
-    const MaterialInterface<DIM>& get_material_interface() const {
-        return m_material_interface;
-    }
-
-    MaterialInterface<DIM>& get_material_interface() {
-        return m_material_interface;
-    }
+    MaterialInterface<DIM>& get_material_interface() { return m_material_interface; }
+    const MaterialInterface<DIM>& get_material_interface() const { return m_material_interface; }
 
 private:
     void initialize_simplex_boundary()
@@ -79,53 +77,74 @@ private:
         }
     }
 
-    void initialize_material_interface()
+    MIComplex<DIM> initialize_complex()
     {
+        MIComplex<DIM> mi_complex;
+
         // Initialize a valid material interface using the first material.
-        m_material_interface.vertices.resize(DIM + 1);
-        m_material_interface.faces.resize(DIM + 1);
-        m_material_interface.cells.resize(1);
-        m_material_interface.cells[0].material_label = DIM + 1;
+        mi_complex.vertices.resize(DIM + 1);
 
         if constexpr (DIM == 2) {
-            m_material_interface.vertices[0] = {1, 2, 3};
-            m_material_interface.vertices[1] = {2, 0, 3};
-            m_material_interface.vertices[2] = {0, 1, 3};
+            mi_complex.vertices[0] = {1, 2, 3};
+            mi_complex.vertices[1] = {2, 0, 3};
+            mi_complex.vertices[2] = {0, 1, 3};
 
-            m_material_interface.faces[0].vertices = {1, 2};
-            m_material_interface.faces[1].vertices = {2, 0};
-            m_material_interface.faces[2].vertices = {0, 1};
+            mi_complex.edges.resize(3);
+            mi_complex.edges[0].vertices = {1, 2};
+            mi_complex.edges[1].vertices = {2, 0};
+            mi_complex.edges[2].vertices = {0, 1};
 
-            m_material_interface.faces[0].positive_material_label = 0;
-            m_material_interface.faces[0].negative_material_label = 3;
-            m_material_interface.faces[1].positive_material_label = 1;
-            m_material_interface.faces[1].negative_material_label = 3;
-            m_material_interface.faces[2].positive_material_label = 2;
-            m_material_interface.faces[2].negative_material_label = 3;
+            mi_complex.edges[0].positive_material_label = 0;
+            mi_complex.edges[0].negative_material_label = 3;
+            mi_complex.edges[1].positive_material_label = 1;
+            mi_complex.edges[1].negative_material_label = 3;
+            mi_complex.edges[2].positive_material_label = 2;
+            mi_complex.edges[2].negative_material_label = 3;
 
-            m_material_interface.cells[0].faces = {0, 1, 2};
+            mi_complex.faces.resize(1);
+            mi_complex.faces[0].material_label = 3;
+            mi_complex.faces[0].edges = {0, 1, 2};
         } else {
-            m_material_interface.vertices[0] = {1, 2, 3, 4};
-            m_material_interface.vertices[1] = {0, 2, 3, 4};
-            m_material_interface.vertices[2] = {0, 1, 3, 4};
-            m_material_interface.vertices[2] = {0, 1, 2, 4};
+            mi_complex.vertices[0] = {1, 2, 3, 4};
+            mi_complex.vertices[1] = {0, 2, 3, 4};
+            mi_complex.vertices[2] = {0, 1, 3, 4};
+            mi_complex.vertices[2] = {0, 1, 2, 4};
 
-            m_material_interface.faces[0].vertices = {1, 2, 3};
-            m_material_interface.faces[1].vertices = {0, 3, 2};
-            m_material_interface.faces[2].vertices = {0, 1, 3};
-            m_material_interface.faces[3].vertices = {0, 2, 1};
+            mi_complex.edges.resize(6);
+            mi_complex.edges[0].vertices = {0, 1};
+            mi_complex.edges[1].vertices = {0, 2};
+            mi_complex.edges[2].vertices = {0, 3};
+            mi_complex.edges[3].vertices = {1, 2};
+            mi_complex.edges[4].vertices = {1, 3};
+            mi_complex.edges[5].vertices = {2, 3};
 
-            m_material_interface.faces[0].positive_material_label = 0;
-            m_material_interface.faces[0].negative_material_label = 4;
-            m_material_interface.faces[1].positive_material_label = 1;
-            m_material_interface.faces[1].negative_material_label = 4;
-            m_material_interface.faces[2].positive_material_label = 2;
-            m_material_interface.faces[2].negative_material_label = 4;
-            m_material_interface.faces[3].positive_material_label = 3;
-            m_material_interface.faces[3].negative_material_label = 4;
+            mi_complex.edges[0].supporting_materials = {2, 3, 4};
+            mi_complex.edges[1].supporting_materials = {1, 3, 4};
+            mi_complex.edges[2].supporting_materials = {1, 2, 4};
+            mi_complex.edges[3].supporting_materials = {0, 3, 4};
+            mi_complex.edges[4].supporting_materials = {0, 2, 4};
+            mi_complex.edges[5].supporting_materials = {0, 1, 4};
 
-            m_material_interface.cells[0].faces = {0, 1, 2, 3};
+            mi_complex.faces.resize(4);
+            mi_complex.faces[0].edges = {3, 5, 4};
+            mi_complex.faces[1].edges = {1, 2, 5};
+            mi_complex.faces[2].edges = {0, 4, 2};
+            mi_complex.faces[3].edges = {0, 1, 3};
+
+            mi_complex.faces[0].positive_material_label = 0;
+            mi_complex.faces[0].negative_material_label = 4;
+            mi_complex.faces[1].positive_material_label = 1;
+            mi_complex.faces[1].negative_material_label = 4;
+            mi_complex.faces[2].positive_material_label = 2;
+            mi_complex.faces[2].negative_material_label = 4;
+            mi_complex.faces[3].positive_material_label = 3;
+            mi_complex.faces[3].negative_material_label = 4;
+
+            mi_complex.cells.resize(1);
+            mi_complex.cells[0].material_label = 4;
+            mi_complex.cells[0].faces = {0, 1, 2, 3};
         }
+        return mi_complex;
     }
 
     inline void sort(Joint<DIM>& p) const
