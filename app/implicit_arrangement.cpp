@@ -7,8 +7,10 @@
 #include <queue>
 #include <nlohmann/json.hpp>
 #include "ScopedTimer.h"
+#include <chrono>
 #include <absl/container/flat_hash_map.h>
 
+typedef std::chrono::duration<double> Time_duration;
 
 using namespace simplicial_arrangement;
 
@@ -84,7 +86,9 @@ bool load_tet_mesh(const std::string& filename,
 bool save_result(const std::string& filename, const std::vector<std::array<double, 3>>& iso_pts,
     const std::vector<IsoFace>& iso_faces, const std::vector<std::vector<size_t>> &patches,
     const std::vector<IsoEdge>& iso_edges, const std::vector<std::vector<size_t>> &chains,
-    const std::vector<std::vector<size_t>>& non_manifold_edges_of_vert)
+    const std::vector<std::vector<size_t>>& non_manifold_edges_of_vert,
+    const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
+    const std::vector<std::vector<size_t>>& arrangement_cells)
 {
     using json = nlohmann::json;
     std::ofstream fout(filename.c_str());
@@ -121,6 +125,20 @@ bool save_result(const std::string& filename, const std::vector<std::array<doubl
         }
     }
     //
+    json jHalfPatchsList;
+    for (size_t i = 0; i < half_patch_list.size(); i++) {
+        json jHalfPatchs;
+        for (size_t j = 0; j < half_patch_list[i].size(); j++) {
+            jHalfPatchs.push_back(json(half_patch_list[i][j]));
+        }
+        jHalfPatchsList.push_back(jHalfPatchs);
+    }
+    //
+    json jArrCells;
+    for (size_t i = 0; i < arrangement_cells.size(); i++) {
+        jArrCells.push_back(json(arrangement_cells[i]));
+    }
+    //
     json jOut;
     jOut.push_back(jPts);
     jOut.push_back(jFaces);
@@ -128,7 +146,8 @@ bool save_result(const std::string& filename, const std::vector<std::array<doubl
     jOut.push_back(jEdges);
     jOut.push_back(jChains);
     jOut.push_back(jCorners);
-    
+    jOut.push_back(jHalfPatchsList);
+    jOut.push_back(jArrCells);
     fout << jOut << std::endl;
     fout.close();
     return true;
@@ -444,7 +463,6 @@ void compute_chains(const std::vector<IsoEdge>& iso_edges,
     const std::vector<std::vector<size_t>> &non_manifold_edges_of_vert, 
     std::vector<std::vector<size_t>> &chains) 
 {
-    ScopedTimer<> timer("group non-manifold iso-edges into chains");
     std::vector<bool> visited_edge(iso_edges.size(), false);
     for (size_t i = 0; i < iso_edges.size(); i++) {
         if (!visited_edge[i] && iso_edges[i].face_edge_indices.size() > 2) {
@@ -486,7 +504,118 @@ void compute_chains(const std::vector<IsoEdge>& iso_edges,
             }
         }
     }
+}
 
+// compute neighboring pair of half-faces around an iso-edge in a tetrahedron
+// pair<size_t, int> : pair (iso-face index, iso-face orientation)
+void compute_face_order_in_one_tet(const Arrangement<3>& tet_cut_result,
+    const std::vector<IsoFace>& iso_faces,
+    const IsoEdge& iso_edge,     
+    std::vector<std::pair<size_t, int>>& ordered_faces)
+{
+    // in a single tetrahedron, num face pairs == num iso-faces incident to the iso-edge
+    size_t num_incident_faces = iso_edge.face_edge_indices.size();
+    ordered_faces.resize(num_incident_faces);
+    //
+    std::vector<bool> is_incident_faces(tet_cut_result.faces.size(), false);
+    // map: tet face id --> iso face id
+    std::vector<size_t> iso_face_Id_of_face(tet_cut_result.faces.size(), Arrangement<3>::None);
+    for (const auto& fId_eId_pair : iso_edge.face_edge_indices) {
+        size_t iso_face_id = fId_eId_pair.first;
+        size_t face_id = iso_faces[iso_face_id].tet_face_indices[0].second;
+        is_incident_faces[face_id] = true;
+        iso_face_Id_of_face[face_id] = iso_face_id;
+    }
+    
+
+    // travel around the edge
+    size_t iso_face_id1 = iso_edge.face_edge_indices[0].first;
+    size_t face_id1 = iso_faces[iso_face_id1].tet_face_indices[0].second;   
+    int face_sign = 1;    
+    size_t cell_id = tet_cut_result.faces[face_id1].positive_cell;
+    size_t face_id2 = Arrangement<3>::None;
+    for (size_t i = 0; i < num_incident_faces; i++) {
+        ordered_faces[i] = std::make_pair(iso_face_id1, face_sign);
+        // find next face        
+        for (const auto& fId : tet_cut_result.cells[cell_id].faces) {
+            if (is_incident_faces[fId] && fId != face_id1) {
+                face_id2 = fId;
+            }
+        }
+        // assert: face_id2 != None
+        // get sign of face2 and find next cell
+        if (tet_cut_result.faces[face_id2].positive_cell == cell_id) {
+            cell_id = tet_cut_result.faces[face_id2].negative_cell;
+            face_sign = -1;
+        } else {
+            cell_id = tet_cut_result.faces[face_id2].positive_cell;
+            face_sign = 1;
+        }
+        // update face1 and clear face2
+        face_id1 = face_id2;
+        iso_face_id1 = iso_face_Id_of_face[face_id2];
+        face_id2 = Arrangement<3>::None;
+    }
+}
+
+void compute_arrangement_cells(
+    size_t num_patch, const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list, 
+    std::vector<std::vector<size_t>> &arrangement_cells)
+{
+    ScopedTimer<> timer("group patches into arrangement cells");
+    // (patch i, 1) <--> 2i,  (patch i, -1) <--> 2i+1
+    // compute half-patch adjacency list
+    std::vector<std::vector<size_t>> half_patch_adj_list(2 * num_patch);
+    for (const auto& half_patches : half_patch_list) {
+        for (size_t i = 0; i+1 < half_patches.size(); i++) {
+            const auto& hp1 = half_patches[i];
+            const auto& hp2 = half_patches[i + 1];
+            // half-patch index of hp1
+            size_t hp_Id1 = (hp1.second == 1) ? 2 * hp1.first : (2 * hp1.first + 1);
+            // half-patch index of hp2.opposite
+            size_t hp_Id2 = (hp2.second == 1) ? (2 * hp2.first + 1) : 2 * hp2.first;
+            half_patch_adj_list[hp_Id1].push_back(hp_Id2);
+            half_patch_adj_list[hp_Id2].push_back(hp_Id1);
+        }
+        //
+        const auto& hp1 = half_patches.back();
+        const auto& hp2 = half_patches.front();
+        size_t hp_Id1 = (hp1.second == 1) ? 2 * hp1.first : (2 * hp1.first + 1);
+        size_t hp_Id2 = (hp2.second == 1) ? (2 * hp2.first + 1) : 2 * hp2.first;
+        half_patch_adj_list[hp_Id1].push_back(hp_Id2);
+        half_patch_adj_list[hp_Id2].push_back(hp_Id1);
+    }
+    // find connected component of half-patch adjacency graph
+    std::vector<bool> visited_half_patch(2 * num_patch, false);
+    arrangement_cells.clear();
+    for (size_t i = 0; i < 2*num_patch; i++) {
+        if (!visited_half_patch[i]) {
+            // create new component
+            arrangement_cells.emplace_back();
+            auto& cell = arrangement_cells.back();
+            std::queue<size_t> Q;
+            Q.push(i);
+            cell.push_back(i);
+            visited_half_patch[i] = true;
+            while (! Q.empty()) {
+                auto half_patch = Q.front();
+                Q.pop();
+                for (auto hp : half_patch_adj_list[half_patch]) {
+                    if (!visited_half_patch[hp]) {
+                        cell.push_back(hp);
+                        Q.push(hp);
+                        visited_half_patch[hp] = true;
+                    }
+                }
+            }
+        }
+    }
+    // get arrangement cells as list of patch indices
+    for (auto& cell : arrangement_cells) {
+        for (auto& pId : cell) {
+            pId /= 2;   // get patch index of half-patch
+        }
+    }
 }
 
 // compute barycentric coordinate of Point (intersection of three planes)
@@ -565,23 +694,6 @@ int main(int argc, const char* argv[])
     load_tet_mesh(tet_mesh_file, pts, tets);
     std::cout << "tet mesh: " << pts.size() << " verts, " << tets.size() << " tets." << std::endl;
 
-    // compute face list of tet mesh and tet-face connected
-    //std::vector<std::pair<size_t, size_t>> 
-    //std::vector<std::array<size_t, 4>> tet_faces;
-
-    // compute list of incident tets for each vertex
-    std::vector<std::vector<size_t>> incident_tets_of_vert(pts.size());
-    {
-        ScopedTimer<> timer("compute vertex-tet adjacency of input tet mesh");
-        for (size_t i = 0; i < tets.size(); i++) {
-            const auto& tet = tets[i];
-            incident_tets_of_vert[tet[0]].push_back(i);
-            incident_tets_of_vert[tet[1]].push_back(i);
-            incident_tets_of_vert[tet[2]].push_back(i);
-            incident_tets_of_vert[tet[3]].push_back(i);
-        }
-    }
-
     // load implicit function values, or evaluate
     size_t n_func = 4;
     std::vector<std::array<double,3>> centers(n_func);
@@ -639,15 +751,50 @@ int main(int argc, const char* argv[])
         }
     }
 
+    // test: marching tet on each implicit function
+    {
+        ScopedTimer<> timer("test: marching tet");
+        for (size_t i = 0; i < funcVals.size(); i++) {
+            for (size_t j = 0; j < tets.size(); j++) {
+                size_t pos_count = 0;
+                size_t neg_count = 0;
+                for (const auto& vId : tets[j]) {
+                    if (funcSigns[i][vId] == 1) {
+                        pos_count += 1;
+                    } else if (funcSigns[i][vId] == -1) {
+                        neg_count += 1;
+                    }
+                }                
+                if (pos_count < 4 && neg_count < 4) {
+                    // iso-surface of function i intersects tet j
+                    std::vector<Plane<double, 3>> planes(1);
+                    planes[0] = {funcVals[i][tets[j][0]],
+                        funcVals[i][tets[j][1]],
+                        funcVals[i][tets[j][2]],
+                        funcVals[i][tets[j][3]]};
+                    compute_arrangement(planes);
+                }
+                
+            }
+        }
+    }
+
     // compute arrangement in each tet (iterative plane cut)
     std::vector<bool> has_isosurface(tets.size(), false);
     std::vector<Arrangement<3>> cut_results(tets.size());
     size_t num_intersecting_tet = 0;
+    //
+    Time_duration time_1_func = Time_duration::zero();
+    Time_duration time_2_func = Time_duration::zero();
+    Time_duration time_more_func = Time_duration::zero();
+    //
     {
         ScopedTimer<> timer("compute arrangement in all tets");
         for (size_t i = 0; i < tets.size(); i++) {
             const auto& func_ids = func_in_tet[i];
             if (!func_ids.empty()) {
+                std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+                //
                 has_isosurface[i] = true;
                 ++num_intersecting_tet;
                 size_t v1 = tets[i][0];
@@ -664,10 +811,21 @@ int main(int argc, const char* argv[])
                 }
                 //
                 cut_results[i] = compute_arrangement(planes);
+                //
+                std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+                switch (func_ids.size()) {
+                    case 1: time_1_func += std::chrono::duration_cast<Time_duration>(t2 - t1); break;
+                    case 2: time_2_func += std::chrono::duration_cast<Time_duration>(t2 - t1); break;
+                    default: time_more_func += std::chrono::duration_cast<Time_duration>(t2 - t1); break;
+                }
             }
         }
     }
     //std::cout << "num_intersecting_tet = " << num_intersecting_tet << std::endl;
+    std::cout << "-- [1   func]: " << time_1_func.count() << "s" << std::endl;
+    std::cout << "-- [2   func]: " << time_2_func.count() << "s" << std::endl;
+    std::cout << "-- [>=3 func]: " << time_more_func.count() << "s" << std::endl;
+
 
     // extract arrangement mesh
     std::vector<IsoVert> iso_verts;
@@ -764,21 +922,104 @@ int main(int argc, const char* argv[])
     compute_patches(iso_faces, iso_edges, patches);
     //std::cout << "num patches = " << patches.size() << std::endl;    
 
-    // get incident non-manifold edges for iso-vertices
-    std::vector<std::vector<size_t>> non_manifold_edges_of_vert(iso_pts.size());
-    for (size_t i = 0; i < iso_edges.size(); i++) {
-        if (iso_edges[i].face_edge_indices.size() > 2) { // non-manifold edge (not a boundary edge)
-            // there is only one patch indicent to a boundary edge,
-            // so there is no need to figure out the "order" of patches around a boundary edge
-            non_manifold_edges_of_vert[iso_edges[i].v1].push_back(i);
-            non_manifold_edges_of_vert[iso_edges[i].v2].push_back(i);
-        }
-    }
     
     // group non-manifold iso-edges into chains
+    std::vector<std::vector<size_t>> non_manifold_edges_of_vert(iso_pts.size());
     std::vector<std::vector<size_t>> chains;
-    compute_chains(iso_edges, non_manifold_edges_of_vert, chains);
-    std::cout << "num chains = " << chains.size() << std::endl;
+    {
+        ScopedTimer<> timer("group non-manifold iso-edges into chains");
+        // get incident non-manifold edges for iso-vertices
+        for (size_t i = 0; i < iso_edges.size(); i++) {
+            if (iso_edges[i].face_edge_indices.size() > 2) 
+            { // non-manifold edge (not a boundary edge)
+                // there is only one patch indicent to a boundary edge,
+                // so there is no need to figure out the "order" of patches around a boundary edge
+                non_manifold_edges_of_vert[iso_edges[i].v1].push_back(i);
+                non_manifold_edges_of_vert[iso_edges[i].v2].push_back(i);
+            }
+        }
+        // group non-manifold iso-edges into chains
+        compute_chains(iso_edges, non_manifold_edges_of_vert, chains);
+        // std::cout << "num chains = " << chains.size() << std::endl;
+    }
+
+    // compute list of incident tets for each vertex
+    std::vector<std::vector<size_t>> incident_tets_of_vert(pts.size());
+    {
+        ScopedTimer<> timer("compute vertex-tet adjacency of input tet mesh");
+        // compute number of tets incident to each vertex
+        std::vector<size_t> num_incident_tets(pts.size(), 0);
+        for (size_t i = 0; i < tets.size(); i++) {
+            const auto& tet = tets[i];
+            num_incident_tets[tet[0]] += 1;
+            num_incident_tets[tet[1]] += 1;
+            num_incident_tets[tet[2]] += 1;
+            num_incident_tets[tet[3]] += 1;
+        }
+        // compute indices of tets incident to each vertex
+        std::vector<size_t> size_incident_tets(pts.size(), 0);
+        for (size_t i = 0; i < pts.size(); i++) {
+            incident_tets_of_vert[i].resize(num_incident_tets[i]);
+        }
+        for (size_t i = 0; i < tets.size(); i++) {
+            const auto& tet = tets[i];
+            incident_tets_of_vert[tet[0]][size_incident_tets[tet[0]]] = i;
+            incident_tets_of_vert[tet[1]][size_incident_tets[tet[1]]] = i;
+            incident_tets_of_vert[tet[2]][size_incident_tets[tet[2]]] = i;
+            incident_tets_of_vert[tet[3]][size_incident_tets[tet[3]]] = i;
+            size_incident_tets[tet[0]] += 1;
+            size_incident_tets[tet[1]] += 1;
+            size_incident_tets[tet[2]] += 1;
+            size_incident_tets[tet[3]] += 1;           
+        }
+    }
+
+    // compute order of patches around chains
+    std::vector<std::vector<std::pair<size_t, int>>> half_faces_list(chains.size());
+    std::vector<std::vector<std::pair<size_t, int>>> half_patch_list(half_faces_list.size());
+    {
+        ScopedTimer<> timer("compute order of patches around chains");
+        // pick representative iso-edge from each chain
+        std::vector<size_t> chain_representatives(chains.size());
+        for (size_t i = 0; i < chains.size(); i++) {
+            chain_representatives[i] = chains[i][0];
+        }
+        // order iso-faces incident to each representative iso-edge
+        // pair<size_t, int> : pair (iso-face index, iso-face orientation)
+        /*std::vector<std::vector<std::pair<size_t, int>>> half_faces_list(chains.size());*/
+        for (size_t i = 0; i < chain_representatives.size(); i++) {
+            // first try: assume each representative edge is in the interior of a tetrahedron
+            const auto& iso_edge = iso_edges[chain_representatives[i]];
+            auto iso_face_id = iso_edge.face_edge_indices[0].first;
+            auto tet_id = iso_faces[iso_face_id].tet_face_indices[0].first;
+            compute_face_order_in_one_tet(
+                cut_results[tet_id], iso_faces, iso_edge, half_faces_list[i]);
+        }
+
+        // compute map: iso-face Id --> patch Id
+        std::vector<size_t> patch_of_face(iso_faces.size());
+        for (size_t i = 0; i < patches.size(); i++) {
+            for (const auto& fId : patches[i]) {
+                patch_of_face[fId] = i;
+            }
+        }
+
+        // replace iso-face indices by patch indices
+        // std::vector<std::vector<std::pair<size_t, int>>> half_patch_list(half_faces_list.size());
+        for (size_t i = 0; i < half_faces_list.size(); i++) {
+            half_patch_list[i].resize(half_faces_list[i].size());
+            for (size_t j = 0; j < half_faces_list[i].size(); j++) {
+                half_patch_list[i][j] = std::make_pair(
+                    patch_of_face[half_faces_list[i][j].first], half_faces_list[i][j].second);
+            }
+        }
+    }
+
+    // group patches into arrangement cells
+    // each cell is a represented as a list of patch indices
+    std::vector<std::vector<size_t>> arrangement_cells;
+    compute_arrangement_cells(patches.size(), half_patch_list, arrangement_cells);
+    //std::cout << "num arrangement cells = " << arrangement_cells.size() << std::endl;
 
     // test: export iso-mesh, patches, chains
     save_result("D:/research/simplicial_arrangement/data/iso_mesh.json",
@@ -787,7 +1028,9 @@ int main(int argc, const char* argv[])
         patches,
         iso_edges,
         chains,
-        non_manifold_edges_of_vert);
+        non_manifold_edges_of_vert,
+        half_patch_list,
+        arrangement_cells);
     
     return 0;
 }
