@@ -27,6 +27,7 @@ std::array<size_t, 3> mi_cut_2_face(MaterialInterfaceBuilder<Scalar, DIM>& build
     size_t first_positive_idx = INVALID;
     size_t first_negative_idx = INVALID;
     size_t cut_edge_index = INVALID;
+    bool face_is_coplanar = true;
     MIEdge<DIM> cut_edge;
 
     auto get_shared_vertex = [&](size_t eid_0, size_t eid_1) -> size_t {
@@ -54,6 +55,8 @@ std::array<size_t, 3> mi_cut_2_face(MaterialInterfaceBuilder<Scalar, DIM>& build
         if (positive_subedge == INVALID && negative_subedge == INVALID) {
             // Edge is collinear with material.
             cut_edge_index = eid;
+        } else {
+            face_is_coplanar = false;
         }
         if (intersection_point == INVALID) continue;
 
@@ -75,6 +78,11 @@ std::array<size_t, 3> mi_cut_2_face(MaterialInterfaceBuilder<Scalar, DIM>& build
     logger().debug("first negative edge: {}", first_negative_idx);
     logger().debug("cut point: {}, {}", cut_edge.vertices[0], cut_edge.vertices[1]);
 
+    if (face_is_coplanar) {
+        logger().debug("Face {} is coplanar with material", fid);
+        return {INVALID, INVALID, INVALID};
+    }
+
     // Insert cut edge if necessary.
     if (cut_edge.vertices[0] != INVALID && cut_edge.vertices[1] != INVALID) {
         if constexpr (DIM == 2) {
@@ -90,7 +98,7 @@ std::array<size_t, 3> mi_cut_2_face(MaterialInterfaceBuilder<Scalar, DIM>& build
 
     if (first_positive_idx == INVALID || first_negative_idx == INVALID) {
         // No cut.
-        logger().debug("No cut!");
+        logger().debug("No cut across face {}", fid);
         bool on_positive_side = false;
         for (size_t j = 0; j < num_bd_edges; j++) {
             const size_t eid = f.edges[j];

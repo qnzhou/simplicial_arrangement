@@ -144,99 +144,75 @@ template <typename Scalar>
 void add_material(
     MaterialInterfaceBuilder<Scalar, 3>& builder, MIComplex<3>& mi_complex, size_t material_index)
 {
-    // auto& material_interface = builder.get_material_interface();
-    // const auto& material = builder.get_material(material_index);
-    // const size_t num_vertices = material_interface.vertices.size();
-    // const size_t num_faces = material_interface.faces.size();
+    const size_t num_vertices = mi_complex.vertices.size();
+    const size_t num_edges = mi_complex.edges.size();
+    const size_t num_faces = mi_complex.faces.size();
+    const size_t num_cells = mi_complex.cells.size();
+    logger().info("adding material {}", material_index);
+    logger().debug("Before: {} {} {} {}", num_vertices, num_edges, num_faces, num_cells);
 
-    // auto& vertices = material_interface.vertices;
-    // auto& edges = material_interface.edges;
-    // auto& faces = material_interface.faces;
+    auto& vertices = mi_complex.vertices;
+    auto& edges = mi_complex.edges;
+    auto& faces = mi_complex.faces;
+    auto& cells = mi_complex.cells;
 
-    //// Step 1: cut 0-face.
-    // std::vector<implicit_predicates::Orientation> orientations;
-    // orientations.reserve(num_vertices);
-    // for (size_t i = 0; i < num_vertices; i++) {
-    //    const auto& p = vertices[i];
-    //    orientations.push_back(compute_orientation(builder, p, material));
-    //    assert(orientations.back() != implicit_predicates::INVALID);
-    //    logger().debug("vertex {}: {}, {}, {}", i, p[0], p[1], p[2]);
-    //    logger().debug("orientation: {}", orientations.back());
-    //}
+    // Reserve capacity. TODO: check if this helps.
+    vertices.reserve(num_vertices + num_edges);
+    edges.reserve(num_edges * 2);
+    faces.reserve(num_faces * 2);
+    cells.reserve(num_cells * 2);
 
-    //// Step 2: cut 2-face.
-    // std::vector<size_t> positive_subfaces;
-    // std::vector<size_t> negative_subfaces;
-    // std::vector<std::array<size_t, 2>> cut_edges;
-    // positive_subfaces.reserve(num_faces);
-    // negative_subfaces.reserve(num_faces);
-    // cut_edges.reserve(num_faces);
+    // Step 1: handle 0-faces.
+    std::vector<int8_t> orientations;
+    orientations.reserve(num_vertices);
+    for (size_t i = 0; i < num_vertices; i++) {
+        orientations.push_back(mi_cut_0_face(builder, mi_complex, i, material_index));
+    }
 
-    // auto cut_face = [&](size_t i) {
-    //    const auto& f = faces[i];
+    // Step 2: handle 1-faces.
+    std::vector<std::array<size_t, 3>> subedges;
+    subedges.reserve(num_edges);
+    for (size_t i = 0; i < num_edges; i++) {
+        subedges.push_back(mi_cut_1_face(builder, mi_complex, i, material_index, orientations));
+    }
 
-    //    // Check for easy cases first.
-    //    bool all_positive = true;
-    //    bool all_negative = true;
-    //    bool all_zero = true;
-    //    for (auto eid : f.edges) {
-    //        const auto& vids = edges[eid].vertices;
-    //        if (orientations[vids[0]] > 0 && orientations[vids[1]] > 0) {
-    //            all_negative = false;
-    //            all_zero = false;
-    //        } else if (orientations[vids[0]] < 0 && orientations[vids[1]] < 0) {
-    //            all_positive = false;
-    //            all_zero = false;
-    //        } else if (orientations[vids[0]] == 0 && orientations[vids[1]] == 0){
-    //            all_positive = false;
-    //            all_negative = false;
-    //        } else {
-    //            all_positive = false;
-    //            all_negative = false;
-    //            all_zero = false;
-    //            break;
+    // Step 3: handle 2-faces.
+    std::vector<std::array<size_t, 3>> subfaces;
+    subfaces.reserve(num_faces);
+    for (size_t i = 0; i < num_faces; i++) {
+        subfaces.push_back(
+            mi_cut_2_face(builder, mi_complex, i, material_index, orientations, subedges));
+    }
+
+    // Step 4: handle 3-faces.
+    std::vector<std::array<size_t, 3>> subcells;
+    subcells.reserve(num_cells);
+    for (size_t i = 0; i < num_cells; i++) {
+        subcells.push_back(mi_cut_3_face(builder, mi_complex, i, material_index, subfaces));
+    }
+
+    // Step 5: combine negative cells into a single cell.
+    //{
+    //    size_t combined_negative_cell =
+    //        mi_union_negative_faces(builder, mi_complex, material_index, subfaces);
+    //    std::vector<bool> to_keep(faces.size(), false);
+    //    if (combined_negative_cell != INVALID) {
+    //        to_keep[combined_negative_cell] = true;
+    //    }
+    //    std::for_each(subfaces.begin(), subfaces.end(), [&](const auto& subface) {
+    //        if (subface[0] != INVALID) {
+    //            to_keep[subface[0]] = true;
     //        }
-    //    }
-    //    if (all_positive) {
-    //        positive_subfaces.push_back(i);
-    //        negative_subfaces.push_back(INVALID);
-    //        cut_edges.push_back({INVALID, INVALID});
-    //        return;
-    //    } else if (all_negative) {
-    //        positive_subfaces.push_back(INVALID);
-    //        negative_subfaces.push_back(i);
-    //        cut_edges.push_back({INVALID, INVALID});
-    //        return;
-    //    } else if (all_zero) {
-    //        positive_subfaces.push_back(INVALID);
-    //        negative_subfaces.push_back(INVALID);
-    //        cut_edges.push_back({INVALID, INVALID});
-    //        return;
-    //    }
-
-    //    // The cut is either a cross cut or is tangent at 1 or 2 vertices.
-    //    //const size_t num_bd_edges = f.edges.size();
-    //    //size_t first_positive = INVALID;
-    //    ////size_t first_negative = INVALID;
-    //    //std::array<size_t, 2> intersection{INVALID, INVALID};
-    //    //for (size_t j = 0; j < num_bd_vertices; j++) {
-    //    //    const size_t v0 = f.vertices[j];
-    //    //    const size_t v1 = f.vertices[(j + 1) % num_bd_vertices];
-    //    //    const auto o0 = orientations[v0];
-    //    //    const auto o1 = orientations[v1];
-    //    //    if (o0 == 0 && o1 == 0) {
-    //    //        intersection = {v0, v1};
-    //    //        continue;
-    //    //    } else if (o0 <= 0 && o1 > 0) {
-    //    //        first_positive = j;
-    //    //        // TODO.
-    //    //    }
-    //    //}
-    //};
-
-    // for (size_t i = 0; i < num_faces; i++) {
-    //    cut_face(i);
+    //    });
+    //    shrink(faces, [&](size_t i) { return to_keep[i]; });
     //}
+
+    // Step 6: consolidate.
+    consolidate(mi_complex);
+    logger().debug("After: {} {} {}",
+        mi_complex.vertices.size(),
+        mi_complex.edges.size(),
+        mi_complex.faces.size());
 }
 
 } // namespace

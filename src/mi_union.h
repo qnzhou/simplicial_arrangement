@@ -3,10 +3,177 @@
 #include "MIComplex.h"
 #include "MaterialInterfaceBuilder.h"
 
+#include <absl/container/flat_hash_map.h>
+#include <absl/container/flat_hash_set.h>
 #include <array>
 #include <vector>
 
 namespace simplicial_arrangement {
+
+/**
+ * Combined multiple edge into a single edge.  This operation only makes sense
+ * for boundary edges.  This function also update the boundary vertex and edge's
+ * supporting materials.
+ */
+template <int DIM>
+size_t mi_union_1_face(
+    MIComplex<DIM>& mi_complex, size_t material_index, const std::vector<size_t>& bd_edge_indices)
+{
+    const size_t num_bd_edges = bd_edge_indices.size();
+    if (num_bd_edges == 0) return INVALID;
+
+    auto& vertices = mi_complex.vertices;
+    auto& edges = mi_complex.edges;
+    absl::flat_hash_set<size_t> bd_vertices;
+    bd_vertices.reserve(num_bd_edges + 1);
+
+    auto toggle = [&](size_t vid) {
+        auto itr = bd_vertices.find(vid);
+        if (itr == bd_vertices.end()) {
+            bd_vertices.insert(vid);
+        } else {
+            bd_vertices.erase(itr);
+        }
+    };
+
+    for (size_t eid : bd_edge_indices) {
+        const auto& e = edges[eid];
+        toggle(e.vertices[0]);
+        toggle(e.vertices[1]);
+    }
+    assert(bd_vertices.size() == 2);
+
+    MIEdge<DIM> combined_edge;
+    {
+        size_t counter = 0;
+        for (auto vid : bd_vertices) {
+            combined_edge.vertices[counter] = vid;
+            counter++;
+        }
+    }
+
+    // Correct vertex material label.
+    auto correct_vertex_material_label = [&](size_t vid) {
+        auto& v = vertices[vid];
+        if constexpr (DIM == 2) {
+            if (v[0] <= DIM && v[1] <= DIM) {
+                v[2] = material_index;
+            } else if (v[0] <= DIM && v[2] <= DIM) {
+                v[1] = material_index;
+            } else if (v[1] <= DIM && v[2] <= DIM) {
+                v[0] = material_index;
+            }
+        } else {
+            if (v[0] <= DIM && v[1] <= DIM && v[2] <= DIM) {
+                v[3] = material_index;
+            } else if (v[0] <= DIM && v[1] <= DIM && v[3] <= DIM) {
+                v[2] = material_index;
+            } else if (v[0] <= DIM && v[2] <= DIM && v[3] <= DIM) {
+                v[1] = material_index;
+            } else if (v[1] <= DIM && v[2] <= DIM && v[3] <= DIM) {
+                v[0] = material_index;
+            }
+        }
+    };
+    correct_vertex_material_label(combined_edge.vertices[0]);
+    correct_vertex_material_label(combined_edge.vertices[1]);
+
+    if constexpr (DIM == 3) {
+        combined_edge.supporting_materials = edges[bd_edge_indices.front()].supporting_materials;
+        auto correct_edge_material = [&](size_t i) {
+            if (combined_edge.supporting_materials[i] > 3) {
+                combined_edge.supporting_materials[i] = material_index;
+                assert(combined_edge.supporting_materials[(i + 1) % 3] <= 3);
+                assert(combined_edge.supporting_materials[(i + 2) % 3] <= 3);
+            }
+        };
+        correct_edge_material(0);
+        correct_edge_material(1);
+        correct_edge_material(2);
+    } else {
+        combined_edge.positive_material_label =
+            edges[bd_edge_indices.front()].positive_material_label;
+        combined_edge.negative_material_label =
+            edges[bd_edge_indices.front()].negative_material_label;
+        if (combined_edge.positive_material_label > 2) {
+            combined_edge.positive_material_label = material_index;
+            assert(combined_edge.negative_material_label <= 2);
+        } else if (combined_edge.negative_material_label > 2) {
+            combined_edge.negative_material_label = material_index;
+            assert(combined_edge.positive_material_label <= 2);
+        } else {
+            logger().error(
+                "Both positive and negative materials of an edge are boundary material!");
+            assert(false);
+        }
+    }
+
+    edges.push_back(std::move(combined_edge));
+    return edges.size() - 1;
+}
+
+template <int DIM>
+size_t mi_union_2_faces(
+    MIComplex<DIM>& mi_complex, size_t material_index, const std::vector<size_t>& bd_face_indices)
+{
+    const size_t num_bd_faces = bd_face_indices.size();
+    if (num_bd_faces == 0) return INVALID;
+
+    auto& edges = mi_complex.edges;
+    auto& faces = mi_complex.faces;
+    absl::flat_hash_set<size_t> bd_edges;
+    absl::flat_hash_map<size_t, size_t> first_vertex;
+    size_t num_active_half_edges = std::reduce(
+        bd_face_indices.begin(), bd_face_indices.end(), 0, [&](size_t fid, size_t count) {
+            return count + faces[fid].edges.size();
+        });
+    bd_edges.reserve(num_active_half_edges);
+
+    auto toggle = [&](size_t eid) {
+        auto itr = bd_edges.find(eid);
+        if (itr == bd_edges.end()) {
+            bd_edges.insert(eid);
+        } else {
+            bd_edges.erase(itr);
+        }
+    };
+
+    for (size_t fid : bd_face_indices) {
+        const auto& f = faces[fid];
+        for (size_t eid : f.edges) {
+            toggle(eid);
+        }
+
+        if constexpr (DIM == 2) {
+            assert(f.material_label == material_index);
+        } else {
+            assert(f.positive_material_label == material_index ||
+                   f.negative_material_label == material_index);
+        }
+    }
+
+    auto get_ordered_vertex = [&](size_t eid, size_t i) {
+        assert(i < 2);
+        const auto& e = edges[eid];
+        if constexpr (DIM == 2) {
+            if (e.positive_material_label == material_index) {
+                return e.vertices[(i + 1) % 2];
+            } else {
+                assert(e.negative_material_label == material_index);
+                return e.vertices[i];
+            }
+        } else {
+            // TODO.
+        }
+    };
+
+    size_t num_bd_edges = bd_edges.size();
+    absl::flat_hash_map<size_t, size_t> v2e;
+    v2e.reserve(num_bd_edges);
+    for (size_t eid : bd_edges) {
+        const auto& e = edges[eid];
+    }
+}
 
 template <typename Scalar>
 size_t mi_union_negative_faces(MaterialInterfaceBuilder<Scalar, 2>& builder,
@@ -17,7 +184,7 @@ size_t mi_union_negative_faces(MaterialInterfaceBuilder<Scalar, 2>& builder,
     const size_t num_negative_faces = std::count_if(
         subfaces.begin(), subfaces.end(), [](const auto& val) { return val[1] != INVALID; });
     if (num_negative_faces == 0) return INVALID;
-    logger().debug("combining {} negative cells.", num_negative_faces);
+    logger().debug("combining {} negative 2D cells.", num_negative_faces);
 
     auto& vertices = mi_complex.vertices;
     auto& edges = mi_complex.edges;
@@ -69,10 +236,16 @@ size_t mi_union_negative_faces(MaterialInterfaceBuilder<Scalar, 2>& builder,
     }
     assert(eid == start_edge);
 
-    // Update corner boundary vertices.
+    // Update corner boundary edges and vertices.
     for (size_t i = 0; i < num_bd_edges; i++) {
         const auto eid = combined_face.edges[i];
         const auto vid = get_ordered_vertex(eid, 0);
+
+#ifndef NDEBUG
+        auto& e = edges[eid];
+        assert(e.positive_material_label == material_index ||
+               e.negative_material_label == material_index);
+#endif
 
         auto& v = vertices[vid];
         if (v[0] <= 2 && v[1] <= 2) {
@@ -128,5 +301,78 @@ size_t mi_union_negative_faces(MaterialInterfaceBuilder<Scalar, 2>& builder,
     faces.push_back(std::move(combined_face));
     return faces.size() - 1;
 }
+
+//template <typename Scalar>
+//size_t mi_union_negative_cells(MaterialInterfaceBuilder<Scalar, 3>& builder,
+//    MIComplex<3>& mi_complex,
+//    size_t material_index,
+//    const std::vector<std::array<size_t, 3>>& subcells)
+//{
+//    const size_t num_negative_cells = std::count_if(
+//        subcells.begin(), subcells.end(), [](const auto& val) { return val[1] != INVALID; });
+//    if (num_negative_cells == 0) return INVALID;
+//    logger().debug("combining {} negative 3D cells.", num_negative_cells);
+//
+//    auto& vertices = mi_complex.vertices;
+//    auto& edges = mi_complex.edges;
+//    auto& faces = mi_complex.faces;
+//    auto& cells = mi_complex.cells;
+//
+//    MICell<3> combined_cell;
+//    combined_cell.material_label = material_index;
+//
+//    const size_t total_num_vertices = mi_complex.vertices.size();
+//    const size_t total_num_edges = mi_complex.edges.size();
+//    const size_t total_num_faces = mi_complex.faces.size();
+//
+//    std::vector<bool> on_border(total_num_faces, false);
+//
+//    for (const auto& subcell : subcells) {
+//        const auto cid = subcell[1]; // Negative subcell.
+//        if (cid == INVALID) continue;
+//        const auto& c = cells[cid];
+//        for (const auto& fid : c.faces) {
+//            on_border[fid] = !on_border[fid];
+//        }
+//    }
+//
+//    size_t num_bd_faces = std::count(on_border.begin(), on_border.end(), [](bool v) { return v; });
+//    std::vector<size_t> bd_faces;
+//    bd_faces.reserve(num_bd_faces);
+//    for (size_t i = 0; i < total_num_faces; i++) {
+//        if (!on_border[i]) continue;
+//        bd_faces.push_back(i);
+//    }
+//
+//    std::array<std::vector<size_t>, 4> bd_face_groups;
+//    bd_face_groups[0].reserve(num_bd_faces);
+//    bd_face_groups[1].reserve(num_bd_faces);
+//    bd_face_groups[2].reserve(num_bd_faces);
+//    bd_face_groups[3].reserve(num_bd_faces);
+//    for (size_t fid : bd_faces) {
+//        auto& f = faces[fid];
+//        if (f.positive_material_label <= 3) {
+//            f.negative_material_label = material_index;
+//            bd_face_groups[f.positive_material_label].push_back(fid);
+//        } else if (f.negative_material_label <= 3) {
+//            f.positive_material_label = material_index;
+//            bd_face_groups[f.negative_material_label].push_back(fid);
+//        } else {
+//            combined_cell.faces.push_back(fid);
+//        }
+//    }
+//
+//    for (size_t i = 0; i < 4; i++) {
+//        if (bd_face_groups[i].empty()) continue;
+//
+//        // Correct for corner_vertices;
+//        for (size_t fid : bd_face_groups[i]) {
+//            // TODO.
+//        }
+//    }
+//
+//
+//    return INVALID;
+//}
 
 } // namespace simplicial_arrangement
