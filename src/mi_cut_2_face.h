@@ -23,29 +23,16 @@ std::array<size_t, 3> mi_cut_2_face(MaterialInterfaceBuilder<Scalar, DIM>& build
     const size_t num_bd_edges = f.edges.size();
     logger().debug("face {} has {} bd edges", fid, num_bd_edges);
 
-    // Find edges that straddle the material boundary.
-    size_t first_positive_idx = INVALID;
-    size_t first_negative_idx = INVALID;
+    std::vector<size_t> positive_subedges, negative_subedges;
+    positive_subedges.reserve(num_bd_edges);
+    negative_subedges.reserve(num_bd_edges);
+
+    MIEdge<DIM> cut_edge;
     size_t cut_edge_index = INVALID;
     bool face_is_coplanar = true;
-    MIEdge<DIM> cut_edge;
-
-    auto get_shared_vertex = [&](size_t eid_0, size_t eid_1) -> size_t {
-        const auto& e0 = edges[eid_0];
-        const auto& e1 = edges[eid_1];
-        if (e0.vertices[0] == e1.vertices[0] || e0.vertices[0] == e1.vertices[1]) {
-            return e0.vertices[0];
-        } else if (e0.vertices[1] == e1.vertices[0] || e0.vertices[1] == e1.vertices[1]) {
-            return e1.vertices[0];
-        } else {
-            logger().error("Edge {} and edge {} do not share a vertex", eid_0, eid_1);
-            return INVALID;
-        }
-    };
 
     for (size_t j = 0; j < num_bd_edges; j++) {
         const size_t eid = f.edges[j];
-        const size_t next_eid = f.edges[(j + 1) % num_bd_edges];
 
         size_t intersection_point = subedges[eid][2];
         size_t positive_subedge = subedges[eid][0];
@@ -56,26 +43,24 @@ std::array<size_t, 3> mi_cut_2_face(MaterialInterfaceBuilder<Scalar, DIM>& build
             // Edge is collinear with material.
             cut_edge_index = eid;
         } else {
+            if (positive_subedge != INVALID) {
+                positive_subedges.push_back(positive_subedge);
+            }
+            if (negative_subedge != INVALID) {
+                negative_subedges.push_back(negative_subedge);
+            }
             face_is_coplanar = false;
         }
-        if (intersection_point == INVALID) continue;
-
-        size_t end_vertex = get_shared_vertex(eid, next_eid);
-        auto end_orientation = orientations[end_vertex];
-
-        if (positive_subedge != INVALID && end_orientation > 0) {
-            assert(first_positive_idx == INVALID);
-            first_positive_idx = j;
-            cut_edge.vertices[0] = intersection_point;
-        }
-        if (negative_subedge != INVALID && end_orientation < 0) {
-            assert(first_negative_idx == INVALID);
-            first_negative_idx = j;
-            cut_edge.vertices[1] = intersection_point;
+        if (intersection_point != INVALID) {
+            if (cut_edge.vertices[0] == INVALID) {
+                cut_edge.vertices[0] = intersection_point;
+            } else if (cut_edge.vertices[0] != intersection_point) {
+                cut_edge.vertices[1] = intersection_point;
+            }
         }
     }
-    logger().debug("first positive edge: {}", first_positive_idx);
-    logger().debug("first negative edge: {}", first_negative_idx);
+    logger().debug("num positive subedges: {}", positive_subedges.size());
+    logger().debug("num negative subedges: {}", negative_subedges.size());
     logger().debug("cut point: {}, {}", cut_edge.vertices[0], cut_edge.vertices[1]);
 
     if (face_is_coplanar) {
@@ -83,8 +68,20 @@ std::array<size_t, 3> mi_cut_2_face(MaterialInterfaceBuilder<Scalar, DIM>& build
         return {INVALID, INVALID, INVALID};
     }
 
-    // Insert cut edge if necessary.
-    if (cut_edge.vertices[0] != INVALID && cut_edge.vertices[1] != INVALID) {
+    if (positive_subedges.empty() || negative_subedges.empty()) {
+        // No cut.
+        if (positive_subedges.empty()) {
+            assert(!negative_subedges.empty());
+            return {INVALID, fid, cut_edge_index};
+        } else {
+            assert(!positive_subedges.empty());
+            assert(negative_subedges.empty());
+            return {fid, INVALID, cut_edge_index};
+        }
+    }
+
+    if (cut_edge_index == INVALID) {
+        // Insert cut edge.
         if constexpr (DIM == 2) {
             cut_edge.positive_material_label = f.material_label;
             cut_edge.negative_material_label = material_index;
@@ -96,29 +93,7 @@ std::array<size_t, 3> mi_cut_2_face(MaterialInterfaceBuilder<Scalar, DIM>& build
         edges.push_back(std::move(cut_edge));
     }
 
-    if (first_positive_idx == INVALID || first_negative_idx == INVALID) {
-        // No cut.
-        logger().debug("No cut across face {}", fid);
-        bool on_positive_side = false;
-        for (size_t j = 0; j < num_bd_edges; j++) {
-            const size_t eid = f.edges[j];
-            const auto& e = edges[eid];
-            if (orientations[e.vertices[0]] > 0) {
-                on_positive_side = true;
-                break;
-            } else if (orientations[e.vertices[0]] < 0) {
-                on_positive_side = false;
-                break;
-            }
-        }
-        if (on_positive_side) {
-            return {fid, INVALID, cut_edge_index};
-        } else {
-            return {INVALID, fid, cut_edge_index};
-        }
-    }
-
-    // Cross cut.
+    // Create subfaces.
     MIFace<DIM> positive_subface, negative_subface;
     if constexpr (DIM == 2) {
         positive_subface.material_label = f.material_label;
@@ -127,27 +102,13 @@ std::array<size_t, 3> mi_cut_2_face(MaterialInterfaceBuilder<Scalar, DIM>& build
         positive_subface.positive_material_label = f.positive_material_label;
         negative_subface.negative_material_label = f.negative_material_label;
     }
-    positive_subface.edges.reserve(num_bd_edges + 1);
-    negative_subface.edges.reserve(num_bd_edges + 1);
+    positive_subface.edges = std::move(positive_subedges);
+    negative_subface.edges = std::move(negative_subedges);
 
-    positive_subface.edges.push_back(cut_edge_index);
-    for (size_t j = 0; j < num_bd_edges; j++) {
-        const size_t eid = f.edges[(j + first_positive_idx) % num_bd_edges];
-        size_t positive_subedge = subedges[eid][0];
-        if (positive_subedge == INVALID) break;
-        positive_subface.edges.push_back(positive_subedge);
-    }
-
-    negative_subface.edges.push_back(cut_edge_index);
-    for (size_t j = 0; j < num_bd_edges; j++) {
-        const size_t eid = f.edges[(j + first_negative_idx) % num_bd_edges];
-        size_t negative_subedge = subedges[eid][1];
-        if (negative_subedge == INVALID) break;
-        negative_subface.edges.push_back(negative_subedge);
-
-        if constexpr (DIM == 2) {
-            // Update cell id.
-            auto& e = edges[negative_subedge];
+    if constexpr (DIM == 2) {
+        // Update material labels for 2D edge.
+        for (auto eid : negative_subface.edges) {
+            auto& e = edges[eid];
             if (e.positive_material_label == f.material_label) {
                 e.positive_material_label = material_index;
             } else {
@@ -157,7 +118,10 @@ std::array<size_t, 3> mi_cut_2_face(MaterialInterfaceBuilder<Scalar, DIM>& build
         }
     }
 
+    // Insert cut edge.
     assert(cut_edge_index != INVALID);
+    positive_subface.edges.push_back(cut_edge_index);
+    negative_subface.edges.push_back(cut_edge_index);
     assert(positive_subface.edges.size() > 2);
     assert(negative_subface.edges.size() > 2);
 

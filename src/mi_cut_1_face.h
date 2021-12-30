@@ -28,6 +28,7 @@ std::array<size_t, 3> mi_cut_1_face(MaterialInterfaceBuilder<Scalar, DIM>& build
     const auto& end_points = e.vertices;
     const auto o0 = orientations[end_points[0]];
     const auto o1 = orientations[end_points[1]];
+    logger().debug("orientations {} {}", o0, o1);
 
     if (o0 == 0) intersection_id = end_points[0];
     if (o1 == 0) intersection_id = end_points[1];
@@ -55,6 +56,7 @@ std::array<size_t, 3> mi_cut_1_face(MaterialInterfaceBuilder<Scalar, DIM>& build
     } else if (o0 <= 0 && o1 <= 0) {
         negative_subedge_id = eid;
     } else {
+        assert(intersection_id == INVALID);
         intersection_id = compute_intersection_id();
         MIEdge<DIM> positive_subedge, negative_subedge;
 

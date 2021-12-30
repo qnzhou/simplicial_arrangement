@@ -16,7 +16,7 @@ namespace simplicial_arrangement {
  * supporting materials.
  */
 template <int DIM>
-size_t mi_union_1_face(
+size_t mi_union_1_faces(
     MIComplex<DIM>& mi_complex, size_t material_index, const std::vector<size_t>& bd_edge_indices)
 {
     const size_t num_bd_edges = bd_edge_indices.size();
@@ -121,12 +121,12 @@ size_t mi_union_2_faces(
 
     auto& edges = mi_complex.edges;
     auto& faces = mi_complex.faces;
+
     absl::flat_hash_set<size_t> bd_edges;
-    absl::flat_hash_map<size_t, size_t> first_vertex;
-    size_t num_active_half_edges = std::reduce(
-        bd_face_indices.begin(), bd_face_indices.end(), 0, [&](size_t fid, size_t count) {
-            return count + faces[fid].edges.size();
-        });
+    size_t num_active_half_edges = 0;
+    for (auto fid : bd_face_indices) {
+        num_active_half_edges += faces[fid].edges.size();
+    }
     bd_edges.reserve(num_active_half_edges);
 
     auto toggle = [&](size_t eid) {
@@ -152,27 +152,83 @@ size_t mi_union_2_faces(
         }
     }
 
-    auto get_ordered_vertex = [&](size_t eid, size_t i) {
-        assert(i < 2);
-        const auto& e = edges[eid];
-        if constexpr (DIM == 2) {
-            if (e.positive_material_label == material_index) {
-                return e.vertices[(i + 1) % 2];
-            } else {
-                assert(e.negative_material_label == material_index);
-                return e.vertices[i];
-            }
-        } else {
-            // TODO.
-        }
+    std::array<std::vector<size_t>, DIM*(DIM + 1) / 2> to_merge;
+    std::for_each(to_merge.begin(), to_merge.end(), [&](std::vector<size_t>& entry) {
+        entry.reserve(bd_edges.size());
+    });
+
+    auto sort3 = [](std::array<size_t, 3>& a) {
+        if (a[0] > a[1]) std::swap(a[0], a[1]);
+        if (a[0] > a[2]) std::swap(a[0], a[2]);
+        if (a[1] > a[2]) std::swap(a[1], a[2]);
     };
 
-    size_t num_bd_edges = bd_edges.size();
-    absl::flat_hash_map<size_t, size_t> v2e;
-    v2e.reserve(num_bd_edges);
     for (size_t eid : bd_edges) {
-        const auto& e = edges[eid];
+        auto& e = edges[eid];
+        if constexpr (DIM == 2) {
+            if (e.positive_material_label <= 2) {
+                assert(e.negative_material_label > 2);
+                to_merge[e.positive_material_label].push_back(eid);
+            } else if (e.negative_material_label <= 2) {
+                assert(e.positive_material_label > 2);
+                to_merge[e.negative_material_label].push_back(eid);
+            }
+        } else {
+            sort3(e.supporting_materials);
+            size_t m0 = e.supporting_materials[0];
+            size_t m1 = e.supporting_materials[1];
+            assert(m1 <= 3);
+            assert(e.supporting_materials[2] > 3);
+            if (m0 == 0 && m1 == 1) {
+                to_merge[0].push_back(eid);
+            } else if (m0 == 0 && m1 == 2) {
+                to_merge[1].push_back(eid);
+            } else if (m0 == 0 && m1 == 3) {
+                to_merge[2].push_back(eid);
+            } else if (m0 == 1 && m1 == 2) {
+                to_merge[3].push_back(eid);
+            } else if (m0 == 1 && m1 == 3) {
+                to_merge[4].push_back(eid);
+            } else if (m0 == 2 && m1 == 3) {
+                to_merge[5].push_back(eid);
+            }
+        }
     }
+    for (const auto& edge_group : to_merge) {
+        if (edge_group.empty()) continue;
+        size_t out_eid = mi_union_1_faces(mi_complex, material_index, edge_group);
+        assert(out_eid != INVALID);
+        for (auto eid : edge_group) {
+            bd_edges.erase(eid);
+        }
+        bd_edges.insert(out_eid);
+    }
+
+    size_t num_bd_edges = bd_edges.size();
+    MIFace<DIM> combined_face;
+    combined_face.edges.reserve(num_bd_edges);
+    for (size_t eid : bd_edges) {
+        combined_face.edges.push_back(eid);
+    }
+    if constexpr (DIM == 2) {
+        combined_face.material_label = material_index;
+    } else {
+        // For 3D combined face must be on a tet boundary triangle.
+        const auto& old_face = faces[bd_face_indices.front()];
+        if (old_face.positive_material <= 3) {
+            assert(old_face.negative_material > 3);
+            combined_face.positive_material = old_face.positive_material;
+            combined_face.negative_material = material_index;
+        } else {
+            assert(old_face.positive_material > 3);
+            assert(old_face.negative_material <= 3);
+            combined_face.positive_material = material_index;
+            combined_face.negative_material = old_face.negative_material;
+        }
+    }
+
+    faces.push_back(std::move(combined_face));
+    return faces.size() - 1;
 }
 
 template <typename Scalar>
@@ -302,8 +358,8 @@ size_t mi_union_negative_faces(MaterialInterfaceBuilder<Scalar, 2>& builder,
     return faces.size() - 1;
 }
 
-//template <typename Scalar>
-//size_t mi_union_negative_cells(MaterialInterfaceBuilder<Scalar, 3>& builder,
+// template <typename Scalar>
+// size_t mi_union_negative_cells(MaterialInterfaceBuilder<Scalar, 3>& builder,
 //    MIComplex<3>& mi_complex,
 //    size_t material_index,
 //    const std::vector<std::array<size_t, 3>>& subcells)
@@ -336,10 +392,9 @@ size_t mi_union_negative_faces(MaterialInterfaceBuilder<Scalar, 2>& builder,
 //        }
 //    }
 //
-//    size_t num_bd_faces = std::count(on_border.begin(), on_border.end(), [](bool v) { return v; });
-//    std::vector<size_t> bd_faces;
-//    bd_faces.reserve(num_bd_faces);
-//    for (size_t i = 0; i < total_num_faces; i++) {
+//    size_t num_bd_faces = std::count(on_border.begin(), on_border.end(), [](bool v) { return v;
+//    }); std::vector<size_t> bd_faces; bd_faces.reserve(num_bd_faces); for (size_t i = 0; i <
+//    total_num_faces; i++) {
 //        if (!on_border[i]) continue;
 //        bd_faces.push_back(i);
 //    }

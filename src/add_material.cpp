@@ -118,8 +118,15 @@ void add_material(
 
     // Step 4: combine negative cells into a single cell.
     {
+        std::vector<size_t> negative_subfaces;
+        negative_subfaces.reserve(subfaces.size());
+        for (const auto& subface : subfaces) {
+            if (subface[1] != INVALID) {
+                negative_subfaces.push_back(subface[1]);
+            }
+        }
         size_t combined_negative_cell =
-            mi_union_negative_faces(builder, mi_complex, material_index, subfaces);
+            mi_union_2_faces(mi_complex, material_index, negative_subfaces);
         std::vector<bool> to_keep(faces.size(), false);
         if (combined_negative_cell != INVALID) {
             to_keep[combined_negative_cell] = true;

@@ -22,7 +22,7 @@ struct MIComplex;
 template <>
 struct MIEdge<2>
 {
-    std::array<size_t, 2> vertices{INVALID, INVALID};
+    std::array<size_t, 2> vertices{INVALID, INVALID}; // unordered.
     size_t positive_material_label = INVALID;
     size_t negative_material_label = INVALID;
 };
@@ -30,21 +30,21 @@ struct MIEdge<2>
 template <>
 struct MIEdge<3>
 {
-    std::array<size_t, 2> vertices{INVALID, INVALID};
+    std::array<size_t, 2> vertices{INVALID, INVALID}; // unordered.
     std::array<size_t, 3> supporting_materials{INVALID, INVALID, INVALID};
 };
 
 template <>
 struct MIFace<2>
 {
-    std::vector<size_t> edges; // ordered.
+    std::vector<size_t> edges; // unordered.
     size_t material_label = INVALID;
 };
 
 template <>
 struct MIFace<3>
 {
-    std::vector<size_t> edges; // ordered
+    std::vector<size_t> edges; // unordered.
     size_t positive_material_label = INVALID;
     size_t negative_material_label = INVALID;
 };
@@ -52,7 +52,7 @@ struct MIFace<3>
 template <>
 struct MICell<3>
 {
-    std::vector<size_t> faces;
+    std::vector<size_t> faces; // unordered.
     size_t material_label = INVALID;
 };
 
