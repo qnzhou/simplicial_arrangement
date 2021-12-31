@@ -100,6 +100,8 @@ std::array<size_t, 3> mi_cut_2_face(MaterialInterfaceBuilder<Scalar, DIM>& build
         negative_subface.material_label = material_index;
     } else {
         positive_subface.positive_material_label = f.positive_material_label;
+        positive_subface.negative_material_label = f.negative_material_label;
+        negative_subface.positive_material_label = f.positive_material_label;
         negative_subface.negative_material_label = f.negative_material_label;
     }
     positive_subface.edges = std::move(positive_subedges);

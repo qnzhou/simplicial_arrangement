@@ -199,27 +199,34 @@ void add_material(
     }
 
     // Step 5: combine negative cells into a single cell.
-    //{
-    //    size_t combined_negative_cell =
-    //        mi_union_negative_faces(builder, mi_complex, material_index, subfaces);
-    //    std::vector<bool> to_keep(faces.size(), false);
-    //    if (combined_negative_cell != INVALID) {
-    //        to_keep[combined_negative_cell] = true;
-    //    }
-    //    std::for_each(subfaces.begin(), subfaces.end(), [&](const auto& subface) {
-    //        if (subface[0] != INVALID) {
-    //            to_keep[subface[0]] = true;
-    //        }
-    //    });
-    //    shrink(faces, [&](size_t i) { return to_keep[i]; });
-    //}
+    {
+        std::vector<size_t> negative_cells;
+        negative_cells.reserve(num_cells);
+        for (const auto& subcell : subcells) {
+            if (subcell[1] == INVALID) continue;
+            negative_cells.push_back(subcell[1]);
+        }
+        size_t combined_negative_cell =
+            mi_union_3_faces(mi_complex, material_index, negative_cells);
+        std::vector<bool> to_keep(cells.size(), false);
+        if (combined_negative_cell != INVALID) {
+            to_keep[combined_negative_cell] = true;
+        }
+        std::for_each(subcells.begin(), subcells.end(), [&](const auto& subcell) {
+            if (subcell[0] != INVALID) {
+                to_keep[subcell[0]] = true;
+            }
+        });
+        shrink(cells, [&](size_t i) { return to_keep[i]; });
+    }
 
     // Step 6: consolidate.
     consolidate(mi_complex);
-    logger().debug("After: {} {} {}",
+    logger().debug("After: {} {} {} {}",
         mi_complex.vertices.size(),
         mi_complex.edges.size(),
-        mi_complex.faces.size());
+        mi_complex.faces.size(),
+        mi_complex.cells.size());
 }
 
 } // namespace

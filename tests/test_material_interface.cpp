@@ -6,7 +6,8 @@
 
 namespace {
 
-void validate(const simplicial_arrangement::MaterialInterface<2>& mi)
+template<int DIM>
+void validate(const simplicial_arrangement::MaterialInterface<DIM>& mi)
 {
     const size_t num_vertices = mi.vertices.size();
     const size_t num_faces = mi.faces.size();
@@ -148,6 +149,49 @@ void test_2D()
         }
     }
 }
+
+template <typename Scalar>
+void test_3D()
+{
+    using namespace simplicial_arrangement;
+
+    std::vector<Material<Scalar, 3>> materials;
+    spdlog::set_level(spdlog::level::info);
+
+    SECTION("1 implicit")
+    {
+        materials.push_back({1, 1, 1, 1});
+        auto mi = compute_material_interface(materials);
+        REQUIRE(mi.cells.size() == 1);
+        REQUIRE(mi.faces.size() == 4);
+        REQUIRE(mi.vertices.size() == 4);
+        validate(mi);
+    }
+
+    SECTION("2 implicits")
+    {
+        SECTION("Case 1")
+        {
+            materials.push_back({1, 0, 0, 0});
+            materials.push_back({0, 1, 0, 0});
+            auto mi = compute_material_interface(materials);
+            REQUIRE(mi.cells.size() == 2);
+            REQUIRE(mi.faces.size() == 7);
+            REQUIRE(mi.vertices.size() == 5);
+            validate(mi);
+        }
+        SECTION("Case 2")
+        {
+            materials.push_back({1, 0, 0, 0});
+            materials.push_back({-1, 1, -1, -1});
+            auto mi = compute_material_interface(materials);
+            REQUIRE(mi.cells.size() == 2);
+            REQUIRE(mi.faces.size() == 8);
+            REQUIRE(mi.vertices.size() == 7);
+            validate(mi);
+        }
+    }
+}
 } // namespace
 
 TEST_CASE("Material interface 2D", "[material_interface][2D]")
@@ -155,4 +199,11 @@ TEST_CASE("Material interface 2D", "[material_interface][2D]")
     using namespace simplicial_arrangement;
     SECTION("Int") { test_2D<Int>(); }
     SECTION("double") { test_2D<double>(); }
+}
+
+TEST_CASE("Material interface 3D", "[material_interface][3D]")
+{
+    using namespace simplicial_arrangement;
+    SECTION("Int") { test_3D<Int>(); }
+    SECTION("double") { test_3D<double>(); }
 }

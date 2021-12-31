@@ -146,9 +146,6 @@ size_t mi_union_2_faces(
 
         if constexpr (DIM == 2) {
             assert(f.material_label == material_index);
-        } else {
-            assert(f.positive_material_label == material_index ||
-                   f.negative_material_label == material_index);
         }
     }
 
@@ -177,20 +174,21 @@ size_t mi_union_2_faces(
             sort3(e.supporting_materials);
             size_t m0 = e.supporting_materials[0];
             size_t m1 = e.supporting_materials[1];
-            assert(m1 <= 3);
-            assert(e.supporting_materials[2] > 3);
-            if (m0 == 0 && m1 == 1) {
-                to_merge[0].push_back(eid);
-            } else if (m0 == 0 && m1 == 2) {
-                to_merge[1].push_back(eid);
-            } else if (m0 == 0 && m1 == 3) {
-                to_merge[2].push_back(eid);
-            } else if (m0 == 1 && m1 == 2) {
-                to_merge[3].push_back(eid);
-            } else if (m0 == 1 && m1 == 3) {
-                to_merge[4].push_back(eid);
-            } else if (m0 == 2 && m1 == 3) {
-                to_merge[5].push_back(eid);
+            if (m1 <= 3) {
+                assert(e.supporting_materials[2] > 3);
+                if (m0 == 0 && m1 == 1) {
+                    to_merge[0].push_back(eid);
+                } else if (m0 == 0 && m1 == 2) {
+                    to_merge[1].push_back(eid);
+                } else if (m0 == 0 && m1 == 3) {
+                    to_merge[2].push_back(eid);
+                } else if (m0 == 1 && m1 == 2) {
+                    to_merge[3].push_back(eid);
+                } else if (m0 == 1 && m1 == 3) {
+                    to_merge[4].push_back(eid);
+                } else if (m0 == 2 && m1 == 3) {
+                    to_merge[5].push_back(eid);
+                }
             }
         }
     }
@@ -215,20 +213,93 @@ size_t mi_union_2_faces(
     } else {
         // For 3D combined face must be on a tet boundary triangle.
         const auto& old_face = faces[bd_face_indices.front()];
-        if (old_face.positive_material <= 3) {
-            assert(old_face.negative_material > 3);
-            combined_face.positive_material = old_face.positive_material;
-            combined_face.negative_material = material_index;
+        if (old_face.positive_material_label <= 3) {
+            assert(old_face.negative_material_label > 3);
+            combined_face.positive_material_label = old_face.positive_material_label;
+            combined_face.negative_material_label = material_index;
         } else {
-            assert(old_face.positive_material > 3);
-            assert(old_face.negative_material <= 3);
-            combined_face.positive_material = material_index;
-            combined_face.negative_material = old_face.negative_material;
+            assert(old_face.positive_material_label > 3);
+            assert(old_face.negative_material_label <= 3);
+            combined_face.positive_material_label = material_index;
+            combined_face.negative_material_label = old_face.negative_material_label;
         }
     }
 
     faces.push_back(std::move(combined_face));
     return faces.size() - 1;
+}
+
+template <int DIM>
+size_t mi_union_3_faces(
+    MIComplex<DIM>& mi_complex, size_t material_index, const std::vector<size_t>& bd_cell_indices)
+{
+    static_assert(DIM == 3);
+    const size_t num_bd_cells = bd_cell_indices.size();
+    if (num_bd_cells == 0) return INVALID;
+
+    auto& faces = mi_complex.faces;
+    auto& cells = mi_complex.cells;
+
+    // Extract a set of bounding faces to the combined cell.
+    absl::flat_hash_set<size_t> bd_faces;
+    size_t num_active_half_faces = 0;
+    for (auto cid : bd_cell_indices) {
+        num_active_half_faces += cells[cid].faces.size();
+    }
+    bd_faces.reserve(num_active_half_faces);
+
+    auto toggle = [&](size_t fid) {
+        auto itr = bd_faces.find(fid);
+        if (itr == bd_faces.end()) {
+            bd_faces.insert(fid);
+        } else {
+            bd_faces.erase(itr);
+        }
+    };
+
+    for (size_t cid : bd_cell_indices) {
+        const auto& c = cells[cid];
+        assert(c.material_label == material_index);
+        for (size_t fid : c.faces) {
+            toggle(fid);
+        }
+    }
+
+    // Merge coplanar faces on the tet boundary.
+    std::array<std::vector<size_t>, 4> to_merge;
+    std::for_each(to_merge.begin(), to_merge.end(), [&](std::vector<size_t>& entry) {
+        entry.reserve(bd_faces.size());
+    });
+
+    for (auto fid : bd_faces) {
+        const auto& f = faces[fid];
+        if (f.positive_material_label <= DIM) {
+            to_merge[f.positive_material_label].push_back(fid);
+        } else if (f.negative_material_label <= DIM) {
+            to_merge[f.negative_material_label].push_back(fid);
+        }
+    }
+
+    for (const auto& face_group : to_merge) {
+        if (face_group.empty()) continue;
+        size_t combined_fid = mi_union_2_faces(mi_complex, material_index, face_group);
+        for (auto fid : face_group) {
+            bd_faces.erase(fid);
+        }
+        bd_faces.insert(combined_fid);
+    }
+
+    // Generate combined cell.
+    const size_t num_bd_faces = bd_faces.size();
+    MICell<DIM> combined_cell;
+    combined_cell.material_label = material_index;
+    combined_cell.faces.reserve(num_bd_faces);
+    for (auto fid : bd_faces) {
+        combined_cell.faces.push_back(fid);
+    }
+
+    cells.push_back(std::move(combined_cell));
+    return cells.size() - 1;
 }
 
 template <typename Scalar>

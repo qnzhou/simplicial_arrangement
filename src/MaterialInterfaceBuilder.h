@@ -108,7 +108,7 @@ private:
             mi_complex.vertices[0] = {1, 2, 3, 4};
             mi_complex.vertices[1] = {0, 2, 3, 4};
             mi_complex.vertices[2] = {0, 1, 3, 4};
-            mi_complex.vertices[2] = {0, 1, 2, 4};
+            mi_complex.vertices[3] = {0, 1, 2, 4};
 
             mi_complex.edges.resize(6);
             mi_complex.edges[0].vertices = {0, 1};
