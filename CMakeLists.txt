@@ -31,8 +31,10 @@ if (SIMPLICIAL_ARRANGEMENT_UNIT_TESTS)
     enable_testing()
     include(Catch2)
 
-    file(GLOB TEST_FILES "${CMAKE_SOURCE_DIR}/tests/*.cpp")
+    file(GLOB TEST_FILES "${CMAKE_CURRENT_LIST_DIR}/tests/*.cpp")
     add_executable(simplicial_arrangement_tests ${TEST_FILES})
+    target_include_directories(simplicial_arrangement_tests PRIVATE
+        "${CMAKE_CURRENT_LIST_DIR}/src/")
     target_link_libraries(simplicial_arrangement_tests PRIVATE
         simplicial_arrangement::simplicial_arrangement
         implicit_predicates::implicit_predicates Catch2::Catch2 spdlog::spdlog)

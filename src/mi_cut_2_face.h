@@ -1,16 +1,14 @@
 #pragma once
 
 #include "MIComplex.h"
-#include "MaterialInterfaceBuilder.h"
 
 #include <array>
 #include <vector>
 
 namespace simplicial_arrangement {
 
-template <typename Scalar, int DIM>
-std::array<size_t, 3> mi_cut_2_face(MaterialInterfaceBuilder<Scalar, DIM>& builder,
-    MIComplex<DIM>& mi_complex,
+template <int DIM>
+std::array<size_t, 3> mi_cut_2_face(MIComplex<DIM>& mi_complex,
     size_t fid,
     size_t material_index,
     const std::vector<int8_t>& orientations,

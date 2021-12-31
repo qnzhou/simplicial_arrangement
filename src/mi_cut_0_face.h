@@ -7,7 +7,7 @@
 
 namespace simplicial_arrangement {
 
-int8_t signof(implicit_predicates::Orientation o)
+inline int8_t signof(implicit_predicates::Orientation o)
 {
     assert(o != implicit_predicates::INVALID);
     if (o > 0)
@@ -19,14 +19,14 @@ int8_t signof(implicit_predicates::Orientation o)
 }
 
 template <typename Scalar>
-int8_t mi_cut_0_face(MaterialInterfaceBuilder<Scalar, 2>& builder,
+int8_t mi_cut_0_face(const MaterialRepo<Scalar, 2>& materials,
     MIComplex<2>& mi_complex,
     size_t vid,
     size_t material_index)
 {
     const auto& vertices = mi_complex.vertices;
     const auto& p = vertices[vid];
-    const auto& material = builder.get_material(material_index);
+    const auto& material = materials.get_material(material_index);
 
     short vertex_type = 0;
     if (p[0] > 2) vertex_type |= 1;
@@ -85,36 +85,36 @@ int8_t mi_cut_0_face(MaterialInterfaceBuilder<Scalar, 2>& builder,
 
     switch (vertex_type) {
     case 1: {
-        const auto& m0 = builder.get_material(p[0]);
+        const auto& m0 = materials.get_material(p[0]);
         return signof(compute_orientation_0d(p[1], p[2], m0));
     }
     case 2: {
-        const auto& m1 = builder.get_material(p[1]);
+        const auto& m1 = materials.get_material(p[1]);
         return signof(compute_orientation_0d(p[0], p[2], m1));
     }
     case 3: {
-        const auto& m0 = builder.get_material(p[0]);
-        const auto& m1 = builder.get_material(p[1]);
+        const auto& m0 = materials.get_material(p[0]);
+        const auto& m1 = materials.get_material(p[1]);
         return signof(compute_orientation_1d(p[2], m0, m1));
     }
     case 4: {
-        const auto& m2 = builder.get_material(p[2]);
+        const auto& m2 = materials.get_material(p[2]);
         return signof(compute_orientation_0d(p[0], p[1], m2));
     }
     case 5: {
-        const auto& m0 = builder.get_material(p[0]);
-        const auto& m2 = builder.get_material(p[2]);
+        const auto& m0 = materials.get_material(p[0]);
+        const auto& m2 = materials.get_material(p[2]);
         return signof(compute_orientation_1d(p[1], m0, m2));
     }
     case 6: {
-        const auto& m1 = builder.get_material(p[1]);
-        const auto& m2 = builder.get_material(p[2]);
+        const auto& m1 = materials.get_material(p[1]);
+        const auto& m2 = materials.get_material(p[2]);
         return signof(compute_orientation_1d(p[0], m1, m2));
     }
     case 7: {
-        const auto& m0 = builder.get_material(p[0]);
-        const auto& m1 = builder.get_material(p[1]);
-        const auto& m2 = builder.get_material(p[2]);
+        const auto& m0 = materials.get_material(p[0]);
+        const auto& m1 = materials.get_material(p[1]);
+        const auto& m2 = materials.get_material(p[2]);
         return signof(
             implicit_predicates::mi_orient2d(m0.data(), m1.data(), m2.data(), material.data()));
     }
@@ -125,14 +125,14 @@ int8_t mi_cut_0_face(MaterialInterfaceBuilder<Scalar, 2>& builder,
 }
 
 template <typename Scalar>
-int8_t mi_cut_0_face(MaterialInterfaceBuilder<Scalar, 3>& builder,
+int8_t mi_cut_0_face(const MaterialRepo<Scalar, 3>& materials,
     MIComplex<3>& mi_complex,
     size_t vid,
     size_t material_index)
 {
     const auto& vertices = mi_complex.vertices;
     const auto& p = vertices[vid];
-    const auto& material = builder.get_material(material_index);
+    const auto& material = materials.get_material(material_index);
 
     short vertex_type = 0;
     if (p[0] > 3) vertex_type |= 1;
@@ -256,80 +256,80 @@ int8_t mi_cut_0_face(MaterialInterfaceBuilder<Scalar, 3>& builder,
 
     switch (vertex_type) {
     case 1: {
-        const auto& m0 = builder.get_material(p[0]);
+        const auto& m0 = materials.get_material(p[0]);
         return signof(compute_orientation_0d(p[1], p[2], p[3], m0));
     }
     case 2: {
-        const auto& m1 = builder.get_material(p[1]);
+        const auto& m1 = materials.get_material(p[1]);
         return signof(compute_orientation_0d(p[0], p[2], p[3], m1));
     }
     case 3: {
-        const auto& m0 = builder.get_material(p[0]);
-        const auto& m1 = builder.get_material(p[1]);
+        const auto& m0 = materials.get_material(p[0]);
+        const auto& m1 = materials.get_material(p[1]);
         return signof(compute_orientation_1d(p[2], p[3], m0, m1));
     }
     case 4: {
-        const auto& m2 = builder.get_material(p[2]);
+        const auto& m2 = materials.get_material(p[2]);
         return signof(compute_orientation_0d(p[0], p[1], p[3], m2));
     }
     case 5: {
-        const auto& m0 = builder.get_material(p[0]);
-        const auto& m2 = builder.get_material(p[2]);
+        const auto& m0 = materials.get_material(p[0]);
+        const auto& m2 = materials.get_material(p[2]);
         return signof(compute_orientation_1d(p[1], p[3], m0, m2));
     }
     case 6: {
-        const auto& m1 = builder.get_material(p[1]);
-        const auto& m2 = builder.get_material(p[2]);
+        const auto& m1 = materials.get_material(p[1]);
+        const auto& m2 = materials.get_material(p[2]);
         return signof(compute_orientation_1d(p[0], p[3], m1, m2));
     }
     case 7: {
-        const auto& m0 = builder.get_material(p[0]);
-        const auto& m1 = builder.get_material(p[1]);
-        const auto& m2 = builder.get_material(p[2]);
+        const auto& m0 = materials.get_material(p[0]);
+        const auto& m1 = materials.get_material(p[1]);
+        const auto& m2 = materials.get_material(p[2]);
         return signof(compute_orientation_2d(p[3], m0, m1, m2));
     }
     case 8: {
-        const auto& m3 = builder.get_material(p[3]);
+        const auto& m3 = materials.get_material(p[3]);
         return signof(compute_orientation_0d(p[0], p[1], p[2], m3));
     }
     case 9: {
-        const auto& m0 = builder.get_material(p[0]);
-        const auto& m3 = builder.get_material(p[3]);
+        const auto& m0 = materials.get_material(p[0]);
+        const auto& m3 = materials.get_material(p[3]);
         return signof(compute_orientation_1d(p[1], p[2], m0, m3));
     }
     case 10: {
-        const auto& m1 = builder.get_material(p[1]);
-        const auto& m3 = builder.get_material(p[3]);
+        const auto& m1 = materials.get_material(p[1]);
+        const auto& m3 = materials.get_material(p[3]);
         return signof(compute_orientation_1d(p[0], p[2], m1, m3));
     }
     case 11: {
-        const auto& m0 = builder.get_material(p[0]);
-        const auto& m1 = builder.get_material(p[1]);
-        const auto& m3 = builder.get_material(p[3]);
+        const auto& m0 = materials.get_material(p[0]);
+        const auto& m1 = materials.get_material(p[1]);
+        const auto& m3 = materials.get_material(p[3]);
         return signof(compute_orientation_2d(p[2], m0, m1, m3));
     }
     case 12: {
-        const auto& m2 = builder.get_material(p[2]);
-        const auto& m3 = builder.get_material(p[3]);
+        const auto& m2 = materials.get_material(p[2]);
+        const auto& m3 = materials.get_material(p[3]);
         return signof(compute_orientation_1d(p[0], p[1], m2, m3));
     }
     case 13: {
-        const auto& m0 = builder.get_material(p[0]);
-        const auto& m2 = builder.get_material(p[2]);
-        const auto& m3 = builder.get_material(p[3]);
+        const auto& m0 = materials.get_material(p[0]);
+        const auto& m2 = materials.get_material(p[2]);
+        const auto& m3 = materials.get_material(p[3]);
         return signof(compute_orientation_2d(p[1], m0, m2, m3));
     }
     case 14: {
-        const auto& m1 = builder.get_material(p[1]);
-        const auto& m2 = builder.get_material(p[2]);
-        const auto& m3 = builder.get_material(p[3]);
+        const auto& m1 = materials.get_material(p[1]);
+        const auto& m2 = materials.get_material(p[2]);
+        const auto& m3 = materials.get_material(p[3]);
         return signof(compute_orientation_2d(p[0], m1, m2, m3));
     }
     case 15: {
-        const auto& m0 = builder.get_material(p[0]);
-        const auto& m1 = builder.get_material(p[1]);
-        const auto& m2 = builder.get_material(p[2]);
-        const auto& m3 = builder.get_material(p[3]);
+        const auto& m0 = materials.get_material(p[0]);
+        const auto& m1 = materials.get_material(p[1]);
+        const auto& m2 = materials.get_material(p[2]);
+        const auto& m3 = materials.get_material(p[3]);
         return signof(implicit_predicates::mi_orient3d(
             m0.data(), m1.data(), m2.data(), m3.data(), material.data()));
     }

@@ -98,22 +98,22 @@ void add_material(
     std::vector<int8_t> orientations;
     orientations.reserve(num_vertices);
     for (size_t i = 0; i < num_vertices; i++) {
-        orientations.push_back(mi_cut_0_face(builder, mi_complex, i, material_index));
+        orientations.push_back(
+            mi_cut_0_face(builder.get_material_repo(), mi_complex, i, material_index));
     }
 
     // Step 2: handle 1-faces.
     std::vector<std::array<size_t, 3>> subedges;
     subedges.reserve(num_edges);
     for (size_t i = 0; i < num_edges; i++) {
-        subedges.push_back(mi_cut_1_face(builder, mi_complex, i, material_index, orientations));
+        subedges.push_back(mi_cut_1_face(mi_complex, i, material_index, orientations));
     }
 
     // Step 3: handle 2-faces.
     std::vector<std::array<size_t, 3>> subfaces;
     subfaces.reserve(num_faces);
     for (size_t i = 0; i < num_faces; i++) {
-        subfaces.push_back(
-            mi_cut_2_face(builder, mi_complex, i, material_index, orientations, subedges));
+        subfaces.push_back(mi_cut_2_face(mi_complex, i, material_index, orientations, subedges));
     }
 
     // Step 4: combine negative cells into a single cell.
@@ -173,29 +173,29 @@ void add_material(
     std::vector<int8_t> orientations;
     orientations.reserve(num_vertices);
     for (size_t i = 0; i < num_vertices; i++) {
-        orientations.push_back(mi_cut_0_face(builder, mi_complex, i, material_index));
+        orientations.push_back(
+            mi_cut_0_face(builder.get_material_repo(), mi_complex, i, material_index));
     }
 
     // Step 2: handle 1-faces.
     std::vector<std::array<size_t, 3>> subedges;
     subedges.reserve(num_edges);
     for (size_t i = 0; i < num_edges; i++) {
-        subedges.push_back(mi_cut_1_face(builder, mi_complex, i, material_index, orientations));
+        subedges.push_back(mi_cut_1_face(mi_complex, i, material_index, orientations));
     }
 
     // Step 3: handle 2-faces.
     std::vector<std::array<size_t, 3>> subfaces;
     subfaces.reserve(num_faces);
     for (size_t i = 0; i < num_faces; i++) {
-        subfaces.push_back(
-            mi_cut_2_face(builder, mi_complex, i, material_index, orientations, subedges));
+        subfaces.push_back(mi_cut_2_face(mi_complex, i, material_index, orientations, subedges));
     }
 
     // Step 4: handle 3-faces.
     std::vector<std::array<size_t, 3>> subcells;
     subcells.reserve(num_cells);
     for (size_t i = 0; i < num_cells; i++) {
-        subcells.push_back(mi_cut_3_face(builder, mi_complex, i, material_index, subfaces));
+        subcells.push_back(mi_cut_3_face(mi_complex, i, material_index, subfaces));
     }
 
     // Step 5: combine negative cells into a single cell.

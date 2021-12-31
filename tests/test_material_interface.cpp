@@ -158,36 +158,79 @@ void test_3D()
     std::vector<Material<Scalar, 3>> materials;
     spdlog::set_level(spdlog::level::info);
 
-    SECTION("1 implicit")
-    {
-        materials.push_back({1, 1, 1, 1});
-        auto mi = compute_material_interface(materials);
-        REQUIRE(mi.cells.size() == 1);
-        REQUIRE(mi.faces.size() == 4);
-        REQUIRE(mi.vertices.size() == 4);
-        validate(mi);
-    }
+    //SECTION("1 implicit")
+    //{
+    //    materials.push_back({1, 1, 1, 1});
+    //    auto mi = compute_material_interface(materials);
+    //    REQUIRE(mi.cells.size() == 1);
+    //    REQUIRE(mi.faces.size() == 4);
+    //    REQUIRE(mi.vertices.size() == 4);
+    //    validate(mi);
+    //}
 
-    SECTION("2 implicits")
-    {
-        SECTION("Case 1")
-        {
+    //SECTION("2 implicits")
+    //{
+    //    SECTION("Case 1")
+    //    {
+    //        materials.push_back({1, 0, 0, 0});
+    //        materials.push_back({0, 1, 0, 0});
+    //        auto mi = compute_material_interface(materials);
+    //        REQUIRE(mi.cells.size() == 2);
+    //        REQUIRE(mi.faces.size() == 7);
+    //        REQUIRE(mi.vertices.size() == 5);
+    //        validate(mi);
+    //    }
+    //    SECTION("Case 2")
+    //    {
+    //        materials.push_back({1, 0, 0, 0});
+    //        materials.push_back({-1, 1, -1, -1});
+    //        auto mi = compute_material_interface(materials);
+    //        REQUIRE(mi.cells.size() == 2);
+    //        REQUIRE(mi.faces.size() == 8);
+    //        REQUIRE(mi.vertices.size() == 7);
+    //        validate(mi);
+    //    }
+    //    SECTION("Case 3")
+    //    {
+    //        materials.push_back({1, 1, 0, 0});
+    //        materials.push_back({0, 0, 1, 1});
+    //        auto mi = compute_material_interface(materials);
+    //        REQUIRE(mi.cells.size() == 2);
+    //        REQUIRE(mi.faces.size() == 9);
+    //        REQUIRE(mi.vertices.size() == 8);
+    //        validate(mi);
+    //    }
+    //    SECTION("Case 4")
+    //    {
+    //        materials.push_back({1, 0, 0, 0});
+    //        materials.push_back({0, 0, 0, 0});
+    //        auto mi = compute_material_interface(materials);
+    //        REQUIRE(mi.cells.size() == 1);
+    //        REQUIRE(mi.faces.size() == 4);
+    //        REQUIRE(mi.vertices.size() == 4);
+    //        validate(mi);
+    //    }
+    //    SECTION("Case 5")
+    //    {
+    //        materials.push_back({1, 0, 0, 0});
+    //        materials.push_back({1, 1, 1, -1});
+    //        auto mi = compute_material_interface(materials);
+    //        REQUIRE(mi.cells.size() == 2);
+    //        REQUIRE(mi.faces.size() == 8);
+    //        REQUIRE(mi.vertices.size() == 6);
+    //        validate(mi);
+    //    }
+    //}
+    SECTION("3 implicits") {
+        SECTION("Case 1") {
+            spdlog::set_level(spdlog::level::debug);
             materials.push_back({1, 0, 0, 0});
             materials.push_back({0, 1, 0, 0});
+            materials.push_back({0, 0, 1, 0});
             auto mi = compute_material_interface(materials);
-            REQUIRE(mi.cells.size() == 2);
-            REQUIRE(mi.faces.size() == 7);
-            REQUIRE(mi.vertices.size() == 5);
-            validate(mi);
-        }
-        SECTION("Case 2")
-        {
-            materials.push_back({1, 0, 0, 0});
-            materials.push_back({-1, 1, -1, -1});
-            auto mi = compute_material_interface(materials);
-            REQUIRE(mi.cells.size() == 2);
-            REQUIRE(mi.faces.size() == 8);
-            REQUIRE(mi.vertices.size() == 7);
+            REQUIRE(mi.cells.size() == 3);
+            REQUIRE(mi.faces.size() == 12);
+            REQUIRE(mi.vertices.size() == 8);
             validate(mi);
         }
     }

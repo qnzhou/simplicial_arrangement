@@ -1,7 +1,6 @@
 #pragma once
 
 #include "MIComplex.h"
-#include "MaterialInterfaceBuilder.h"
 
 #include <implicit_predicates/implicit_predicates.h>
 
@@ -10,8 +9,8 @@
 
 namespace simplicial_arrangement {
 
-template <typename Scalar, int DIM>
-std::array<size_t, 3> mi_cut_1_face(MaterialInterfaceBuilder<Scalar, DIM>& builder,
+template <int DIM>
+std::array<size_t, 3> mi_cut_1_face(
     MIComplex<DIM>& mi_complex,
     size_t eid,
     size_t material_index,
