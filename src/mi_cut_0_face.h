@@ -186,27 +186,27 @@ int8_t mi_cut_0_face(MaterialInterfaceBuilder<Scalar, 3>& builder,
             return implicit_predicates::mi_orient1d(mm0, mm1, mm);
         }
         case 6: {
-            const Scalar mm0[]{m0[1], m0[2]};
-            const Scalar mm1[]{m1[1], m1[2]};
-            const Scalar mm[]{material[1], material[2]};
-            return implicit_predicates::mi_orient1d(mm0, mm1, mm);
-        }
-        case 9: {
             const Scalar mm0[]{m0[0], m0[3]};
             const Scalar mm1[]{m1[0], m1[3]};
             const Scalar mm[]{material[0], material[3]};
             return implicit_predicates::mi_orient1d(mm0, mm1, mm);
         }
+        case 9: {
+            const Scalar mm0[]{m0[1], m0[2]};
+            const Scalar mm1[]{m1[1], m1[2]};
+            const Scalar mm[]{material[1], material[2]};
+            return implicit_predicates::mi_orient1d(mm0, mm1, mm);
+        }
         case 10: {
-            const Scalar mm0[]{m0[1], m0[3]};
-            const Scalar mm1[]{m1[1], m1[3]};
-            const Scalar mm[]{material[1], material[3]};
+            const Scalar mm0[]{m0[0], m0[2]};
+            const Scalar mm1[]{m1[0], m1[2]};
+            const Scalar mm[]{material[0], material[2]};
             return implicit_predicates::mi_orient1d(mm0, mm1, mm);
         }
         case 12: {
-            const Scalar mm0[]{m0[2], m0[3]};
-            const Scalar mm1[]{m1[2], m1[3]};
-            const Scalar mm[]{material[2], material[3]};
+            const Scalar mm0[]{m0[0], m0[1]};
+            const Scalar mm1[]{m1[0], m1[1]};
+            const Scalar mm[]{material[0], material[1]};
             return implicit_predicates::mi_orient1d(mm0, mm1, mm);
         }
         default:
