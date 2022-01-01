@@ -1,5 +1,7 @@
 #pragma once
 
+#include "common.h"
+
 #include <simplicial_arrangement/material_interface.h>
 
 #include <vector>

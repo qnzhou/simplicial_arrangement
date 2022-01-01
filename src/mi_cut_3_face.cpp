@@ -42,7 +42,11 @@ std::array<size_t, 3> mi_cut_3_face(MIComplex<3>& mi_complex,
         }
     }
 
-    if (positive_subfaces.empty()) {
+    if (positive_subfaces.empty() && negative_subfaces.empty()) {
+        // The added material and the current material are identical over the
+        // whole cell.
+        return {INVALID, INVALID, INVALID};
+    } else if (positive_subfaces.empty()) {
         return {INVALID, cid, cut_face_id};
     } else if (negative_subfaces.empty()) {
         return {cid, INVALID, cut_face_id};

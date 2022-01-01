@@ -20,10 +20,11 @@ inline int8_t signof(implicit_predicates::Orientation o)
 
 template <typename Scalar>
 int8_t mi_cut_0_face(const MaterialRepo<Scalar, 2>& materials,
-    MIComplex<2>& mi_complex,
+    const MIComplex<2>& mi_complex,
     size_t vid,
     size_t material_index)
 {
+    assert(material_index > 2);
     const auto& vertices = mi_complex.vertices;
     const auto& p = vertices[vid];
     const auto& material = materials.get_material(material_index);
@@ -126,10 +127,11 @@ int8_t mi_cut_0_face(const MaterialRepo<Scalar, 2>& materials,
 
 template <typename Scalar>
 int8_t mi_cut_0_face(const MaterialRepo<Scalar, 3>& materials,
-    MIComplex<3>& mi_complex,
+    const MIComplex<3>& mi_complex,
     size_t vid,
     size_t material_index)
 {
+    assert(material_index > 3);
     const auto& vertices = mi_complex.vertices;
     const auto& p = vertices[vid];
     const auto& material = materials.get_material(material_index);
