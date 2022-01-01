@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.14)
 
-project(simplicial_arrangement LANGUAGES CXX)
+project(simplicial_arrangement LANGUAGES CXX C)
 
 include(FetchContent)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
@@ -9,22 +9,17 @@ include(implicit_predicates)
 include(spdlog)
 include(nlohmann-json)
 include(sanitizers)
-#include(Eigen3)
-#include(cli11)
-#include(fast_arrangement)
+include(fast_arrangement)
 
-#option(LIBIGL_WITH_CGAL "Build CGAL support in libigl" On)
-#option(LIBIGL_WITH_OPENGL_GLFW_IMGUI "Build with UI" OFF)
-#option(LIBIGL_WITH_OPENGL "" On)
-#option(LIBIGL_WITH_OPENGL_GLFW "" On)
-#include(libigl)
+option(LIBIGL_WITH_CGAL "Build CGAL support in libigl" On)
+include(libigl)
 
-#add_library(arrangement STATIC
-#    ${CMAKE_SOURCE_DIR}/src/PyMesh/Arrangement.cpp
-#    ${CMAKE_SOURCE_DIR}/src/PyMesh/FastArrangement.cpp
-#    ${CMAKE_SOURCE_DIR}/src/PyMesh/MeshArrangement.cpp)
-#target_link_libraries(arrangement PUBLIC igl::core igl::cgal
-#    fast_arrangement::fast_arrangement)
+add_library(arrangement STATIC
+    ${CMAKE_SOURCE_DIR}/src/PyMesh/Arrangement.cpp
+    ${CMAKE_SOURCE_DIR}/src/PyMesh/FastArrangement.cpp
+    ${CMAKE_SOURCE_DIR}/src/PyMesh/MeshArrangement.cpp)
+target_link_libraries(arrangement PUBLIC igl::core igl::cgal
+    fast_arrangement::fast_arrangement)
 
 file(GLOB INC_FILES ${CMAKE_CURRENT_LIST_DIR}/include/*.h)
 file(GLOB SRC_FILES ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp)
@@ -78,10 +73,12 @@ set(LOOKUP_TABLE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lookup_table")
 target_compile_definitions(simplicial_arrangement PUBLIC -DLOOKUP_TABLE_PATH="${LOOKUP_TABLE_PATH}")
 
 add_library(impl_arrangement_util STATIC "app/implicit_arrangement_util.cpp")
+target_compile_features(impl_arrangement_util PRIVATE cxx_std_17)
 #target_include_directories(impl_arrangement_util PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
 target_link_libraries(impl_arrangement_util PUBLIC simplicial_arrangement::simplicial_arrangement)
 
 add_executable(impl_arrangement "app/implicit_arrangement.cpp")
+target_compile_features(impl_arrangement PRIVATE cxx_std_17)
 target_link_libraries(impl_arrangement simplicial_arrangement::simplicial_arrangement impl_arrangement_util)
 if (SIMPLICIAL_ARRANGEMENT_TEST_COVERAGE)
     if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
@@ -93,6 +90,7 @@ endif()
 
 add_executable(marching_tet "app/marching_tet.cpp")
 target_link_libraries(marching_tet simplicial_arrangement::simplicial_arrangement impl_arrangement_util)
+target_compile_features(marching_tet PRIVATE cxx_std_17)
 if (SIMPLICIAL_ARRANGEMENT_TEST_COVERAGE)
     if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
         target_compile_options(marching_tet PRIVATE -fprofile-instr-generate -fcoverage-mapping)
