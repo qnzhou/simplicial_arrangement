@@ -15,40 +15,79 @@ namespace simplicial_arrangement {
  * for boundary edges.  This function also update the boundary vertex and edge's
  * supporting materials.
  */
-template <int DIM>
-size_t mi_union_1_faces(
-    MIComplex<DIM>& mi_complex, size_t material_index, const std::vector<size_t>& bd_edge_indices)
+template <int DIM, typename EdgeMap = absl::flat_hash_map<size_t, size_t>>
+size_t mi_union_1_faces(MIComplex<DIM>& mi_complex,
+    size_t material_index,
+    const std::vector<size_t>& bd_edge_indices,
+    EdgeMap* edge_map = nullptr)
 {
     const size_t num_bd_edges = bd_edge_indices.size();
     if (num_bd_edges == 0) return INVALID;
 
+    size_t edge_group_key = INVALID;
+    if constexpr (DIM == 3) {
+        if (edge_map != nullptr) {
+            // Check if this set of edges has already been unioned.
+            edge_group_key = *std::min_element(bd_edge_indices.begin(), bd_edge_indices.end());
+            auto itr = edge_map->find(edge_group_key);
+            if (itr != edge_map->end()) {
+                logger().debug("Edge group with key {} has been unioned already as edge {}.",
+                    edge_group_key,
+                    itr->second);
+                return itr->second;
+            }
+        }
+    }
+
     auto& vertices = mi_complex.vertices;
     auto& edges = mi_complex.edges;
-    absl::flat_hash_set<size_t> bd_vertices;
-    bd_vertices.reserve(num_bd_edges + 1);
 
-    auto toggle = [&](size_t vid) {
-        auto itr = bd_vertices.find(vid);
-        if (itr == bd_vertices.end()) {
-            bd_vertices.insert(vid);
-        } else {
-            bd_vertices.erase(itr);
+    auto compute_bd_vertices = [&]() {
+        absl::flat_hash_set<size_t> bd_vertices;
+        bd_vertices.reserve(num_bd_edges + 1);
+
+        auto toggle = [&](size_t vid) {
+            auto itr = bd_vertices.find(vid);
+            if (itr == bd_vertices.end()) {
+                bd_vertices.insert(vid);
+            } else {
+                bd_vertices.erase(itr);
+            }
+        };
+
+        for (size_t eid : bd_edge_indices) {
+            const auto& e = edges[eid];
+            toggle(e.vertices[0]);
+            toggle(e.vertices[1]);
         }
+        assert(bd_vertices.size() == 2);
+        return bd_vertices;
     };
 
-    for (size_t eid : bd_edge_indices) {
-        const auto& e = edges[eid];
-        toggle(e.vertices[0]);
-        toggle(e.vertices[1]);
-    }
-    assert(bd_vertices.size() == 2);
-
-    MIEdge<DIM> combined_edge;
-    {
+    size_t combined_eid = INVALID;
+    if (num_bd_edges > 1) {
+        MIEdge<DIM> combined_edge;
+        auto bd_vertices = compute_bd_vertices();
         size_t counter = 0;
         for (auto vid : bd_vertices) {
             combined_edge.vertices[counter] = vid;
             counter++;
+        }
+        edges.push_back(std::move(combined_edge));
+        combined_eid = edges.size() - 1;
+        logger().debug("Adding combined edge: {}", combined_eid);
+    } else {
+        assert(bd_edge_indices.size() == 1);
+        combined_eid = bd_edge_indices[0];
+    }
+    assert(combined_eid != INVALID);
+    auto& combined_edge = edges[combined_eid];
+
+    if constexpr (DIM == 3) {
+        if (edge_map != nullptr) {
+            // Register combined edge in edge map.
+            assert(edge_group_key != INVALID);
+            edge_map->insert({edge_group_key, combined_eid});
         }
     }
 
@@ -108,13 +147,14 @@ size_t mi_union_1_faces(
         }
     }
 
-    edges.push_back(std::move(combined_edge));
-    return edges.size() - 1;
+    return combined_eid;
 }
 
-template <int DIM>
-size_t mi_union_2_faces(
-    MIComplex<DIM>& mi_complex, size_t material_index, const std::vector<size_t>& bd_face_indices)
+template <int DIM, typename EdgeMap = absl::flat_hash_map<size_t, size_t>>
+size_t mi_union_2_faces(MIComplex<DIM>& mi_complex,
+    size_t material_index,
+    const std::vector<size_t>& bd_face_indices,
+    EdgeMap* edge_map = nullptr)
 {
     const size_t num_bd_faces = bd_face_indices.size();
     if (num_bd_faces == 0) return INVALID;
@@ -194,7 +234,7 @@ size_t mi_union_2_faces(
     }
     for (const auto& edge_group : to_merge) {
         if (edge_group.empty()) continue;
-        size_t out_eid = mi_union_1_faces(mi_complex, material_index, edge_group);
+        size_t out_eid = mi_union_1_faces(mi_complex, material_index, edge_group, edge_map);
         assert(out_eid != INVALID);
         for (auto eid : edge_group) {
             bd_edges.erase(eid);
@@ -236,6 +276,9 @@ size_t mi_union_3_faces(
     static_assert(DIM == 3);
     const size_t num_bd_cells = bd_cell_indices.size();
     if (num_bd_cells == 0) return INVALID;
+
+    absl::flat_hash_map<size_t, size_t> edge_map;
+    edge_map.reserve(4);
 
     auto& faces = mi_complex.faces;
     auto& cells = mi_complex.cells;
@@ -282,7 +325,7 @@ size_t mi_union_3_faces(
 
     for (const auto& face_group : to_merge) {
         if (face_group.empty()) continue;
-        size_t combined_fid = mi_union_2_faces(mi_complex, material_index, face_group);
+        size_t combined_fid = mi_union_2_faces(mi_complex, material_index, face_group, &edge_map);
         for (auto fid : face_group) {
             bd_faces.erase(fid);
         }

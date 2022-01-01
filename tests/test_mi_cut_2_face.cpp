@@ -43,8 +43,11 @@ void test_2D()
         auto subedges = test_utils::compute_subedges(mi_complex, repo, material_index, orientations);
         auto r = mi_cut_2_face(mi_complex, 0, material_index, orientations, subedges);
         REQUIRE(r[0] == INVALID);
-        REQUIRE(r[1] != INVALID);
+        REQUIRE(r[1] == 0);
         REQUIRE(r[2] == INVALID);
+
+        const auto& f = mi_complex.faces[0];
+        REQUIRE(f.material_label == material_index);
     }
     SECTION("Cross cut")
     {
@@ -79,7 +82,6 @@ void test_3D()
     {
         // Inserting material 6.
         size_t material_index = 6;
-        spdlog::set_level(spdlog::level::debug);
         auto orientations = test_utils::compute_orientations(mi_complex, repo, material_index);
         auto subedges = test_utils::compute_subedges(mi_complex, repo, material_index, orientations);
         auto r = mi_cut_2_face(mi_complex, 0, material_index, orientations, subedges);
@@ -91,7 +93,6 @@ void test_3D()
     {
         materials.push_back({1, 1, 0, 0}); // material 10
         size_t material_index = 10;
-        spdlog::set_level(spdlog::level::debug);
         const size_t num_edges = mi_complex.edges.size();
         auto orientations = test_utils::compute_orientations(mi_complex, repo, material_index);
         auto subedges = test_utils::compute_subedges(mi_complex, repo, material_index, orientations);

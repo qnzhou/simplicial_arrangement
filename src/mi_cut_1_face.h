@@ -36,12 +36,14 @@ std::array<size_t, 3> mi_cut_1_face(
         if constexpr (DIM == 2) {
             size_t m0 = e.positive_material_label;
             size_t m1 = e.negative_material_label;
+            logger().debug("Adding cut vertex: {}, {}, {}", m0, m1, material_index);
             vertices.push_back({m0, m1, material_index});
             return vertices.size() - 1;
         } else {
             size_t m0 = e.supporting_materials[0];
             size_t m1 = e.supporting_materials[1];
             size_t m2 = e.supporting_materials[2];
+            logger().debug("Adding cut vertex: {}, {}, {}", m0, m1, m2, material_index);
             vertices.push_back({m0, m1, m2, material_index});
             return vertices.size() - 1;
         }
@@ -84,6 +86,8 @@ std::array<size_t, 3> mi_cut_1_face(
         edges.push_back(std::move(negative_subedge));
         positive_subedge_id = edges.size() - 2;
         negative_subedge_id = edges.size() - 1;
+        logger().debug("Adding positive subedge: {}", positive_subedge_id);
+        logger().debug("Adding negative subedge: {}", negative_subedge_id);
     }
     logger().debug("Cut edge {}: {} {} with intersection {}",
         eid,

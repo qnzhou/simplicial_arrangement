@@ -47,6 +47,7 @@ std::array<size_t, 3> mi_cut_3_face(MIComplex<3>& mi_complex,
         // whole cell.
         return {INVALID, INVALID, INVALID};
     } else if (positive_subfaces.empty()) {
+        cells[cid].material_label = material_index;
         return {INVALID, cid, cut_face_id};
     } else if (negative_subfaces.empty()) {
         return {cid, INVALID, cut_face_id};
@@ -60,6 +61,7 @@ std::array<size_t, 3> mi_cut_3_face(MIComplex<3>& mi_complex,
     cut_face.negative_material_label = c.material_label;
     faces.push_back(std::move(cut_face));
     cut_face_id = faces.size() - 1;
+    logger().debug("Adding cut face: {}", cut_face_id);
 
     // Generate positive and negative subcell.
     MICell<3> positive_cell, negative_cell;
@@ -77,6 +79,8 @@ std::array<size_t, 3> mi_cut_3_face(MIComplex<3>& mi_complex,
 
     cells.push_back(positive_cell);
     cells.push_back(negative_cell);
+    logger().debug("Adding positive subcell: {}", cells.size() - 2);
+    logger().debug("Adding negative subcell: {}", cells.size() - 1);
     return {cells.size() - 2, cells.size() - 1, cut_face_id};
 }
 

@@ -70,6 +70,9 @@ std::array<size_t, 3> mi_cut_2_face(MIComplex<DIM>& mi_complex,
         // No cut.
         if (positive_subedges.empty()) {
             assert(!negative_subedges.empty());
+            if constexpr (DIM == 2) {
+                faces[fid].material_label = material_index;
+            }
             return {INVALID, fid, cut_edge_index};
         } else {
             assert(!positive_subedges.empty());
@@ -89,6 +92,7 @@ std::array<size_t, 3> mi_cut_2_face(MIComplex<DIM>& mi_complex,
         }
         cut_edge_index = edges.size();
         edges.push_back(std::move(cut_edge));
+        logger().debug("Adding cut edge: {}", cut_edge_index);
     }
 
     // Create subfaces.
@@ -127,6 +131,8 @@ std::array<size_t, 3> mi_cut_2_face(MIComplex<DIM>& mi_complex,
 
     faces.push_back(std::move(positive_subface));
     faces.push_back(std::move(negative_subface));
+    logger().debug("Adding positive subface: {}", faces.size() - 2);
+    logger().debug("Adding negative subface: {}", faces.size() - 1);
 
     return {faces.size() - 2, faces.size() - 1, cut_edge_index};
 }
