@@ -82,7 +82,7 @@ void add_material(
     const size_t num_vertices = mi_complex.vertices.size();
     const size_t num_edges = mi_complex.edges.size();
     const size_t num_faces = mi_complex.faces.size();
-    logger().info("adding material {}", material_index);
+    logger().debug("adding material {}", material_index);
     logger().debug("Before: {} {} {}", num_vertices, num_edges, num_faces);
 
     auto& vertices = mi_complex.vertices;
@@ -155,7 +155,7 @@ void add_material(
     const size_t num_edges = mi_complex.edges.size();
     const size_t num_faces = mi_complex.faces.size();
     const size_t num_cells = mi_complex.cells.size();
-    logger().info("adding material {}", material_index);
+    logger().debug("adding material {}", material_index);
     logger().debug("Before: {} {} {} {}", num_vertices, num_edges, num_faces, num_cells);
 
     auto& vertices = mi_complex.vertices;
