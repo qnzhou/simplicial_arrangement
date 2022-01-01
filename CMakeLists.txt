@@ -2,12 +2,29 @@ cmake_minimum_required(VERSION 3.14)
 
 project(simplicial_arrangement LANGUAGES CXX)
 
+include(FetchContent)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 include(absl)
 include(implicit_predicates)
 include(spdlog)
 include(nlohmann-json)
 include(sanitizers)
+#include(Eigen3)
+#include(cli11)
+#include(fast_arrangement)
+
+#option(LIBIGL_WITH_CGAL "Build CGAL support in libigl" On)
+#option(LIBIGL_WITH_OPENGL_GLFW_IMGUI "Build with UI" OFF)
+#option(LIBIGL_WITH_OPENGL "" On)
+#option(LIBIGL_WITH_OPENGL_GLFW "" On)
+#include(libigl)
+
+#add_library(arrangement STATIC
+#    ${CMAKE_SOURCE_DIR}/src/PyMesh/Arrangement.cpp
+#    ${CMAKE_SOURCE_DIR}/src/PyMesh/FastArrangement.cpp
+#    ${CMAKE_SOURCE_DIR}/src/PyMesh/MeshArrangement.cpp)
+#target_link_libraries(arrangement PUBLIC igl::core igl::cgal
+#    fast_arrangement::fast_arrangement)
 
 file(GLOB INC_FILES ${CMAKE_CURRENT_LIST_DIR}/include/*.h)
 file(GLOB SRC_FILES ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp)
@@ -53,6 +70,8 @@ if (SIMPLICIAL_ARRANGEMENT_UNIT_TESTS)
         endif()
     endif()
 endif()
+
+
 
 
 set(LOOKUP_TABLE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lookup_table")
