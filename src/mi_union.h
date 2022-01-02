@@ -24,7 +24,7 @@ size_t mi_union_1_faces(MIComplex<DIM>& mi_complex,
     const size_t num_bd_edges = bd_edge_indices.size();
     if (num_bd_edges == 0) return INVALID;
 
-    size_t edge_group_key = INVALID;
+    [[maybe_unused]] size_t edge_group_key = INVALID;
     if constexpr (DIM == 3) {
         if (edge_map != nullptr) {
             // Check if this set of edges has already been unioned.
