@@ -194,7 +194,7 @@ size_t mi_union_2_faces(MIComplex<DIM>& mi_complex,
         entry.reserve(bd_edges.size());
     });
 
-    auto sort3 = [](std::array<size_t, 3>& a) {
+    [[maybe_unused]] auto sort3 = [](std::array<size_t, 3>& a) {
         if (a[0] > a[1]) std::swap(a[0], a[1]);
         if (a[0] > a[2]) std::swap(a[0], a[2]);
         if (a[1] > a[2]) std::swap(a[1], a[2]);
