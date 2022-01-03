@@ -57,30 +57,29 @@ std::array<size_t, 3> ar_cut_3_face(ARComplex<3>& ar_complex,
 
     // Chain cut edges into a loop.
     {
-        std::sort(cut_edges.begin(), cut_edges.end());
-        auto itr = std::unique(cut_edges.begin(), cut_edges.end());
-        cut_edges.erase(itr, cut_edges.end());
-
-        // TODO: reorder edges.
-        //const auto& edges = ar_complex.edges;
-        //size_t num_cut_edges = cut_edges.size();
-        //assert(num_cut_edges >= 3);
-        //size_t num_vertices = ar_complex.vertices.size();
-        //std::vector<size_t> v2e(num_vertices, INVALID);
-        //for (size_t i=0; i<num_cut_edges; i++) {
-        //    const auto eid = cut_edges[i];
-        //    const auto& e = edges[eid];
-        //    v2e[e.vertices[0]] = eid;
-        //}
-        //std::vector<size_t> chained_cut_edges;
-        //chained_cut_edges.reserve(num_cut_edges);
-        //chained_cut_edges.push_back(cut_edges.front());
-        //while(chained_cut_edges.size() < num_cut_edges) {
-        //    const auto& e = edges[chained_cut_edges.back()];
-        //    chained_cut_edges.push_back(v2e[e.vertices[1]]);
-        //    assert(chained_cut_edges.back() != INVALID);
-        //}
-        //std::swap(cut_edges, chained_cut_edges);
+        const auto& edges = ar_complex.edges;
+        size_t num_cut_edges = cut_edges.size();
+        assert(num_cut_edges >= 3);
+        size_t num_vertices = ar_complex.vertices.size();
+        std::vector<size_t> v2e(num_vertices, INVALID);
+        for (size_t i=0; i<num_cut_edges; i++) {
+            const auto eid = cut_edges[i];
+            const auto& e = edges[eid];
+            v2e[e.vertices[0]] = eid;
+        }
+        std::vector<size_t> chained_cut_edges;
+        chained_cut_edges.reserve(num_cut_edges);
+        chained_cut_edges.push_back(cut_edges.front());
+        while(chained_cut_edges.size() < num_cut_edges) {
+            const auto& e = edges[chained_cut_edges.back()];
+            const size_t next_e = v2e[e.vertices[1]];
+            assert(next_e != INVALID);
+            if (next_e == chained_cut_edges.front()) {
+                break;
+            }
+            chained_cut_edges.push_back(next_e);
+        }
+        std::swap(cut_edges, chained_cut_edges);
     }
 
     // Cross cut.

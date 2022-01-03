@@ -103,6 +103,13 @@ std::array<size_t, 3> ar_cut_2_face(ARComplex<DIM>& ar_complex,
         if (positive_subedges.empty()) {
             assert(!negative_subedges.empty());
             if constexpr (DIM == 2) f.signs[plane_index] = false;
+            if (cut_edge_index != INVALID) {
+                // Cut edge is part of the face on the negative side.
+                // Need to swap its end points so all cut edges are consistently
+                // oriented.
+                auto& e = edges[cut_edge_index];
+                std::swap(e.vertices[0], e.vertices[1]);
+            }
             return {INVALID, fid, cut_edge_index};
         } else {
             assert(!positive_subedges.empty());
