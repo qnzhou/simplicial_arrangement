@@ -71,7 +71,7 @@ void add_material(
                 to_keep[subface[0]] = true;
             }
         });
-        shrink(faces, [&](size_t i) { return to_keep[i]; });
+        utils::shrink(faces, [&](size_t i) { return to_keep[i]; });
     }
 
     // Step 5: consolidate.
@@ -152,7 +152,7 @@ void add_material(
                 to_keep[subcell[0]] = true;
             }
         });
-        shrink(cells, [&](size_t i) { return to_keep[i]; });
+        utils::shrink(cells, [&](size_t i) { return to_keep[i]; });
     }
 
     // Step 6: consolidate.

@@ -6,7 +6,7 @@
 
 #include <vector>
 
-namespace simplicial_arrangement {
+namespace simplicial_arrangement::utils {
 
 inline int8_t signof(implicit_predicates::Orientation o)
 {

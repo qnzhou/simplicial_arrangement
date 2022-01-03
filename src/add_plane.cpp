@@ -55,7 +55,7 @@ void add_plane(const PlaneRepo<Scalar, 2>& repo, ARComplex<2>& ar_complex, size_
             if (subface[1] != INVALID) to_keep[subface[1]] = true;
         }
 
-        auto index_map = shrink(faces, [&](size_t i) { return to_keep[i]; });
+        auto index_map = utils::shrink(faces, [&](size_t i) { return to_keep[i]; });
 
         // Update face indices in edges.
         for (auto& e : edges) {
@@ -73,8 +73,7 @@ void add_plane(const PlaneRepo<Scalar, 2>& repo, ARComplex<2>& ar_complex, size_
 }
 
 template <typename Scalar>
-void add_plane(
-    const PlaneRepo<Scalar, 3>& repo, MIComplex<3>& ar_complex, size_t plane_index)
+void add_plane(const PlaneRepo<Scalar, 3>& repo, MIComplex<3>& ar_complex, size_t plane_index)
 {
     const size_t num_vertices = ar_complex.vertices.size();
     const size_t num_edges = ar_complex.edges.size();
@@ -98,8 +97,7 @@ void add_plane(
     std::vector<int8_t> orientations;
     orientations.reserve(num_vertices);
     for (size_t i = 0; i < num_vertices; i++) {
-        orientations.push_back(
-            ar_cut_0_face(repo, ar_complex, i, plane_index));
+        orientations.push_back(ar_cut_0_face(repo, ar_complex, i, plane_index));
     }
 
     // Step 2: handle 1-faces.
@@ -131,7 +129,7 @@ void add_plane(
             if (subcell[1] != INVALID) to_keep[subcell[1]] = true;
         }
 
-        auto index_map = shrink(cells, [&](size_t i) { return to_keep[i]; });
+        auto index_map = utils::shrink(cells, [&](size_t i) { return to_keep[i]; });
 
         // Update cell indices in faces.
         for (auto& f : faces) {

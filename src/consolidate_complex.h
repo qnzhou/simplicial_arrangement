@@ -20,7 +20,7 @@ void consolidate(Complex<DIM>& data)
             }
         }
 
-        auto index_map = shrink(data.faces, [&](size_t fid) { return active_faces[fid]; });
+        auto index_map = utils::shrink(data.faces, [&](size_t fid) { return active_faces[fid]; });
 
         for (auto& c : data.cells) {
             std::transform(c.faces.begin(), c.faces.end(), c.faces.begin(), [&](size_t i) {
@@ -39,7 +39,7 @@ void consolidate(Complex<DIM>& data)
             }
         }
 
-        auto index_map = shrink(data.edges, [&](size_t eid) { return active_edges[eid]; });
+        auto index_map = utils::shrink(data.edges, [&](size_t eid) { return active_edges[eid]; });
 
         for (auto& f : data.faces) {
             std::transform(f.edges.begin(), f.edges.end(), f.edges.begin(), [&](size_t i) {
@@ -60,7 +60,7 @@ void consolidate(Complex<DIM>& data)
         }
 
         auto index_map =
-            shrink(data.vertices, [&](size_t vid) { return active_vertices[vid]; });
+            utils::shrink(data.vertices, [&](size_t vid) { return active_vertices[vid]; });
 
         for (auto& e : data.edges) {
             e.vertices[0] = index_map[e.vertices[0]];

@@ -77,41 +77,41 @@ int8_t mi_cut_0_face(const MaterialRepo<Scalar, 2>& materials,
     switch (vertex_type) {
     case 1: {
         const auto& m0 = materials.get_material(p[0]);
-        return signof(compute_orientation_0d(p[1], p[2], m0));
+        return utils::signof(compute_orientation_0d(p[1], p[2], m0));
     }
     case 2: {
         const auto& m1 = materials.get_material(p[1]);
-        return signof(compute_orientation_0d(p[0], p[2], m1));
+        return utils::signof(compute_orientation_0d(p[0], p[2], m1));
     }
     case 3: {
         const auto& m0 = materials.get_material(p[0]);
         const auto& m1 = materials.get_material(p[1]);
-        return signof(compute_orientation_1d(p[2], m0, m1));
+        return utils::signof(compute_orientation_1d(p[2], m0, m1));
     }
     case 4: {
         const auto& m2 = materials.get_material(p[2]);
-        return signof(compute_orientation_0d(p[0], p[1], m2));
+        return utils::signof(compute_orientation_0d(p[0], p[1], m2));
     }
     case 5: {
         const auto& m0 = materials.get_material(p[0]);
         const auto& m2 = materials.get_material(p[2]);
-        return signof(compute_orientation_1d(p[1], m0, m2));
+        return utils::signof(compute_orientation_1d(p[1], m0, m2));
     }
     case 6: {
         const auto& m1 = materials.get_material(p[1]);
         const auto& m2 = materials.get_material(p[2]);
-        return signof(compute_orientation_1d(p[0], m1, m2));
+        return utils::signof(compute_orientation_1d(p[0], m1, m2));
     }
     case 7: {
         const auto& m0 = materials.get_material(p[0]);
         const auto& m1 = materials.get_material(p[1]);
         const auto& m2 = materials.get_material(p[2]);
-        return signof(
+        return utils::signof(
             implicit_predicates::mi_orient2d(m0.data(), m1.data(), m2.data(), material.data()));
     }
     default:
         logger().error("Impossible vertex type case detected: {}", vertex_type);
-        return signof(implicit_predicates::INVALID);
+        return utils::signof(implicit_predicates::INVALID);
     }
 }
 
@@ -249,85 +249,85 @@ int8_t mi_cut_0_face(const MaterialRepo<Scalar, 3>& materials,
     switch (vertex_type) {
     case 1: {
         const auto& m0 = materials.get_material(p[0]);
-        return signof(compute_orientation_0d(p[1], p[2], p[3], m0));
+        return utils::signof(compute_orientation_0d(p[1], p[2], p[3], m0));
     }
     case 2: {
         const auto& m1 = materials.get_material(p[1]);
-        return signof(compute_orientation_0d(p[0], p[2], p[3], m1));
+        return utils::signof(compute_orientation_0d(p[0], p[2], p[3], m1));
     }
     case 3: {
         const auto& m0 = materials.get_material(p[0]);
         const auto& m1 = materials.get_material(p[1]);
-        return signof(compute_orientation_1d(p[2], p[3], m0, m1));
+        return utils::signof(compute_orientation_1d(p[2], p[3], m0, m1));
     }
     case 4: {
         const auto& m2 = materials.get_material(p[2]);
-        return signof(compute_orientation_0d(p[0], p[1], p[3], m2));
+        return utils::signof(compute_orientation_0d(p[0], p[1], p[3], m2));
     }
     case 5: {
         const auto& m0 = materials.get_material(p[0]);
         const auto& m2 = materials.get_material(p[2]);
-        return signof(compute_orientation_1d(p[1], p[3], m0, m2));
+        return utils::signof(compute_orientation_1d(p[1], p[3], m0, m2));
     }
     case 6: {
         const auto& m1 = materials.get_material(p[1]);
         const auto& m2 = materials.get_material(p[2]);
-        return signof(compute_orientation_1d(p[0], p[3], m1, m2));
+        return utils::signof(compute_orientation_1d(p[0], p[3], m1, m2));
     }
     case 7: {
         const auto& m0 = materials.get_material(p[0]);
         const auto& m1 = materials.get_material(p[1]);
         const auto& m2 = materials.get_material(p[2]);
-        return signof(compute_orientation_2d(p[3], m0, m1, m2));
+        return utils::signof(compute_orientation_2d(p[3], m0, m1, m2));
     }
     case 8: {
         const auto& m3 = materials.get_material(p[3]);
-        return signof(compute_orientation_0d(p[0], p[1], p[2], m3));
+        return utils::signof(compute_orientation_0d(p[0], p[1], p[2], m3));
     }
     case 9: {
         const auto& m0 = materials.get_material(p[0]);
         const auto& m3 = materials.get_material(p[3]);
-        return signof(compute_orientation_1d(p[1], p[2], m0, m3));
+        return utils::signof(compute_orientation_1d(p[1], p[2], m0, m3));
     }
     case 10: {
         const auto& m1 = materials.get_material(p[1]);
         const auto& m3 = materials.get_material(p[3]);
-        return signof(compute_orientation_1d(p[0], p[2], m1, m3));
+        return utils::signof(compute_orientation_1d(p[0], p[2], m1, m3));
     }
     case 11: {
         const auto& m0 = materials.get_material(p[0]);
         const auto& m1 = materials.get_material(p[1]);
         const auto& m3 = materials.get_material(p[3]);
-        return signof(compute_orientation_2d(p[2], m0, m1, m3));
+        return utils::signof(compute_orientation_2d(p[2], m0, m1, m3));
     }
     case 12: {
         const auto& m2 = materials.get_material(p[2]);
         const auto& m3 = materials.get_material(p[3]);
-        return signof(compute_orientation_1d(p[0], p[1], m2, m3));
+        return utils::signof(compute_orientation_1d(p[0], p[1], m2, m3));
     }
     case 13: {
         const auto& m0 = materials.get_material(p[0]);
         const auto& m2 = materials.get_material(p[2]);
         const auto& m3 = materials.get_material(p[3]);
-        return signof(compute_orientation_2d(p[1], m0, m2, m3));
+        return utils::signof(compute_orientation_2d(p[1], m0, m2, m3));
     }
     case 14: {
         const auto& m1 = materials.get_material(p[1]);
         const auto& m2 = materials.get_material(p[2]);
         const auto& m3 = materials.get_material(p[3]);
-        return signof(compute_orientation_2d(p[0], m1, m2, m3));
+        return utils::signof(compute_orientation_2d(p[0], m1, m2, m3));
     }
     case 15: {
         const auto& m0 = materials.get_material(p[0]);
         const auto& m1 = materials.get_material(p[1]);
         const auto& m2 = materials.get_material(p[2]);
         const auto& m3 = materials.get_material(p[3]);
-        return signof(implicit_predicates::mi_orient3d(
+        return utils::signof(implicit_predicates::mi_orient3d(
             m0.data(), m1.data(), m2.data(), m3.data(), material.data()));
     }
     default:
         logger().error("Impossible vertex type case detected: {}", vertex_type);
-        return signof(implicit_predicates::INVALID);
+        return utils::signof(implicit_predicates::INVALID);
     }
 }
 
