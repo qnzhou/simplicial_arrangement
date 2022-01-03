@@ -16,6 +16,8 @@ std::array<size_t, 3> mi_cut_2_face(MIComplex<DIM>& mi_complex,
 {
     auto& edges = mi_complex.edges;
     auto& faces = mi_complex.faces;
+    edges.reserve(edges.size() + 1);
+    faces.reserve(faces.size() + 2);
 
     const auto& f = faces[fid];
     const size_t num_bd_edges = f.edges.size();

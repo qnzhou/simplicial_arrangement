@@ -1,22 +1,12 @@
 #pragma once
 
 #include "MIComplex.h"
-#include "MaterialInterfaceBuilder.h"
+#include "MaterialRepo.h"
+#include "utils.h"
 
 #include <implicit_predicates/implicit_predicates.h>
 
 namespace simplicial_arrangement {
-
-inline int8_t signof(implicit_predicates::Orientation o)
-{
-    assert(o != implicit_predicates::INVALID);
-    if (o > 0)
-        return 1;
-    else if (o < 0)
-        return -1;
-    else
-        return 0;
-}
 
 template <typename Scalar>
 int8_t mi_cut_0_face(const MaterialRepo<Scalar, 2>& materials,

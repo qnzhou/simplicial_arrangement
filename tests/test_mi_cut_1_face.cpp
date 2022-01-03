@@ -32,7 +32,7 @@ void test_2D()
 
         const size_t num_edges = mi_complex.edges.size();
         for (size_t eid = 0; eid < num_edges; eid++) {
-            const auto& e = mi_complex.edges[eid];
+            const auto e = mi_complex.edges[eid];
             if (e.vertices[0] == 0 && e.vertices[1] == 1) {
                 // Cut at vertex.
                 auto r = mi_cut_1_face(mi_complex, eid, material_index, orientations);
@@ -59,7 +59,7 @@ void test_2D()
         cut_edge.positive_material_label = 5;
         cut_edge.negative_material_label = 6;
         mi_complex.edges.push_back(std::move(cut_edge));
-        const auto& e = mi_complex.edges.back();
+        const auto e = mi_complex.edges.back();
 
         SECTION("Cross cut")
         {
@@ -122,7 +122,7 @@ void test_3D()
 
         const size_t num_edges = mi_complex.edges.size();
         for (size_t eid = 0; eid < num_edges; eid++) {
-            const auto& e = mi_complex.edges[eid];
+            const auto e = mi_complex.edges[eid];
             if (e.vertices[0] == 0 && e.vertices[1] == 1) {
                 // Cut at vertex.
                 auto r = mi_cut_1_face(mi_complex, eid, material_index, orientations);
@@ -149,7 +149,7 @@ void test_3D()
 
         SECTION("Cross cut")
         {
-            const auto& e = mi_complex.edges.back();
+            const auto e = mi_complex.edges.back();
             size_t material_index = 8;
             auto orientations = test_utils::compute_orientations(mi_complex, repo, material_index);
             auto r = mi_cut_1_face(mi_complex, 6, material_index, orientations);
