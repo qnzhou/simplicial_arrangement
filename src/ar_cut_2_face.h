@@ -167,6 +167,13 @@ std::array<size_t, 3> ar_cut_2_face(ARComplex<DIM>& ar_complex,
     logger().debug("Adding positive subface: {}", faces.size() - 2);
     logger().debug("Adding negative subface: {}", faces.size() - 1);
 
+    // Update face id on each side of cut edge.
+    if constexpr (DIM == 2) {
+        auto& e = edges[cut_edge_index];
+        e.positive_face = faces.size() - 2;
+        e.negative_face = faces.size() - 1;
+    }
+
     return {faces.size() - 2, faces.size() - 1, cut_edge_index};
 }
 

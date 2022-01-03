@@ -24,6 +24,8 @@ struct AREdge<2>
 {
     std::array<size_t, 2> vertices = {INVALID, INVALID}; ///< ordered.
     size_t supporting_plane = INVALID;
+    size_t positive_face = INVALID;
+    size_t negative_face = INVALID;
 };
 
 template <>
@@ -45,6 +47,8 @@ struct ARFace<3>
 {
     std::vector<size_t> edges; ///< ordered.
     size_t supporting_plane = INVALID;
+    size_t positive_cell = INVALID;
+    size_t negative_cell = INVALID;
 };
 
 template <>

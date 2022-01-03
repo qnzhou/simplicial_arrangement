@@ -1,79 +1,14 @@
 #include "add_material.h"
 #include "MaterialInterfaceBuilder.h"
+#include "consolidate_complex.h"
 #include "mi_cut.h"
 #include "mi_union.h"
-#include "utils.h"
 
-#include <implicit_predicates/implicit_predicates.h>
-
-#include <optional>
+#include <array>
+#include <vector>
 
 namespace {
 using namespace simplicial_arrangement;
-
-/**
- * Remove unused verices and faces.
- */
-template <int DIM>
-void consolidate(MIComplex<DIM>& mi_complex)
-{
-    // Shrink faces.
-    if constexpr (DIM == 3) {
-        std::vector<bool> active_faces(mi_complex.faces.size(), false);
-        for (auto& c : mi_complex.cells) {
-            for (auto fid : c.faces) {
-                active_faces[fid] = true;
-            }
-        }
-
-        auto index_map = shrink(mi_complex.faces, [&](size_t fid) { return active_faces[fid]; });
-
-        for (auto& c : mi_complex.cells) {
-            std::transform(c.faces.begin(), c.faces.end(), c.faces.begin(), [&](size_t i) {
-                assert(index_map[i] != INVALID);
-                return index_map[i];
-            });
-        }
-    }
-
-    // Shrink edges.
-    {
-        std::vector<bool> active_edges(mi_complex.edges.size(), false);
-        for (auto& f : mi_complex.faces) {
-            for (auto eid : f.edges) {
-                active_edges[eid] = true;
-            }
-        }
-
-        auto index_map = shrink(mi_complex.edges, [&](size_t eid) { return active_edges[eid]; });
-
-        for (auto& f : mi_complex.faces) {
-            std::transform(f.edges.begin(), f.edges.end(), f.edges.begin(), [&](size_t i) {
-                assert(index_map[i] != INVALID);
-                return index_map[i];
-            });
-        }
-    }
-
-    // Shrink vertices.
-    {
-        std::vector<bool> active_vertices(mi_complex.vertices.size(), false);
-        for (auto& e : mi_complex.edges) {
-            for (auto vid : e.vertices) {
-                assert(vid != INVALID);
-                active_vertices[vid] = true;
-            }
-        }
-
-        auto index_map =
-            shrink(mi_complex.vertices, [&](size_t vid) { return active_vertices[vid]; });
-
-        for (auto& e : mi_complex.edges) {
-            e.vertices[0] = index_map[e.vertices[0]];
-            e.vertices[1] = index_map[e.vertices[1]];
-        }
-    }
-}
 
 template <typename Scalar>
 void add_material(

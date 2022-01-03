@@ -26,9 +26,9 @@ public:
         const size_t num_planes = m_planes.get_num_planes() + DIM + 1;
         auto ar_complex = initialize_simplicial_ar_complex<DIM>();
         for (size_t i = 0; i < num_planes; i++) {
-            // TODO
-            // internal::add_plane(*this, ar_complex, i + DIM + 1);
+            internal::add_plane(m_planes, ar_complex, i + DIM + 1);
         }
+        m_arrangement = extract_arrangement(std::move(ar_complex));
     }
 
     const Plane<Scalar, DIM>& get_plane(size_t i) const {

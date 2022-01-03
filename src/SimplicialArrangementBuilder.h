@@ -23,7 +23,9 @@ public:
         "Only double and 128bit int are supported as Scalar.");
 
 public:
-    SimplicialArrangementBuilder(const std::vector<Plane<Scalar, DIM>>& planes) : m_planes(planes) {
+    SimplicialArrangementBuilder(const std::vector<Plane<Scalar, DIM>>& planes)
+        : m_planes(planes)
+    {
         set_planes();
         initialize();
     }
@@ -70,7 +72,8 @@ public:
         m_coplanar_planes.init(num_cutting_planes + DIM + 1);
     }
 
-    const Plane<Scalar, DIM>& get_plane(size_t i) const {
+    const Plane<Scalar, DIM>& get_plane(size_t i) const
+    {
         if (i <= DIM) {
             return m_simplex_planes[i];
         } else {
@@ -129,7 +132,10 @@ public:
         return m_coplanar_planes.extract_disjoint_sets();
     }
 
-    Arrangement<DIM> extract_arrangement() { return internal::extract_arrangement(*this); }
+    Arrangement<DIM> extract_arrangement()
+    {
+        return ::simplicial_arrangement::extract_arrangement(*this);
+    }
 
 private:
     inline void sort(Point<DIM>& p) const
@@ -144,7 +150,7 @@ private:
     }
 
 private:
-    std::array<Plane<Scalar, DIM>, DIM+1> m_simplex_planes;
+    std::array<Plane<Scalar, DIM>, DIM + 1> m_simplex_planes;
     const std::vector<Plane<Scalar, DIM>>& m_planes;
     utils::DisjointSets m_coplanar_planes;
     absl::flat_hash_map<Point<DIM>, size_t> m_vertex_index_map;

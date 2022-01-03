@@ -16,12 +16,18 @@ ARComplex<DIM> initialize_simplicial_ar_complex()
         ar_complex.vertices[2] = {0, 1};
 
         ar_complex.edges.resize(3);
-        ar_complex.edges[0].vertices = {1, 0};
-        ar_complex.edges[1].vertices = {2, 1};
-        ar_complex.edges[2].vertices = {0, 2};
-        ar_complex.edges[0].supporting_plane = 2;
-        ar_complex.edges[1].supporting_plane = 0;
-        ar_complex.edges[2].supporting_plane = 1;
+        ar_complex.edges[0].vertices = {2, 1};
+        ar_complex.edges[1].vertices = {0, 2};
+        ar_complex.edges[2].vertices = {1, 0};
+        ar_complex.edges[0].supporting_plane = 0;
+        ar_complex.edges[1].supporting_plane = 1;
+        ar_complex.edges[2].supporting_plane = 2;
+        ar_complex.edges[0].positive_face = 0;
+        ar_complex.edges[0].negative_face = INVALID;
+        ar_complex.edges[1].positive_face = 0;
+        ar_complex.edges[1].negative_face = INVALID;
+        ar_complex.edges[2].positive_face = 0;
+        ar_complex.edges[2].negative_face = INVALID;
 
         ar_complex.faces.resize(1);
         ar_complex.faces[0].edges = {0, 1, 2};
@@ -55,6 +61,14 @@ ARComplex<DIM> initialize_simplicial_ar_complex()
         ar_complex.faces[1].supporting_plane = 1;
         ar_complex.faces[2].supporting_plane = 2;
         ar_complex.faces[3].supporting_plane = 3;
+        ar_complex.faces[0].positive_cell = 0;
+        ar_complex.faces[0].negative_cell = INVALID;
+        ar_complex.faces[1].positive_cell = 0;
+        ar_complex.faces[1].negative_cell = INVALID;
+        ar_complex.faces[2].positive_cell = 0;
+        ar_complex.faces[2].negative_cell = INVALID;
+        ar_complex.faces[3].positive_cell = 0;
+        ar_complex.faces[3].negative_cell = INVALID;
 
         ar_complex.cells.resize(1);
         ar_complex.cells[0].faces = {0, 1, 2, 3};

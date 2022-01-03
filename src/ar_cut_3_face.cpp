@@ -110,6 +110,13 @@ std::array<size_t, 3> ar_cut_3_face(ARComplex<3>& ar_complex,
     cells.push_back(std::move(negative_cell));
     logger().debug("Adding positive subcell: {}", cells.size() - 2);
     logger().debug("Adding negative subcell: {}", cells.size() - 1);
+
+    {
+        assert(cut_face_id != INVALID);
+        auto& cut_f = faces[cut_face_id];
+        cut_f.positive_cell = cells.size() - 2;
+        cut_f.negative_cell = cells.size() - 1;
+    }
     return {cells.size() - 2, cells.size() - 1, cut_face_id};
 }
 
