@@ -163,25 +163,51 @@ size_t mi_union_2_faces(MIComplex<DIM>& mi_complex,
     auto& faces = mi_complex.faces;
 
     absl::flat_hash_set<size_t> bd_edges;
+    absl::flat_hash_map<size_t, bool> bd_edge_orientations;
     size_t num_active_half_edges = 0;
     for (auto fid : bd_face_indices) {
         num_active_half_edges += faces[fid].edges.size();
     }
     bd_edges.reserve(num_active_half_edges);
+    bd_edge_orientations.reserve(num_active_half_edges);
 
-    auto toggle = [&](size_t eid) {
+    auto toggle = [&](size_t eid) -> bool {
         auto itr = bd_edges.find(eid);
         if (itr == bd_edges.end()) {
             bd_edges.insert(eid);
+            return true;
         } else {
             bd_edges.erase(itr);
+            return false;
         }
+    };
+
+    auto compute_edge_orientation = [&](size_t fid, size_t local_id) {
+        const auto& f = faces[fid];
+        bool face_ori = true;
+        if constexpr (DIM == 3) {
+            face_ori = f.positive_material_label < DIM + 1;
+        }
+
+        size_t curr_eid = f.edges[local_id];
+        size_t next_eid = f.edges[(local_id + 1) % f.edges.size()];
+
+        const auto& curr_e = edges[curr_eid];
+        const auto& next_e = edges[next_eid];
+
+        bool edge_ori =
+            (curr_e.vertices[1] == next_e.vertices[0] || curr_e.vertices[1] == next_e.vertices[1]);
+
+        return !(face_ori ^ edge_ori);
     };
 
     for (size_t fid : bd_face_indices) {
         const auto& f = faces[fid];
-        for (size_t eid : f.edges) {
-            toggle(eid);
+        const size_t num_face_edges = f.edges.size();
+        for (size_t i = 0; i < num_face_edges; i++) {
+            if (toggle(f.edges[i])) {
+                bd_edge_orientations[f.edges[i]] = compute_edge_orientation(fid, i);
+            }
         }
 
         if constexpr (DIM == 2) {
@@ -232,39 +258,76 @@ size_t mi_union_2_faces(MIComplex<DIM>& mi_complex,
             }
         }
     }
-    for (const auto& edge_group : to_merge) {
-        if (edge_group.empty()) continue;
-        size_t out_eid = mi_union_1_faces(mi_complex, material_index, edge_group, edge_map);
-        assert(out_eid != INVALID);
-        for (auto eid : edge_group) {
-            bd_edges.erase(eid);
+    {
+        std::vector<bool> edge_group_orientations;
+        for (const auto& edge_group : to_merge) {
+            if (edge_group.empty()) continue;
+            edge_group_orientations.clear();
+
+            size_t out_eid = mi_union_1_faces(mi_complex, material_index, edge_group, edge_map);
+            assert(out_eid != INVALID);
+            for (auto eid : edge_group) {
+                bd_edges.erase(eid);
+            }
+            bd_edges.insert(out_eid);
+            const auto& out_edge = edges[out_eid];
+            for (auto eid : edge_group) {
+                const auto& e = edges[eid];
+                size_t start_vid = bd_edge_orientations[eid] ? e.vertices[0] : e.vertices[1];
+                if (out_edge.vertices[0] == start_vid) {
+                    bd_edge_orientations[out_eid] = true;
+                    break;
+                } else if (out_edge.vertices[1] == start_vid) {
+                    bd_edge_orientations[out_eid] = false;
+                    break;
+                }
+            }
+            assert(bd_edge_orientations.find(out_eid) != bd_edge_orientations.end());
         }
-        bd_edges.insert(out_eid);
     }
 
     size_t num_bd_edges = bd_edges.size();
     MIFace<DIM> combined_face;
     combined_face.edges.reserve(num_bd_edges);
-    for (size_t eid : bd_edges) {
-        combined_face.edges.push_back(eid);
+    {
+        // Chain bd edges together.
+        absl::flat_hash_map<size_t, size_t> v2e;
+        v2e.reserve(num_bd_edges);
+
+        for (size_t eid : bd_edges) {
+            const auto& e = edges[eid];
+            size_t start_vid = bd_edge_orientations[eid] ? e.vertices[0] : e.vertices[1];
+            v2e[start_vid] = eid;
+        }
+
+        combined_face.edges.push_back(*bd_edges.begin());
+        while (combined_face.edges.size() < num_bd_edges) {
+            size_t eid = combined_face.edges.back();
+            const auto& e = edges[eid];
+            size_t end_vid = bd_edge_orientations[eid] ? e.vertices[1] : e.vertices[0];
+            auto itr = v2e.find(end_vid);
+            assert(itr != v2e.end());
+            size_t next_eid = itr->second;
+            combined_face.edges.push_back(next_eid);
+        }
     }
     if constexpr (DIM == 2) {
         combined_face.material_label = material_index;
     } else {
         // For 3D combined face must be on a tet boundary triangle.
+        combined_face.negative_material_label = material_index; // by construction.
         const auto& old_face = faces[bd_face_indices.front()];
         if (old_face.positive_material_label <= 3) {
             assert(old_face.negative_material_label > 3);
             combined_face.positive_material_label = old_face.positive_material_label;
-            combined_face.negative_material_label = material_index;
         } else {
             assert(old_face.positive_material_label > 3);
             assert(old_face.negative_material_label <= 3);
-            combined_face.positive_material_label = material_index;
-            combined_face.negative_material_label = old_face.negative_material_label;
+            combined_face.positive_material_label = old_face.negative_material_label;
         }
     }
 
+    assert(utils::edges_are_ordered(edges, combined_face.edges));
     faces.push_back(std::move(combined_face));
     return faces.size() - 1;
 }

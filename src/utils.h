@@ -39,4 +39,21 @@ std::vector<size_t> shrink(std::vector<T>& c, const KeepFunc& keep)
     return index_map;
 }
 
-} // namespace simplicial_arrangement
+template <typename EdgeType>
+bool edges_are_ordered(const std::vector<EdgeType>& edges, const std::vector<size_t>& edge_ids)
+{
+    const size_t num_involved_edges = edge_ids.size();
+    for (size_t i = 0; i < num_involved_edges; i++) {
+        const auto& curr_e = edges[edge_ids[i]];
+        const auto& next_e = edges[edge_ids[(i + 1) % num_involved_edges]];
+
+        if (curr_e.vertices[0] == next_e.vertices[0] || curr_e.vertices[0] == next_e.vertices[1])
+            continue;
+        if (curr_e.vertices[1] == next_e.vertices[0] || curr_e.vertices[1] == next_e.vertices[1])
+            continue;
+        return false;
+    }
+    return true;
+}
+
+} // namespace simplicial_arrangement::utils
