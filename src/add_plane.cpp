@@ -8,8 +8,10 @@
 
 namespace {
 
+using namespace simplicial_arrangement;
+
 template <typename Scalar>
-void add_plane(const PlaneRepo<Scalar, 2>& repo, ARComplex<2>& ar_complex, size_t plane_index)
+size_t add_plane(const PlaneRepo<Scalar, 2>& repo, ARComplex<2>& ar_complex, size_t plane_index)
 {
     const size_t num_vertices = ar_complex.vertices.size();
     const size_t num_edges = ar_complex.edges.size();
@@ -17,9 +19,9 @@ void add_plane(const PlaneRepo<Scalar, 2>& repo, ARComplex<2>& ar_complex, size_
     logger().debug("adding material {}", plane_index);
     logger().debug("Before: {} {} {}", num_vertices, num_edges, num_faces);
 
-    auto& vertices = ar_comlpex.vertices;
-    auto& edges = ar_comlpex.edges;
-    auto& faces = ar_comlpex.faces;
+    auto& vertices = ar_complex.vertices;
+    auto& edges = ar_complex.edges;
+    auto& faces = ar_complex.faces;
 
     // Reserve capacity.
     vertices.reserve(num_vertices + num_edges);
@@ -30,24 +32,24 @@ void add_plane(const PlaneRepo<Scalar, 2>& repo, ARComplex<2>& ar_complex, size_
     std::vector<int8_t> orientations;
     orientations.reserve(num_vertices);
     for (size_t i = 0; i < num_vertices; i++) {
-        orientations.push_back(ar_cut_0_face(repo, ar_comlpex, i, plane_index));
+        orientations.push_back(ar_cut_0_face(repo, ar_complex, i, plane_index));
     }
 
     // Step 2: handle 1-faces.
     std::vector<std::array<size_t, 3>> subedges;
     subedges.reserve(num_edges);
     for (size_t i = 0; i < num_edges; i++) {
-        subedges.push_back(ar_cut_1_face(ar_comlpex, i, plane_index, orientations));
+        subedges.push_back(ar_cut_1_face(ar_complex, i, plane_index, orientations));
     }
 
     // Step 3: handle 2-faces.
     std::vector<std::array<size_t, 3>> subfaces;
     subfaces.reserve(num_faces);
     for (size_t i = 0; i < num_faces; i++) {
-        subfaces.push_back(ar_cut_2_face(ar_comlpex, i, plane_index, orientations, subedges));
+        subfaces.push_back(ar_cut_2_face(ar_complex, i, plane_index, orientations, subedges));
     }
 
-    // Step 4: Remove old faces and update indices.
+    // Step 4: remove old faces and update indices.
     {
         std::vector<bool> to_keep(faces.size(), false);
         for (const auto& subface : subfaces) {
@@ -64,16 +66,29 @@ void add_plane(const PlaneRepo<Scalar, 2>& repo, ARComplex<2>& ar_complex, size_
         }
     }
 
-    // Step 5: consolidate.
-    consolidate(ar_comlpex);
+    // Step 5: check for coplanar planes.
+    size_t coplanar_plane = INVALID;
+    for (size_t i=0; i<num_edges; i++) {
+        const auto& subedge = subedges[i];
+        if (subedge[0] == INVALID && subedge[1] == INVALID) {
+            const auto& e = edges[i];
+            coplanar_plane = e.supporting_plane;
+            break;
+        }
+    }
+
+    // Step 6: consolidate.
+    consolidate(ar_complex);
     logger().debug("After: {} {} {}",
-        ar_comlpex.vertices.size(),
-        ar_comlpex.edges.size(),
-        ar_comlpex.faces.size());
+        ar_complex.vertices.size(),
+        ar_complex.edges.size(),
+        ar_complex.faces.size());
+
+    return coplanar_plane;
 }
 
 template <typename Scalar>
-void add_plane(const PlaneRepo<Scalar, 3>& repo, MIComplex<3>& ar_complex, size_t plane_index)
+size_t add_plane(const PlaneRepo<Scalar, 3>& repo, ARComplex<3>& ar_complex, size_t plane_index)
 {
     const size_t num_vertices = ar_complex.vertices.size();
     const size_t num_edges = ar_complex.edges.size();
@@ -121,10 +136,10 @@ void add_plane(const PlaneRepo<Scalar, 3>& repo, MIComplex<3>& ar_complex, size_
         subcells.push_back(ar_cut_3_face(ar_complex, i, plane_index, subfaces));
     }
 
-    // Step 5: Remove old cells and update cell indices
+    // Step 5: remove old cells and update cell indices
     {
         std::vector<bool> to_keep(cells.size(), false);
-        for (const auto& subcells : subcells) {
+        for (const auto& subcell : subcells) {
             if (subcell[0] != INVALID) to_keep[subcell[0]] = true;
             if (subcell[1] != INVALID) to_keep[subcell[1]] = true;
         }
@@ -138,37 +153,49 @@ void add_plane(const PlaneRepo<Scalar, 3>& repo, MIComplex<3>& ar_complex, size_
         }
     }
 
-    // Step 6: consolidate.
+    // Step 6: check for coplanar planes.
+    size_t coplanar_plane = INVALID;
+    for (size_t i=0; i<num_faces; i++) {
+        const auto& subface = subfaces[i];
+        if (subface[0] == INVALID && subface[1] == INVALID) {
+            const auto& f = faces[i];
+            coplanar_plane = f.supporting_plane;
+        }
+    }
+
+    // Step 7: consolidate.
     consolidate(ar_complex);
     logger().debug("After: {} {} {} {}",
         ar_complex.vertices.size(),
         ar_complex.edges.size(),
         ar_complex.faces.size(),
         ar_complex.cells.size());
+
+    return coplanar_plane;
 }
 
 } // namespace
 
 namespace simplicial_arrangement::internal {
 
-void add_plane(const PlaneRepo<double, 2>& repo, ARComplex<2>& ar_complex, size_t plane_index)
+size_t add_plane(const PlaneRepo<double, 2>& repo, ARComplex<2>& ar_complex, size_t plane_index)
 {
-    ::add_plane(repo, ar_complex, plane_index);
+    return ::add_plane(repo, ar_complex, plane_index);
 }
 
-void add_plane(const PlaneRepo<Int, 2>& repo, ARComplex<2>& ar_complex, size_t plane_index)
+size_t add_plane(const PlaneRepo<Int, 2>& repo, ARComplex<2>& ar_complex, size_t plane_index)
 {
-    ::add_plane(repo, ar_complex, plane_index);
+    return ::add_plane(repo, ar_complex, plane_index);
 }
 
-void add_plane(const PlaneRepo<double, 3>& repo, ARComplex<3>& ar_complex, size_t plane_index)
+size_t add_plane(const PlaneRepo<double, 3>& repo, ARComplex<3>& ar_complex, size_t plane_index)
 {
-    ::add_plane(repo, ar_complex, plane_index);
+    return ::add_plane(repo, ar_complex, plane_index);
 }
 
-void add_plane(const PlaneRepo<Int, 3>& repo, ARComplex<2>& ar_complex, size_t plane_index)
+size_t add_plane(const PlaneRepo<Int, 3>& repo, ARComplex<3>& ar_complex, size_t plane_index)
 {
-    ::add_plane(repo, ar_complex, plane_index);
+    return ::add_plane(repo, ar_complex, plane_index);
 }
 
 } // namespace simplicial_arrangement::internal

@@ -26,7 +26,7 @@ void test_3D()
     planes.push_back({-1, 1, -2, 0}); // plane 11
 
     PlaneRepo<Scalar, 3> repo(planes);
-    auto ar_complex = initialize_simplicial_ar_complex<3>();
+    auto ar_complex = initialize_simplicial_ar_complex<3>(planes.size() * 2);
     test_utils::initialize_signs(ar_complex, planes.size());
 
     SECTION("Tangent case: cell")

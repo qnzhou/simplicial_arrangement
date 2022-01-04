@@ -13,6 +13,7 @@ std::array<size_t, 3> ar_cut_3_face(ARComplex<3>& ar_complex,
     size_t plane_index,
     const std::vector<std::array<size_t, 3>>& subfaces)
 {
+    auto& edges = ar_complex.edges;
     auto& faces = ar_complex.faces;
     auto& cells = ar_complex.cells;
 
@@ -24,9 +25,46 @@ std::array<size_t, 3> ar_cut_3_face(ARComplex<3>& ar_complex,
     std::vector<size_t> positive_subfaces;
     std::vector<size_t> negative_subfaces;
     std::vector<size_t> cut_edges;
+    std::vector<bool> cut_edge_orientations;
     positive_subfaces.reserve(num_bd_faces + 1);
     negative_subfaces.reserve(num_bd_faces + 1);
     cut_edges.reserve(num_bd_faces);
+    cut_edge_orientations.reserve(num_bd_faces);
+
+    auto compute_cut_edge_orientation = [&](size_t fid,
+                                            const std::array<size_t, 3>& subface) -> bool {
+        assert(subface[2] != INVALID);
+        const auto& f = faces[fid];
+        bool s = c.signs[f.supporting_plane];
+
+        if (subface[0] == INVALID || subface[1] == INVALID) {
+            // Intersection edge is on the boundary of the face.
+            auto itr = std::find(f.edges.begin(), f.edges.end(), subface[2]);
+            assert(itr != f.edges.end());
+            size_t curr_i = itr - f.edges.begin();
+            size_t next_i = (curr_i + 1) % f.edges.size();
+
+            const auto& curr_e = edges[f.edges[curr_i]];
+            const auto& next_e = edges[f.edges[next_i]];
+            bool edge_is_consistent_with_face = (curr_e.vertices[1] == next_e.vertices[0] ||
+                                                 curr_e.vertices[1] == next_e.vertices[1]);
+
+            bool on_positive_side = subface[0] != INVALID;
+            logger().debug("cell/face: {}, face/edge: {}, face/cut plane: {}",
+                s,
+                edge_is_consistent_with_face,
+                on_positive_side);
+
+            uint8_t key = 0;
+            if (s) key++;
+            if (edge_is_consistent_with_face) key++;
+            if (on_positive_side) key++;
+            return key % 2 == 0;
+        } else {
+            // Intersection edge is a cross cut.
+            return !s;
+        }
+    };
 
     for (auto fid : c.faces) {
         const auto& subface = subfaces[fid];
@@ -41,6 +79,7 @@ std::array<size_t, 3> ar_cut_3_face(ARComplex<3>& ar_complex,
         }
         if (subface[2] != INVALID) {
             cut_edges.push_back(subface[2]);
+            cut_edge_orientations.push_back(compute_cut_edge_orientation(fid, subface));
         }
     }
 
@@ -57,28 +96,38 @@ std::array<size_t, 3> ar_cut_3_face(ARComplex<3>& ar_complex,
 
     // Chain cut edges into a loop.
     {
-        const auto& edges = ar_complex.edges;
         size_t num_cut_edges = cut_edges.size();
         assert(num_cut_edges >= 3);
-        size_t num_vertices = ar_complex.vertices.size();
-        std::vector<size_t> v2e(num_vertices, INVALID);
-        for (size_t i=0; i<num_cut_edges; i++) {
+        absl::flat_hash_map<size_t, size_t> v2e;
+        v2e.reserve(num_cut_edges);
+        for (size_t i = 0; i < num_cut_edges; i++) {
             const auto eid = cut_edges[i];
             const auto& e = edges[eid];
-            v2e[e.vertices[0]] = eid;
+            if (cut_edge_orientations[i]) {
+                v2e[e.vertices[0]] = i;
+            } else {
+                v2e[e.vertices[1]] = i;
+            }
         }
         std::vector<size_t> chained_cut_edges;
         chained_cut_edges.reserve(num_cut_edges);
-        chained_cut_edges.push_back(cut_edges.front());
-        while(chained_cut_edges.size() < num_cut_edges) {
-            const auto& e = edges[chained_cut_edges.back()];
-            const size_t next_e = v2e[e.vertices[1]];
-            assert(next_e != INVALID);
-            if (next_e == chained_cut_edges.front()) {
+        chained_cut_edges.push_back(0);
+        while (chained_cut_edges.size() < num_cut_edges) {
+            const size_t i = chained_cut_edges.back();
+            const auto& e = edges[cut_edges[i]];
+            const size_t vid = cut_edge_orientations[i] ? e.vertices[1] : e.vertices[0];
+            const auto itr = v2e.find(vid);
+            assert(itr != v2e.end());
+            const size_t next_i = itr->second;
+            if (cut_edges[next_i] == cut_edges[chained_cut_edges.front()]) {
                 break;
             }
-            chained_cut_edges.push_back(next_e);
+            chained_cut_edges.push_back(next_i);
         }
+        std::transform(chained_cut_edges.begin(),
+            chained_cut_edges.end(),
+            chained_cut_edges.begin(),
+            [&](size_t i) { return cut_edges[i]; });
         std::swap(cut_edges, chained_cut_edges);
     }
 
@@ -108,16 +157,45 @@ std::array<size_t, 3> ar_cut_3_face(ARComplex<3>& ar_complex,
 
     cells.push_back(std::move(positive_cell));
     cells.push_back(std::move(negative_cell));
-    logger().debug("Adding positive subcell: {}", cells.size() - 2);
-    logger().debug("Adding negative subcell: {}", cells.size() - 1);
+    size_t positive_cell_id = cells.size() - 2;
+    size_t negative_cell_id = cells.size() - 1;
+    logger().debug("Adding positive subcell: {}", positive_cell_id);
+    logger().debug("Adding negative subcell: {}", negative_cell_id);
 
+    // Update cell id on each side of involved faces.
     {
+        // cut face
         assert(cut_face_id != INVALID);
         auto& cut_f = faces[cut_face_id];
-        cut_f.positive_cell = cells.size() - 2;
-        cut_f.negative_cell = cells.size() - 1;
+        cut_f.positive_cell = positive_cell_id;
+        cut_f.negative_cell = negative_cell_id;
+
+        auto& positive_c = cells[positive_cell_id];
+        auto& negative_c = cells[negative_cell_id];
+
+        for (auto fid : positive_c.faces) {
+            if (fid == cut_face_id) continue;
+            auto& f = faces[fid];
+            assert(f.positive_cell == cid || f.negative_cell == cid);
+            if (f.positive_cell == cid) {
+                f.positive_cell = positive_cell_id;
+            } else {
+                f.negative_cell = positive_cell_id;
+            }
+        }
+        for (auto fid : negative_c.faces) {
+            if (fid == cut_face_id) continue;
+            auto& f = faces[fid];
+            assert(f.positive_cell == cid || f.negative_cell == cid);
+            if (f.positive_cell == cid) {
+                f.positive_cell = negative_cell_id;
+            } else {
+                f.negative_cell = negative_cell_id;
+            }
+        }
     }
-    return {cells.size() - 2, cells.size() - 1, cut_face_id};
+
+    return {positive_cell_id, negative_cell_id, cut_face_id};
 }
 
 } // namespace simplicial_arrangement

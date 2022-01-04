@@ -26,7 +26,12 @@ std::array<size_t, 3> ar_cut_1_face(ARComplex<DIM>& ar_complex,
     const auto& end_points = e.vertices;
     const auto o0 = orientations[end_points[0]];
     const auto o1 = orientations[end_points[1]];
-    logger().debug("orientations {} {}", o0, o1);
+    logger().debug("edge {} has end points ({}, {}) with orientations {} {}",
+        eid,
+        end_points[0],
+        end_points[1],
+        o0,
+        o1);
 
     if (o0 == 0) intersection_id = end_points[0];
     if (o1 == 0) intersection_id = end_points[1];
@@ -72,6 +77,10 @@ std::array<size_t, 3> ar_cut_1_face(ARComplex<DIM>& ar_complex,
         if constexpr (DIM == 2) {
             positive_subedge.supporting_plane = e.supporting_plane;
             negative_subedge.supporting_plane = e.supporting_plane;
+            positive_subedge.positive_face = e.positive_face;
+            positive_subedge.negative_face = e.negative_face;
+            negative_subedge.positive_face = e.positive_face;
+            negative_subedge.negative_face = e.negative_face;
         } else {
             positive_subedge.supporting_planes = e.supporting_planes;
             negative_subedge.supporting_planes = e.supporting_planes;

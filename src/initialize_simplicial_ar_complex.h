@@ -5,7 +5,7 @@
 namespace simplicial_arrangement {
 
 template <int DIM>
-ARComplex<DIM> initialize_simplicial_ar_complex()
+ARComplex<DIM> initialize_simplicial_ar_complex(size_t num_planes)
 {
     ARComplex<DIM> ar_complex;
     ar_complex.vertices.resize(DIM + 1);
@@ -32,6 +32,7 @@ ARComplex<DIM> initialize_simplicial_ar_complex()
         ar_complex.faces.resize(1);
         ar_complex.faces[0].edges = {0, 1, 2};
         ar_complex.faces[0].signs = {true, true, true};
+        ar_complex.faces[0].signs.resize(num_planes, false);
     } else {
         ar_complex.vertices[0] = {1, 2, 3};
         ar_complex.vertices[1] = {2, 3, 0};
@@ -73,6 +74,7 @@ ARComplex<DIM> initialize_simplicial_ar_complex()
         ar_complex.cells.resize(1);
         ar_complex.cells[0].faces = {0, 1, 2, 3};
         ar_complex.cells[0].signs = {true, true, true, true};
+        ar_complex.cells[0].signs.resize(num_planes, false);
     }
     return ar_complex;
 }

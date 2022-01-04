@@ -24,7 +24,7 @@ void test_2D()
     planes.push_back({-1, 1, 1}); // plane 8
 
     PlaneRepo<Scalar, 2> repo(planes);
-    auto ar_complex = initialize_simplicial_ar_complex<2>();
+    auto ar_complex = initialize_simplicial_ar_complex<2>(planes.size() * 2);
 
     SECTION("Tangent case")
     {
@@ -101,7 +101,7 @@ void test_3D()
     planes.push_back({1, -1, -1, -1}); // plane 10
 
     PlaneRepo<Scalar, 3> repo(planes);
-    auto ar_complex = initialize_simplicial_ar_complex<3>();
+    auto ar_complex = initialize_simplicial_ar_complex<3>(planes.size() * 2);
 
     SECTION("Tangent case") {
         size_t plane_index = 5;

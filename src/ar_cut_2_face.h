@@ -103,13 +103,6 @@ std::array<size_t, 3> ar_cut_2_face(ARComplex<DIM>& ar_complex,
         if (positive_subedges.empty()) {
             assert(!negative_subedges.empty());
             if constexpr (DIM == 2) f.signs[plane_index] = false;
-            if (cut_edge_index != INVALID) {
-                // Cut edge is part of the face on the negative side.
-                // Need to swap its end points so all cut edges are consistently
-                // oriented.
-                auto& e = edges[cut_edge_index];
-                std::swap(e.vertices[0], e.vertices[1]);
-            }
             return {INVALID, fid, cut_edge_index};
         } else {
             assert(!positive_subedges.empty());
@@ -142,6 +135,10 @@ std::array<size_t, 3> ar_cut_2_face(ARComplex<DIM>& ar_complex,
     } else {
         positive_subface.supporting_plane = f.supporting_plane;
         negative_subface.supporting_plane = f.supporting_plane;
+        positive_subface.positive_cell = f.positive_cell;
+        positive_subface.negative_cell = f.negative_cell;
+        negative_subface.positive_cell = f.positive_cell;
+        negative_subface.negative_cell = f.negative_cell;
     }
 
     assert(cut_edge_index != INVALID);
@@ -164,17 +161,46 @@ std::array<size_t, 3> ar_cut_2_face(ARComplex<DIM>& ar_complex,
 
     faces.push_back(std::move(positive_subface));
     faces.push_back(std::move(negative_subface));
-    logger().debug("Adding positive subface: {}", faces.size() - 2);
-    logger().debug("Adding negative subface: {}", faces.size() - 1);
+    size_t positive_fid = faces.size() - 2;
+    size_t negative_fid = faces.size() - 1;
+    logger().debug("Adding positive subface: {}", positive_fid);
+    logger().debug("Adding negative subface: {}", negative_fid);
 
-    // Update face id on each side of cut edge.
+    // Update face id on each side of involved edge.
     if constexpr (DIM == 2) {
-        auto& e = edges[cut_edge_index];
-        e.positive_face = faces.size() - 2;
-        e.negative_face = faces.size() - 1;
+        // Cut edge.
+        {
+            auto& e = edges[cut_edge_index];
+            e.positive_face = positive_fid;
+            e.negative_face = negative_fid;
+        }
+
+        auto& positive_f = faces[positive_fid];
+        auto& negative_f = faces[negative_fid];
+
+        for (auto eid : positive_f.edges) {
+            if (eid == cut_edge_index) continue;
+            auto& e = edges[eid];
+            assert(e.positive_face == fid || e.negative_face == fid);
+            if (e.positive_face == fid) {
+                e.positive_face = positive_fid;
+            } else {
+                e.negative_face = positive_fid;
+            }
+        }
+        for (auto eid : negative_f.edges) {
+            if (eid == cut_edge_index) continue;
+            auto& e = edges[eid];
+            assert(e.positive_face == fid || e.negative_face == fid);
+            if (e.positive_face == fid) {
+                e.positive_face = negative_fid;
+            } else {
+                e.negative_face = negative_fid;
+            }
+        }
     }
 
-    return {faces.size() - 2, faces.size() - 1, cut_edge_index};
+    return {positive_fid, negative_fid, cut_edge_index};
 }
 
 } // namespace simplicial_arrangement

@@ -22,7 +22,7 @@ void test_2D()
     planes.push_back({-1, -1, 2}); // plane 8
 
     PlaneRepo<Scalar, 2> repo(planes);
-    auto ar_complex = initialize_simplicial_ar_complex<2>();
+    auto ar_complex = initialize_simplicial_ar_complex<2>(planes.size() + 3);
 
     REQUIRE(ar_cut_0_face(repo, ar_complex, 0, 3) == 0);
     REQUIRE(ar_cut_0_face(repo, ar_complex, 0, 4) > 0);
@@ -46,7 +46,7 @@ void test_3D()
     planes.push_back({-1, -1, 2, 2}); // plane 10
 
     PlaneRepo<Scalar, 3> repo(planes);
-    auto ar_complex = initialize_simplicial_ar_complex<3>();
+    auto ar_complex = initialize_simplicial_ar_complex<3>(planes.size() + 4);
 
     REQUIRE(ar_cut_0_face(repo, ar_complex, 0, 4) == 0);
     REQUIRE(ar_cut_0_face(repo, ar_complex, 0, 5) > 0);

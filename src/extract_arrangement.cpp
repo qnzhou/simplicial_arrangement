@@ -392,8 +392,9 @@ Arrangement<2> extract_arrangement(ARComplex<2>&& ar_complex)
         auto& ce = edges[i];
         auto& e = ar.faces[i];
         e.vertices = {ce.vertices[0], ce.vertices[1]};
-        e.positive_cell = INVALID; // TODO
-        e.negative_cell = INVALID; // TODO
+        e.positive_cell = ce.positive_face;
+        e.negative_cell = ce.negative_face;
+        e.supporting_plane = ce.supporting_plane;
     }
 
     auto& faces = ar_complex.faces;
@@ -405,6 +406,15 @@ Arrangement<2> extract_arrangement(ARComplex<2>&& ar_complex)
         auto& f = ar.cells[i];
         f.faces = std::move(cf.edges);
         f.plane_orientations = std::move(cf.signs);
+    }
+
+    // TODO: This section is computing redundant face orientation info.
+    for (auto& c : ar.cells) {
+        c.face_orientations.reserve(c.faces.size());
+        for (auto fid : c.faces) {
+            const auto& f = ar.faces[fid];
+            c.face_orientations.push_back(c.plane_orientations[f.supporting_plane]);
+        }
     }
 
     return ar;
@@ -440,8 +450,9 @@ Arrangement<3> extract_arrangement(ARComplex<3>&& ar_complex)
             }
         }
 
-        f.positive_cell = INVALID; // TODO
-        f.negative_cell = INVALID; // TODO
+        f.positive_cell = cf.positive_cell;
+        f.negative_cell = cf.negative_cell;
+        f.supporting_plane = cf.supporting_plane;
     }
 
     auto& cells = ar_complex.cells;
@@ -453,6 +464,15 @@ Arrangement<3> extract_arrangement(ARComplex<3>&& ar_complex)
         auto& c = ar.cells[i];
         c.faces = std::move(cc.faces);
         c.plane_orientations = std::move(cc.signs);
+    }
+
+    // TODO: This section is computing redundant face orientation info.
+    for (auto& c : ar.cells) {
+        c.face_orientations.reserve(c.faces.size());
+        for (auto fid : c.faces) {
+            const auto& f = ar.faces[fid];
+            c.face_orientations.push_back(c.plane_orientations[f.supporting_plane]);
+        }
     }
 
     return ar;
