@@ -3,16 +3,7 @@ if(TARGET fast_arrangement::fast_arrangement)
 endif()
 
 include(FetchContent)
-
-# Indirect predicate
-FetchContent_Declare(
-    indirect_predicates
-    GIT_REPOSITORY https://github.com/qnzhou/Indirect_Predicates.git
-    GIT_TAG master
-)
-
-FetchContent_MakeAvailable(indirect_predicates)
-add_library(indirect_predicates::indirect_predicates ALIAS indirectPredicates)
+include(indirect_predicates)
 
 # cinolib
 # It is a large library and it seems we do not need to build it directly.
