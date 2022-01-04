@@ -9,6 +9,8 @@
 #include "ScopedTimer.h"
 
 #include <absl/container/flat_hash_map.h>
+#include <absl/container/flat_hash_set.h>
+
 
 bool load_tet_mesh(const std::string& filename,
     std::vector<std::array<double, 3>>& pts,
@@ -181,6 +183,88 @@ bool save_iso_mesh_list(const std::string& filename,
     fout << jOut << std::endl;
     fout.close();
     return true;
+}
+
+bool save_tri_mesh(const std::string& filename,
+    const std::vector<std::array<double, 3>>& verts,
+    const std::vector<std::array<size_t, 3>>& tris)
+{
+    // assert iso_pts_list.size() == iso_faces_list.size()
+    using json = nlohmann::json;
+    std::ofstream fout(filename.c_str());
+    //
+    json jVerts;
+    for (size_t i = 0; i < verts.size(); i++) {
+        jVerts.push_back(json(verts[i]));
+    }
+    //
+    json jTris;
+    for (size_t i = 0; i < tris.size(); i++) {
+        jTris.push_back(json(tris[i]));
+    }
+    //
+    json jMesh = {jVerts, jTris};
+    fout << jMesh << std::endl;
+    fout.close();
+    return true;
+}
+
+// extract the boundary triangle mesh of a tet mesh
+// assume: the tet mesh represents a simply-connected 3D volume
+// assume: the triangles of the boundary mesh don't need to be consistently oriented
+// input:
+//  verts: num_vert * 3, tet mesh vertices
+//  tets: num_tet * 4, tet's corner vertices' indices
+// output:
+//  boundary_verts: num_boundary_vert * 3, boundary vertices
+//  boundary_faces: num_boundary_face * 3, boundary triangle's vertex indices
+void extract_tet_boundary_mesh(
+    const std::vector<std::array<double, 3>> &verts,
+    const std::vector<std::array<size_t, 4>> &tets,
+    std::vector<std::array<double, 3>> &boundary_verts, std::vector<std::array<size_t,3>> &boundary_faces)
+{
+    ScopedTimer<> timer("extract boundary triangle mesh of tet mesh");
+    absl::flat_hash_set<std::array<size_t, 3>> unpaired_tris;
+    std::vector<std::array<size_t, 3>> four_tris(4);
+    for (size_t i = 0; i < tets.size(); i++) {
+        auto tet = tets[i];
+        std::sort(tet.begin(), tet.end());
+        four_tris[0] = {tet[1], tet[2], tet[3]};
+        four_tris[1] = {tet[0], tet[2], tet[3]};
+        four_tris[2] = {tet[0], tet[1], tet[3]};
+        four_tris[3] = {tet[0], tet[1], tet[2]};
+        for (size_t j = 0; j < 4; j++) {
+            auto iter_inserted = unpaired_tris.insert(four_tris[j]);
+            if (!iter_inserted.second) {
+                // triangle inserted before, we found a pair of triangles, delete it
+                unpaired_tris.erase(iter_inserted.first);
+            }
+        }
+    }
+    //std::cout << "num boundary tris = " << unpaired_tris.size() << std::endl;
+    boundary_faces.clear();
+    boundary_faces.insert(boundary_faces.end(), unpaired_tris.begin(), unpaired_tris.end());
+    // map: tet vert index --> boundary vert index
+    std::vector<size_t> bndry_vId_of_tet_vert(verts.size(), Arrangement<3>::None);
+    size_t num_bndry_vert = 0;
+    for (auto& tri : boundary_faces) {
+        for (size_t i = 0; i < 3; ++i) {
+            size_t vId = tri[i];
+            if (bndry_vId_of_tet_vert[vId] == Arrangement<3>::None) {
+                // create new boundary vertex
+                bndry_vId_of_tet_vert[vId] = num_bndry_vert;
+                ++num_bndry_vert;
+            }
+            tri[i] = bndry_vId_of_tet_vert[vId];
+        }
+    }
+    // copy boundary vertices
+    boundary_verts.resize(num_bndry_vert);
+    for (size_t i = 0; i < verts.size(); ++i) {
+        if (bndry_vId_of_tet_vert[i] != Arrangement<3>::None) {
+            boundary_verts[bndry_vId_of_tet_vert[i]] = verts[i];
+        }
+    }
 }
 
 // given the list of vertex indices of a face, return the unique key of the face: (smallest vert Id, second smallest vert Id, largest vert Id)
@@ -1228,3 +1312,5 @@ void compute_arrangement_cells(size_t num_patch,
         }
     }
 }
+
+
