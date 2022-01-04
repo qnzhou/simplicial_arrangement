@@ -38,6 +38,29 @@ int main(int argc, const char* argv[])
     load_tet_mesh(tet_mesh_file, pts, tets);
     std::cout << "tet mesh: " << pts.size() << " verts, " << tets.size() << " tets." << std::endl;
 
+    // find all boundary triangles of the tet mesh
+     {
+        ScopedTimer<> timer("find boundary triangles of tet mesh");
+        absl::flat_hash_map<std::array<size_t, 3>, size_t> tet_of_tri;
+        std::vector<std::array<size_t, 3>> four_tris(4);
+        for (size_t i = 0; i < tets.size(); i++) {
+            auto tet = tets[i];
+            std::sort(tet.begin(), tet.end());
+            four_tris[0] = {tet[1], tet[2], tet[3]};
+            four_tris[1] = {tet[0], tet[2], tet[3]};
+            four_tris[2] = {tet[0], tet[1], tet[3]};
+            four_tris[3] = {tet[0], tet[1], tet[2]};
+            for (size_t j = 0; j < 4; j++) {
+                auto iter_inserted = tet_of_tri.try_emplace(four_tris[j], i);
+                if (!iter_inserted.second) {
+                    // triangle inserted before, delete it
+                    tet_of_tri.erase(iter_inserted.first);
+                }
+            }
+        }
+        std::cout << "num boundary tris = " << tet_of_tri.size() << std::endl;
+    }
+
     // load implicit function values, or evaluate
     size_t n_func = 4;
     std::vector<std::array<double,3>> centers(n_func);
@@ -300,6 +323,8 @@ int main(int argc, const char* argv[])
                                     cur_simp_cell.face_info[k] = opposite_simp_cell_id;
                                     simp_cells[opposite_simp_cell_id]
                                         .face_info[opposite_cell_face_id] = cur_simp_cell_id;
+                                    // delete face in hash table since a face can only be shared by two cells 
+                                    incident_cell_of_face.erase(iter_inserted.first); // this actually makes it slower
                                 }
                             }
                         }
@@ -338,11 +363,14 @@ int main(int argc, const char* argv[])
                             cur_simp_cell.face_info[j] = opposite_simp_cell_id;
                             simp_cells[opposite_simp_cell_id].face_info[opposite_cell_face_id] =
                                 cur_simp_cell_id;
+                            // delete face in hash table since a face can only be shared by two cells
+                            incident_cell_of_face.erase(iter_inserted.first); // this actually makes it slower
                         }
                     }
                     ++cur_simp_cell_id;
                 }
             }
+            //std::cout << "incident_cell_of_face.size() = " << incident_cell_of_face.size() << std::endl;
         }
         {
             // ------------------- group simplical cells into arrangement cells ---------------
