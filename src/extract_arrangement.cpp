@@ -1,4 +1,5 @@
 #include "extract_arrangement.h"
+#include "ARComplex.h"
 #include "SimplicialArrangementBuilder.h"
 
 #include <absl/container/flat_hash_map.h>
@@ -356,7 +357,7 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangementBuilder<Scalar, 3>& b
 
 } // namespace
 
-namespace simplicial_arrangement::internal {
+namespace simplicial_arrangement {
 
 Arrangement<2> extract_arrangement(SimplicialArrangementBuilder<double, 2>& builder)
 {
@@ -378,4 +379,103 @@ Arrangement<3> extract_arrangement(SimplicialArrangementBuilder<Int, 3>& builder
     return ::extract_arrangement_3D(builder);
 }
 
-} // namespace simplicial_arrangement::internal
+Arrangement<2> extract_arrangement(ARComplex<2>&& ar_complex)
+{
+    Arrangement<2> ar;
+    ar.vertices = std::move(ar_complex.vertices);
+
+    auto& edges = ar_complex.edges;
+    size_t num_edges = edges.size();
+    ar.faces.resize(num_edges);
+
+    for (size_t i = 0; i < num_edges; i++) {
+        auto& ce = edges[i];
+        auto& e = ar.faces[i];
+        e.vertices = {ce.vertices[0], ce.vertices[1]};
+        e.positive_cell = ce.positive_face;
+        e.negative_cell = ce.negative_face;
+        e.supporting_plane = ce.supporting_plane;
+    }
+
+    auto& faces = ar_complex.faces;
+    size_t num_faces = faces.size();
+    ar.cells.resize(num_faces);
+
+    for (size_t i = 0; i < num_faces; i++) {
+        auto& cf = faces[i];
+        auto& f = ar.cells[i];
+        f.faces = std::move(cf.edges);
+        f.plane_orientations = std::move(cf.signs);
+    }
+
+    // TODO: This section is computing redundant face orientation info.
+    for (auto& c : ar.cells) {
+        c.face_orientations.reserve(c.faces.size());
+        for (auto fid : c.faces) {
+            const auto& f = ar.faces[fid];
+            c.face_orientations.push_back(c.plane_orientations[f.supporting_plane]);
+        }
+    }
+
+    return ar;
+}
+
+Arrangement<3> extract_arrangement(ARComplex<3>&& ar_complex)
+{
+    Arrangement<3> ar;
+    ar.vertices = std::move(ar_complex.vertices);
+
+    auto& edges = ar_complex.edges;
+    auto& faces = ar_complex.faces;
+    size_t num_faces = faces.size();
+    ar.faces.resize(num_faces);
+
+    for (size_t i = 0; i < num_faces; i++) {
+        auto& cf = faces[i];
+        auto& f = ar.faces[i];
+        const size_t num_bd_edges = cf.edges.size();
+        assert(num_bd_edges >= 3);
+        f.vertices.reserve(num_bd_edges);
+
+        for (size_t j = 0; j < num_bd_edges; j++) {
+            auto& curr_e = edges[cf.edges[j]];
+            auto& next_e = edges[cf.edges[(j + 1) % num_bd_edges]];
+            if (curr_e.vertices[0] == next_e.vertices[0] ||
+                curr_e.vertices[0] == next_e.vertices[1]) {
+                f.vertices.push_back(curr_e.vertices[0]);
+            } else {
+                assert(curr_e.vertices[1] == next_e.vertices[0] ||
+                       curr_e.vertices[1] == next_e.vertices[1]);
+                f.vertices.push_back(curr_e.vertices[1]);
+            }
+        }
+
+        f.positive_cell = cf.positive_cell;
+        f.negative_cell = cf.negative_cell;
+        f.supporting_plane = cf.supporting_plane;
+    }
+
+    auto& cells = ar_complex.cells;
+    size_t num_cells = cells.size();
+    ar.cells.resize(num_cells);
+
+    for (size_t i = 0; i < num_cells; i++) {
+        auto& cc = cells[i];
+        auto& c = ar.cells[i];
+        c.faces = std::move(cc.faces);
+        c.plane_orientations = std::move(cc.signs);
+    }
+
+    // TODO: This section is computing redundant face orientation info.
+    for (auto& c : ar.cells) {
+        c.face_orientations.reserve(c.faces.size());
+        for (auto fid : c.faces) {
+            const auto& f = ar.faces[fid];
+            c.face_orientations.push_back(c.plane_orientations[f.supporting_plane]);
+        }
+    }
+
+    return ar;
+}
+
+} // namespace simplicial_arrangement
