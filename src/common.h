@@ -1,6 +1,7 @@
 #pragma once
 
 #include <simplicial_arrangement/simplicial_arrangement.h>
+#include <simplicial_arrangement/material_interface.h>
 #include <spdlog/spdlog.h>
 
 #include <array>

@@ -1,6 +1,7 @@
 #include <simplicial_arrangement/lookup_table.h>
 #include <simplicial_arrangement/simplicial_arrangement.h>
 #include <catch2/catch.hpp>
+#include <spdlog/spdlog.h>
 
 #include <implicit_predicates/implicit_predicates.h>
 

@@ -1,7 +1,9 @@
 #include <implicit_predicates/implicit_predicates.h>
 #include <simplicial_arrangement/lookup_table.h>
 
+#include "ArrangementBuilder.h"
 #include "SimplicialArrangementBuilder.h"
+#include "MaterialInterfaceBuilder.h"
 #include "lookup_table_forward_declarations.h"
 
 namespace simplicial_arrangement {
@@ -9,8 +11,11 @@ namespace simplicial_arrangement {
 template <typename Scalar, int DIM>
 Arrangement<DIM> compute_arrangement_impl(const std::vector<Plane<Scalar, DIM>>& planes)
 {
-    SimplicialArrangementBuilder<Scalar, DIM> builder(planes);
-    return builder.extract_arrangement();
+    //SimplicialArrangementBuilder<Scalar, DIM> builder(planes);
+    //return builder.extract_arrangement();
+
+    ArrangementBuilder<Scalar, DIM> builder(planes);
+    return builder.export_arrangement();
 }
 
 template <typename Scalar>
