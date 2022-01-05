@@ -16,7 +16,10 @@ int main(int argc, const char* argv[]) {
     }
 
     // load tet mesh
-    std::string tet_mesh_file = "D:/research/simplicial_arrangement/data/tet_mesh_80k.json";
+//    std::string dataDir = "D:/research/simplicial_arrangement/data/";
+    std::string dataDir = "/Users/charlesdu/Downloads/research/implicit_modeling/code/simplicial_arrangement/data/";
+    std::string resolution = "80k";
+    std::string tet_mesh_file = dataDir + "tet_mesh_" + resolution + ".json";
     std::vector<std::array<double, 3>> pts;
     std::vector<std::array<size_t, 4>> tets;
     load_tet_mesh(tet_mesh_file, pts, tets);
@@ -123,7 +126,7 @@ int main(int argc, const char* argv[]) {
     }
 
     // test: export iso-mesh
-    save_iso_mesh_list("D:/research/simplicial_arrangement/data/marhcing_tet_iso_mesh_80k.json",
+    save_iso_mesh_list(dataDir + "marching_tet_iso_mesh_" + resolution + ".json",
         iso_pts_list,
         iso_faces_list);
 
