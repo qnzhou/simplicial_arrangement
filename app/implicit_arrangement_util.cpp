@@ -267,6 +267,39 @@ void extract_tet_boundary_mesh(
     }
 }
 
+
+
+bool save_tri_mesh_list(const std::string& filename,
+    const std::vector<std::vector<std::array<double, 3>>>& verts_list,
+    const std::vector<std::vector<std::array<size_t, 3>>>& tris_list)
+{
+    // assert verts_list.size() == tris_list.size()
+    using json = nlohmann::json;
+    std::ofstream fout(filename.c_str());
+    //
+    json jOut;
+    for (size_t i = 0; i < verts_list.size(); i++) {
+        const auto& verts = verts_list[i];
+        const auto& tris = tris_list[i];
+        json jVerts;
+        for (size_t i = 0; i < verts.size(); i++) {
+            jVerts.push_back(json(verts[i]));
+        }
+        //
+        json jTris;
+        for (size_t i = 0; i < tris.size(); i++) {
+            jTris.push_back(json(tris[i]));
+        }
+        //
+        json jMesh = {jVerts, jTris};
+        //
+        jOut.push_back(jMesh);
+    }
+    fout << jOut << std::endl;
+    fout.close();
+    return true;
+}
+
 // given the list of vertex indices of a face, return the unique key of the face: (smallest vert Id, second smallest vert Id, largest vert Id)
 // assume: face_verts is a list of non-duplicate natural numbers, with at least three elements.
 void compute_iso_face_key(const std::vector<size_t>& face_verts, std::array<size_t, 3>& key) {
@@ -1312,5 +1345,6 @@ void compute_arrangement_cells(size_t num_patch,
         }
     }
 }
+
 
 
