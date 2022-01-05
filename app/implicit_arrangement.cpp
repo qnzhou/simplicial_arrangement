@@ -32,7 +32,10 @@ int main(int argc, const char* argv[])
     }
 
     // load tet mesh
-    std::string tet_mesh_file = "D:/research/simplicial_arrangement/data/tet_mesh_80k.json";
+//    std::string dataDir = "D:/research/simplicial_arrangement/data/";
+    std::string dataDir = "/Users/charlesdu/Downloads/research/implicit_modeling/code/simplicial_arrangement/data/";
+    std::string resolution = "80k";
+    std::string tet_mesh_file = dataDir + "tet_mesh_" + resolution + ".json";
     std::vector<std::array<double, 3>> pts;
     std::vector<std::array<size_t, 4>> tets;
     load_tet_mesh(tet_mesh_file, pts, tets);
@@ -60,6 +63,13 @@ int main(int argc, const char* argv[])
         }
         std::cout << "num boundary tris = " << tet_of_tri.size() << std::endl;
     }
+
+    // extract tet boundary mesh
+    std::vector<std::array<double, 3>> boundary_pts;
+    std::vector<std::array<size_t, 3>> boundary_tris;
+    extract_tet_boundary_mesh(pts, tets, boundary_pts, boundary_tris);
+    save_tri_mesh(dataDir + "tet_bndry_mesh_" + resolution + ".json",
+        boundary_pts, boundary_tris);
 
     // load implicit function values, or evaluate
     size_t n_func = 4;
@@ -519,7 +529,8 @@ int main(int argc, const char* argv[])
         // std::cout << "num arrangement cells = " << arrangement_cells.size() << std::endl;
 
         // test: export iso-mesh, patches, chains
-        save_result("D:/research/simplicial_arrangement/data/iso_mesh_80k.json",
+        save_result(
+            dataDir + "iso_mesh_" + resolution + ".json",
             iso_pts,
             iso_faces,
             patches,
@@ -531,7 +542,8 @@ int main(int argc, const char* argv[])
     }
 
     if (use_group_simplicial_cells_into_arrangement_cells) {
-        save_result_mini("D:/research/simplicial_arrangement/data/iso_mesh_80k.json",
+        save_result_mini(
+            dataDir + "iso_mesh_" + resolution + ".json",
             iso_pts,
             iso_faces,
             patches,
