@@ -308,6 +308,33 @@ void test_3D()
             REQUIRE(mi.vertices.size() == 6);
             validate(mi);
         }
+        SECTION("Case 5") {
+            // One material above all others.
+            materials.push_back({1, 1, 0, 0});
+            materials.push_back({0, 1, 1, 0});
+            materials.push_back({0, 0, 1, 1});
+            materials.push_back({2, 2, 2, 2});
+            auto mi = compute_material_interface(materials);
+            REQUIRE(mi.cells.size() == 1);
+            REQUIRE(mi.faces.size() == 4);
+            REQUIRE(mi.vertices.size() == 4);
+            validate(mi);
+        }
+        SECTION("Case 6: with duplicate materials")
+        {
+            materials.push_back({1, 1, 0, 0}); // material 4
+            materials.push_back({0, 1, 1, 0}); // material 5
+            materials.push_back({0, 1, 1, 0}); // material 6
+            materials.push_back({1, 1, 0, 0}); // material 7
+            auto mi = compute_material_interface(materials);
+            REQUIRE(mi.cells.size() == 2);
+            REQUIRE(mi.faces.size() == 7);
+            REQUIRE(mi.vertices.size() == 5);
+            validate(mi);
+            REQUIRE(mi.unique_materials.size() == 6); // 4 bd materials + 2 input materials.
+            REQUIRE(mi.unique_material_indices[4] == mi.unique_material_indices[7]);
+            REQUIRE(mi.unique_material_indices[5] == mi.unique_material_indices[6]);
+        }
     }
 }
 } // namespace
