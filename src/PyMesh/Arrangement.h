@@ -32,7 +32,7 @@ public:
     size_t get_num_cells() const
     {
         if (m_cells.rows() > 0)
-            return m_cells.maxCoeff();
+            return m_cells.maxCoeff() + 1;
         else
             return 0;
     }
