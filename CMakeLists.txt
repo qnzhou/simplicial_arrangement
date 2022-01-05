@@ -11,14 +11,14 @@ include(nlohmann-json)
 include(sanitizers)
 include(fast_arrangement)
 
-option(LIBIGL_WITH_CGAL "Build CGAL support in libigl" On)
+option(LIBIGL_COPYLEFT_WITH_CGAL "Build CGAL support in libigl" On)
 include(libigl)
 
 add_library(arrangement STATIC
     ${CMAKE_SOURCE_DIR}/src/PyMesh/Arrangement.cpp
     ${CMAKE_SOURCE_DIR}/src/PyMesh/FastArrangement.cpp
     ${CMAKE_SOURCE_DIR}/src/PyMesh/MeshArrangement.cpp)
-target_link_libraries(arrangement PUBLIC igl::core igl::cgal
+target_link_libraries(arrangement PUBLIC igl::core igl_copyleft::cgal
     fast_arrangement::fast_arrangement)
 
 file(GLOB INC_FILES ${CMAKE_CURRENT_LIST_DIR}/include/*.h)
