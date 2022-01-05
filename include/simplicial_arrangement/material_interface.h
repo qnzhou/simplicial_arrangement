@@ -50,8 +50,25 @@ struct MaterialInterface
      */
     struct Face
     {
+        /**
+         * An ordered list of boundary vertices.
+         *
+         * In 3D, the face is always oriented counterclockwise when viewed from
+         * the cell indicated by the positive material label.
+         *
+         * In 2D, the face (aka edge) is oriented such that the positive
+         * material cell is on the right side of the edge.
+         */
         std::vector<size_t> vertices; // ordered.
+
+        /**
+         * The material occupying the cell on the positive side of the face.
+         */
         size_t positive_material_label = None;
+
+        /**
+         * The material occupying the cell on the negative side of the face.
+         */
         size_t negative_material_label = None;
     };
 
@@ -60,7 +77,14 @@ struct MaterialInterface
      */
     struct Cell
     {
+        /**
+         * A set of boundary face indices in no particular order.
+         */
         std::vector<size_t> faces;
+
+        /**
+         * The material that occupies this cell.
+         */
         size_t material_label = None;
     };
 
