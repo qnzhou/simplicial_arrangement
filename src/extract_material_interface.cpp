@@ -2,8 +2,6 @@
 
 #include "MIComplex.h"
 
-#include <absl/container/flat_hash_set.h>
-
 namespace simplicial_arrangement {
 
 MaterialInterface<2> extract_material_interface(MIComplex<2>&& mi_complex)
@@ -47,8 +45,6 @@ MaterialInterface<3> extract_material_interface(MIComplex<3>&& mi_complex)
     size_t num_faces = faces.size();
     mi.faces.resize(num_faces);
 
-    absl::flat_hash_set<size_t> vertex_set;
-    vertex_set.reserve(mi.vertices.size());
     for (size_t i=0; i<num_faces; i++) {
         auto& cf = faces[i];
         auto& f = mi.faces[i];
@@ -56,15 +52,15 @@ MaterialInterface<3> extract_material_interface(MIComplex<3>&& mi_complex)
         assert(num_bd_edges >= 3);
         f.vertices.reserve(num_bd_edges);
 
-        vertex_set.clear();
         for (size_t j=0; j<num_bd_edges; j++) {
-            auto& e = edges[cf.edges[j]];
-            vertex_set.insert(e.vertices[0]);
-            vertex_set.insert(e.vertices[1]);
-        }
-
-        for (size_t vid : vertex_set) {
-            f.vertices.push_back(vid);
+            const auto& curr_e = edges[cf.edges[j]];
+            const auto& next_e = edges[cf.edges[(j+1)%num_bd_edges]];
+            if (curr_e.vertices[0] == next_e.vertices[0] || curr_e.vertices[0] == next_e.vertices[1]) {
+                f.vertices.push_back(curr_e.vertices[0]);
+            } else {
+                assert(curr_e.vertices[1] == next_e.vertices[0] || curr_e.vertices[1] == next_e.vertices[1]);
+                f.vertices.push_back(curr_e.vertices[1]);
+            }
         }
 
         f.positive_material_label = cf.positive_material_label;

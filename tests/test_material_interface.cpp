@@ -1,12 +1,14 @@
 #include <simplicial_arrangement/material_interface.h>
-#include <spdlog/spdlog.h>
-#include <catch2/catch.hpp>
 
 #include <implicit_predicates/implicit_predicates.h>
 
+#include <absl/container/flat_hash_set.h>
+#include <spdlog/spdlog.h>
+#include <catch2/catch.hpp>
+
 namespace {
 
-template<int DIM>
+template <int DIM>
 void validate(const simplicial_arrangement::MaterialInterface<DIM>& mi)
 {
     const size_t num_vertices = mi.vertices.size();
@@ -38,6 +40,48 @@ void validate(const simplicial_arrangement::MaterialInterface<DIM>& mi)
     REQUIRE(
         std::all_of(vertex_valence.begin(), vertex_valence.end(), [](size_t v) { return v > 0; }));
     REQUIRE(std::all_of(face_valence.begin(), face_valence.end(), [](size_t v) { return v > 0; }));
+
+    if constexpr (DIM == 2) {
+        // Check face orientation is consistent within each cell.
+        for (const auto& c : mi.cells) {
+            const size_t num_cell_faces = c.faces.size();
+            for (size_t i = 0; i < num_cell_faces; i++) {
+                const auto& f0 = mi.faces[c.faces[i]];
+                const auto& f1 = mi.faces[c.faces[(i + 1) % num_cell_faces]];
+                if (f0.negative_material_label == c.material_label) {
+                    REQUIRE((f0.vertices[1] == f1.vertices[0] || f0.vertices[1] == f1.vertices[1]));
+                } else {
+                    REQUIRE((f0.vertices[0] == f1.vertices[0] || f0.vertices[0] == f1.vertices[1]));
+                }
+            }
+        }
+    } else {
+        // Check each cell is topologically a sphere using Euler
+        // characteristics.
+        absl::flat_hash_set<size_t> vertex_set;
+        absl::flat_hash_set<std::array<size_t, 2>> edge_set;
+        vertex_set.reserve(mi.vertices.size());
+        edge_set.reserve(mi.vertices.size() * 2);
+        for (const auto& c : mi.cells) {
+            vertex_set.clear();
+            edge_set.clear();
+            for (const auto fid : c.faces) {
+                const auto& f = mi.faces[fid];
+                vertex_set.insert(f.vertices.begin(), f.vertices.end());
+                const size_t num_face_vertices = f.vertices.size();
+                for (size_t i = 0; i < num_face_vertices; i++) {
+                    const size_t curr_vid = f.vertices[i];
+                    const size_t next_vid = f.vertices[(i + 1) % num_face_vertices];
+                    std::array<size_t, 2> e{curr_vid, next_vid};
+                    if (e[0] > e[1]) std::swap(e[0], e[1]);
+                    edge_set.insert(std::move(e));
+                }
+            }
+
+            int euler = int(vertex_set.size()) - int(edge_set.size()) + int(c.faces.size());
+            REQUIRE(euler == 2);
+        }
+    }
 }
 
 template <typename Scalar>
@@ -231,8 +275,10 @@ void test_3D()
             validate(mi);
         }
     }
-    SECTION("3 implicits") {
-        SECTION("Case 1") {
+    SECTION("3 implicits")
+    {
+        SECTION("Case 1")
+        {
             materials.push_back({1, 0, 0, 0});
             materials.push_back({0, 1, 0, 0});
             materials.push_back({0, 0, 1, 0});
@@ -242,7 +288,8 @@ void test_3D()
             REQUIRE(mi.vertices.size() == 8);
             validate(mi);
         }
-        SECTION("Case 2") {
+        SECTION("Case 2")
+        {
             materials.push_back({1, 0, 0, 0});
             materials.push_back({0, 1, 0, 0});
             materials.push_back({2, 0, 0, 0});
@@ -252,7 +299,8 @@ void test_3D()
             REQUIRE(mi.vertices.size() == 5);
             validate(mi);
         }
-        SECTION("Case 3") {
+        SECTION("Case 3")
+        {
             materials.push_back({1, 0, 0, 0});
             materials.push_back({0, 1, 0, 0});
             materials.push_back({0, 0, 1, 1});
@@ -263,8 +311,10 @@ void test_3D()
             validate(mi);
         }
     }
-    SECTION("4 implicits") {
-        SECTION("Case 1") {
+    SECTION("4 implicits")
+    {
+        SECTION("Case 1")
+        {
             materials.push_back({1, 0, 0, 0});
             materials.push_back({0, 1, 0, 0});
             materials.push_back({0, 0, 1, 0});
@@ -275,7 +325,8 @@ void test_3D()
             REQUIRE(mi.vertices.size() == 15);
             validate(mi);
         }
-        SECTION("Case 2") {
+        SECTION("Case 2")
+        {
             materials.push_back({1, 0, 0, 0});
             materials.push_back({0, 1, 0, 0});
             materials.push_back({0, 0, 1, 0});
@@ -286,7 +337,8 @@ void test_3D()
             REQUIRE(mi.vertices.size() == 8);
             validate(mi);
         }
-        SECTION("Case 3") {
+        SECTION("Case 3")
+        {
             materials.push_back({5, 0, 0, 0});
             materials.push_back({0, 1, 0, 0});
             materials.push_back({0, 0, 1, 0});
@@ -297,7 +349,8 @@ void test_3D()
             REQUIRE(mi.vertices.size() == 8);
             validate(mi);
         }
-        SECTION("Case 4") {
+        SECTION("Case 4")
+        {
             materials.push_back({1, 1, 0, 0});
             materials.push_back({0, 1, 1, 0});
             materials.push_back({0, 0, 1, 1});
@@ -308,7 +361,8 @@ void test_3D()
             REQUIRE(mi.vertices.size() == 6);
             validate(mi);
         }
-        SECTION("Case 5") {
+        SECTION("Case 5")
+        {
             // One material above all others.
             materials.push_back({1, 1, 0, 0});
             materials.push_back({0, 1, 1, 0});

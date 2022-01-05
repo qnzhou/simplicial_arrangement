@@ -115,8 +115,8 @@ std::array<size_t, 3> mi_cut_2_face(MIComplex<DIM>& mi_complex,
     if (cut_edge_index == INVALID) {
         // Insert cut edge.
         if constexpr (DIM == 2) {
-            cut_edge.positive_material_label = f.material_label;
-            cut_edge.negative_material_label = material_index;
+            cut_edge.negative_material_label = f.material_label;
+            cut_edge.positive_material_label = material_index;
         } else {
             cut_edge.supporting_materials = {
                 f.positive_material_label, f.negative_material_label, material_index};

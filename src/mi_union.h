@@ -259,10 +259,8 @@ size_t mi_union_2_faces(MIComplex<DIM>& mi_complex,
         }
     }
     {
-        std::vector<bool> edge_group_orientations;
         for (const auto& edge_group : to_merge) {
             if (edge_group.empty()) continue;
-            edge_group_orientations.clear();
 
             size_t out_eid = mi_union_1_faces(mi_complex, material_index, edge_group, edge_map);
             assert(out_eid != INVALID);
@@ -270,7 +268,8 @@ size_t mi_union_2_faces(MIComplex<DIM>& mi_complex,
                 bd_edges.erase(eid);
             }
             bd_edges.insert(out_eid);
-            const auto& out_edge = edges[out_eid];
+            // Note that out edge's vertex order may be arbitrary.
+            auto& out_edge = edges[out_eid];
             for (auto eid : edge_group) {
                 const auto& e = edges[eid];
                 size_t start_vid = bd_edge_orientations[eid] ? e.vertices[0] : e.vertices[1];
@@ -283,6 +282,20 @@ size_t mi_union_2_faces(MIComplex<DIM>& mi_complex,
                 }
             }
             assert(bd_edge_orientations.find(out_eid) != bd_edge_orientations.end());
+
+            if constexpr (DIM == 2) {
+                // Change material labels in 2D so it is consistent with vertex
+                // ordering.
+                if (bd_edge_orientations[out_eid]) {
+                    if (out_edge.negative_material_label != material_index) {
+                        std::swap(out_edge.positive_material_label, out_edge.negative_material_label);
+                    }
+                } else {
+                    if (out_edge.positive_material_label != material_index) {
+                        std::swap(out_edge.positive_material_label, out_edge.negative_material_label);
+                    }
+                }
+            }
         }
     }
 
@@ -310,6 +323,20 @@ size_t mi_union_2_faces(MIComplex<DIM>& mi_complex,
             size_t next_eid = itr->second;
             combined_face.edges.push_back(next_eid);
         }
+#ifndef NDEBUG
+        if constexpr (DIM == 2) {
+            // Sanity check on edge orientation consistency.
+            for (auto eid : combined_face.edges) {
+                const auto& e = edges[eid];
+                bool ori = bd_edge_orientations[eid];
+                if (ori) {
+                    assert(e.negative_material_label == material_index);
+                } else {
+                    assert(e.positive_material_label == material_index);
+                }
+            }
+        }
+#endif
     }
     if constexpr (DIM == 2) {
         combined_face.material_label = material_index;

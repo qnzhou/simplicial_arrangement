@@ -34,12 +34,20 @@ MaterialInterface<2> compute_material_interface(const std::vector<Material<Int, 
 MaterialInterface<3> compute_material_interface(const std::vector<Material<double, 3>>& materials);
 MaterialInterface<3> compute_material_interface(const std::vector<Material<Int, 3>>& materials);
 
+/**
+ * A self-contained data structure for 2D and 3D material interface
+ * representation.
+ */
 template <int DIM>
 struct MaterialInterface
 {
     static_assert(DIM == 2 || DIM == 3, "Only 2D and 3D material interface are supported.");
     static constexpr size_t None = std::numeric_limits<size_t>::max();
 
+    /**
+     * A face represents a (DIM-1)-dimensional polytope.  For 2D and 3D, its
+     * orientation is uniquely defined by the ordering of its boundary vertices.
+     */
     struct Face
     {
         std::vector<size_t> vertices; // ordered.
@@ -47,6 +55,9 @@ struct MaterialInterface
         size_t negative_material_label = None;
     };
 
+    /**
+     * A cell is a DIM-dimensional polytope.
+     */
     struct Cell
     {
         std::vector<size_t> faces;
