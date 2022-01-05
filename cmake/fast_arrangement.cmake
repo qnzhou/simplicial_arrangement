@@ -10,7 +10,7 @@ include(indirect_predicates)
 FetchContent_Declare(
     cinolib
     GIT_REPOSITORY https://github.com/mlivesu/cinolib.git
-    GIT_TAG v1.0
+    GIT_TAG a0cb8ee0345c2515711a48a088c3305283fa49d3
 )
 if(NOT cinolib_POPULATED)
   FetchContent_Populate(cinolib)
