@@ -81,7 +81,7 @@ target_link_libraries(impl_arrangement_util PUBLIC simplicial_arrangement::simpl
 
 add_executable(impl_arrangement "app/implicit_arrangement.cpp")
 target_compile_features(impl_arrangement PRIVATE cxx_std_17)
-target_link_libraries(impl_arrangement simplicial_arrangement::simplicial_arrangement impl_arrangement_util)
+target_link_libraries(impl_arrangement simplicial_arrangement::simplicial_arrangement impl_arrangement_util igl::core)
 if (SIMPLICIAL_ARRANGEMENT_TEST_COVERAGE)
     if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
         target_compile_options(impl_arrangement PRIVATE -fprofile-instr-generate -fcoverage-mapping)
