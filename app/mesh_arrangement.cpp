@@ -69,6 +69,10 @@ int main(int argc, const char* argv[]) {
     size_t n_tets = tets.size();
     std::cout << "tet mesh: " << pts.size() << " verts, " << tets.size() << " tets." << std::endl;
 
+    // record timings
+    std::vector<std::string> timing_labels;
+    std::vector<double> timings;
+
     // load implicit function values, or evaluate
     size_t n_func = 4;
     std::vector<std::array<double, 3>> centers(n_func);
@@ -80,7 +84,8 @@ int main(int argc, const char* argv[]) {
 
     std::vector<Eigen::VectorXd> funcVals;
     {
-        ScopedTimer<> timer("evaluate implicit functions at vertices");
+        timing_labels.emplace_back("func values");
+        ScopedTimer<> timer("func values");
         funcVals.resize(n_func);
         for (size_t i = 0; i < n_func; i++) {
             funcVals[i].resize(pts.size());
@@ -88,6 +93,7 @@ int main(int argc, const char* argv[]) {
                 funcVals[i][j] = sphere_function(centers[i], radius, pts[j]);
             }
         }
+        timings.push_back(timer.toc());
     }
 
 
@@ -107,25 +113,19 @@ int main(int argc, const char* argv[]) {
         TT(i, 2) = tets[i][2];
         TT(i, 3) = tets[i][3];
     }
-//    std::vector<Eigen::VectorXd> func_S(n_func);
-//    for (size_t i = 0; i < n_func; ++i) {
-//        auto& S = func_S[i];
-//        S.resize(pts.size());
-//        for (size_t j = 0; j < pts.size(); ++j) {
-//            S(j) = funcVals[i][j];
-//        }
-//    }
 
     // marching tet
     std::vector<Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>> SV;
     std::vector<Eigen::Matrix<int, Eigen::Dynamic, 3, Eigen::RowMajor>> SF;
     {
-        ScopedTimer<> timer("marching tet");
+        timing_labels.emplace_back("marching-tets");
+        ScopedTimer<> timer("marching-tets");
         SV.resize(n_func);
         SF.resize(n_func);
         for (size_t i = 0; i < n_func; ++i) {
             igl::marching_tets(TV, TT, funcVals[i], 0, SV[i], SF[i]);
         }
+        timings.push_back(timer.toc());
     }
 
     // test: export iso-meshes
@@ -164,6 +164,7 @@ int main(int argc, const char* argv[]) {
     IGL_Mesh merged_mesh;
     Eigen::VectorXi face_to_mesh;
     {
+        timing_labels.emplace_back("merge meshes");
         ScopedTimer<> timer("merge meshes");
         iso_meshes.resize(n_func);
         for (size_t i = 0; i < n_func; ++i) {
@@ -171,17 +172,20 @@ int main(int argc, const char* argv[]) {
             iso_meshes[i].faces = SF[i];
         }
         merge_meshes(iso_meshes, merged_mesh, face_to_mesh);
+        timings.push_back(timer.toc());
     }
 
     // compute arrangement
     std::shared_ptr<PyMesh::Arrangement> engine;
     {
-        ScopedTimer<> timer("(fast) mesh arrangement");
+        timing_labels.emplace_back("mesh arrangement");
+        ScopedTimer<> timer("mesh arrangement");
         engine = PyMesh::Arrangement::create_fast_arrangement(
             merged_mesh.vertices, merged_mesh.faces, face_to_mesh);
 //        engine = PyMesh::Arrangement::create_mesh_arrangement(
 //            merged_mesh.vertices, merged_mesh.faces, face_to_mesh);
         engine->run();
+        timings.push_back(timer.toc());
     }
 
     // test: export arrangement cells
@@ -215,6 +219,9 @@ int main(int argc, const char* argv[]) {
         save_tri_mesh_list(dataDir + "mesh_arr_cells_" + resolution + ".json",
             iso_pts_list,
             iso_faces_list);
+        // export timings
+        save_timings(dataDir + "mesh_timings_" + resolution + ".json",
+            timing_labels, timings);
     }
 
 

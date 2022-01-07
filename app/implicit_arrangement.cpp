@@ -34,6 +34,10 @@ int main(int argc, const char* argv[])
         std::cout << "loading complete." << std::endl;
     }
 
+    // record timings
+    std::vector<std::string> timing_labels;
+    std::vector<double> timings;
+
     // load tet mesh
     //    std::string dataDir = "D:/research/simplicial_arrangement/data/";
     std::string dataDir = "/Users/charlesdu/Downloads/research/implicit_modeling/code/simplicial_arrangement/data/";
@@ -48,7 +52,8 @@ int main(int argc, const char* argv[])
 
     // find all boundary triangles of the tet mesh
     {
-        ScopedTimer<> timer("find boundary triangles of tet mesh");
+        timing_labels.emplace_back("tet mesh boundary");
+        ScopedTimer<> timer("tet mesh boundary");
         absl::flat_hash_set<std::array<size_t, 3>> unpaired_tris;
         std::vector<std::array<size_t, 3>> four_tris(4);
         for (size_t i = 0; i < tets.size(); i++) {
@@ -66,7 +71,8 @@ int main(int argc, const char* argv[])
                 }
             }
         }
-        std::cout << "num boundary tris = " << unpaired_tris.size() << std::endl;
+        timings.push_back(timer.toc());
+        //std::cout << "num boundary tris = " << unpaired_tris.size() << std::endl;
     }
 
     // find all boundary triangles of the tet mesh
@@ -139,26 +145,30 @@ int main(int argc, const char* argv[])
 
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals;
     {
-        ScopedTimer<> timer("evaluate implicit functions at vertices");
+        timing_labels.emplace_back("func values");
+        ScopedTimer<> timer("func values");
         funcVals.resize(n_func, n_pts);
         for (size_t i = 0; i < n_func; i++) {
             for (size_t j = 0; j < n_pts; j++) {
                 funcVals(i,j) = sphere_function(centers[i], radius, pts[j]);
             }
         }
+        timings.push_back(timer.toc());
     }
 
 
     // function signs at vertices
     Eigen::MatrixXi funcSigns;
     {
-        ScopedTimer<> timer("compute function signs at vertices");
+        timing_labels.emplace_back("func signs");
+        ScopedTimer<> timer("func signs");
         funcSigns.resize(n_func, n_pts);
         for (size_t i = 0; i < n_func; i++) {
             for (size_t j = 0; j < n_pts; j++) {
                 funcSigns(i,j) = sign(funcVals(i,j));
             }
         }
+        timings.push_back(timer.toc());
     }
 //    {
 //        ScopedTimer<> timer("compute function signs at vertices");
@@ -170,7 +180,8 @@ int main(int argc, const char* argv[])
     Eigen::Matrix<size_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> func_in_tet;
     Eigen::VectorXi num_func_in_tet;
     {
-        ScopedTimer<> timer("filter out intersecting implicits in each tet");
+        timing_labels.emplace_back("filter");
+        ScopedTimer<> timer("filter");
         func_in_tet.resize(n_tets, n_func);
         num_func_in_tet.setZero(n_tets);
         int pos_count;
@@ -196,6 +207,7 @@ int main(int argc, const char* argv[])
             }
             num_func_in_tet[i] = num_func;
         }
+        timings.push_back(timer.toc());
     }
 
     // compute arrangement in each tet (iterative plane cut)
@@ -208,7 +220,8 @@ int main(int argc, const char* argv[])
     Time_duration time_more_func = Time_duration::zero();
     //
     {
-        ScopedTimer<> timer("compute arrangement in all tets");
+        timing_labels.emplace_back("simp_arr(other)");
+        ScopedTimer<> timer("simp_arr");
         has_isosurface.resize(n_tets, false);
         cut_results.resize(n_tets);
         int num_func;
@@ -233,13 +246,13 @@ int main(int argc, const char* argv[])
                         funcVals(f_id,v4)};
                 }
                 //
-                if (num_func == 2) {
-                    disable_lookup_table();
+//                if (num_func == 2) {
+//                    disable_lookup_table();
+//                    cut_results[i] = compute_arrangement(planes);
+//                    enable_lookup_table();
+//                } else {
                     cut_results[i] = compute_arrangement(planes);
-                    enable_lookup_table();
-                } else {
-                    cut_results[i] = compute_arrangement(planes);
-                }
+//                }
 
                 //
                 std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
@@ -250,11 +263,18 @@ int main(int argc, const char* argv[])
                 }
             }
         }
+        timings.push_back(timer.toc() - time_1_func.count() - time_2_func.count() - time_more_func.count());
     }
     //std::cout << "num_intersecting_tet = " << num_intersecting_tet << std::endl;
-    std::cout << "-- [1   func]: " << time_1_func.count() << "s" << std::endl;
-    std::cout << "-- [2   func]: " << time_2_func.count() << "s" << std::endl;
-    std::cout << "-- [>=3 func]: " << time_more_func.count() << "s" << std::endl;
+    timing_labels.emplace_back("simp_arr(1 func)");
+    timings.push_back(time_1_func.count());
+    timing_labels.emplace_back("simp_arr(2 func)");
+    timings.push_back(time_2_func.count());
+    timing_labels.emplace_back("simp_arr(>=3 func)");
+    timings.push_back(time_more_func.count());
+    std::cout << " -- [simp_arr(1 func)]: " << time_1_func.count() << " s" << std::endl;
+    std::cout << " -- [simp_arr(2 func)]: " << time_2_func.count() << " s" << std::endl;
+    std::cout << " -- [simp_arr(>=3 func)]: " << time_more_func.count() << " s" << std::endl;
 
 
     // extract arrangement mesh
@@ -273,8 +293,11 @@ int main(int argc, const char* argv[])
             global_vId_of_tet_vert,
             iso_fId_of_tet_face);
     } else {
+        timing_labels.emplace_back("extract mesh");
+        ScopedTimer<> timer("extract mesh");
         extract_iso_mesh_pure(has_isosurface, cut_results,
             func_in_tet, num_func_in_tet, tets, iso_verts, iso_faces);
+        timings.push_back(timer.toc());
     }
     
     //std::cout << "num iso-vertices = " << iso_verts.size() << std::endl;
@@ -282,28 +305,46 @@ int main(int argc, const char* argv[])
     
     // compute xyz of iso-vertices
     std::vector<std::array<double, 3>> iso_pts;
-    compute_iso_vert_xyz(iso_verts, funcVals, pts, iso_pts);
+    {
+        timing_labels.emplace_back("compute xyz");
+        ScopedTimer<> timer("compute xyz");
+        compute_iso_vert_xyz(iso_verts, funcVals, pts, iso_pts);
+        timings.push_back(timer.toc());
+    }
     
     //  compute iso-edges and edge-face connectivity
     std::vector<IsoEdge> iso_edges;
-    compute_iso_edges(iso_faces, iso_edges);
-    //std::cout << "num iso-edges = " << iso_edges.size() << std::endl;
+    {
+        timing_labels.emplace_back("isoEdge-face connectivity");
+        ScopedTimer<> timer("isoEdge-face connectivity");
+        compute_iso_edges(iso_faces, iso_edges);
+        timings.push_back(timer.toc());
+    }
+    // std::cout << "num iso-edges = " << iso_edges.size() << std::endl;
+
 
     // group iso-faces into patches
     std::vector<std::vector<size_t>> patches;
-    compute_patches(iso_faces, iso_edges, patches);
+    {
+        timing_labels.emplace_back("patches");
+        ScopedTimer<> timer("patches");
+        compute_patches(iso_faces, iso_edges, patches);
+        timings.push_back(timer.toc());
+    }
     //std::cout << "num patches = " << patches.size() << std::endl;    
 
     // compute map: iso-face Id --> patch Id
     std::vector<size_t> patch_of_face;
     {
-        ScopedTimer<> timer("compute iso-face-id to patch-id map");
+        timing_labels.emplace_back("face-patch map");
+        ScopedTimer<> timer("face-patch map");
         patch_of_face.resize(iso_faces.size());
         for (size_t i = 0; i < patches.size(); i++) {
             for (const auto& fId : patches[i]) {
                 patch_of_face[fId] = i;
             }
         }
+        timings.push_back(timer.toc());
     }
 
     std::vector<std::vector<size_t>> arrangement_cells;
@@ -523,7 +564,8 @@ int main(int argc, const char* argv[])
         std::vector<std::vector<size_t>> non_manifold_edges_of_vert;
         std::vector<std::vector<size_t>> chains;
         {
-            ScopedTimer<> timer("group non-manifold iso-edges into chains");
+            timing_labels.emplace_back("chains");
+            ScopedTimer<> timer("chains");
             non_manifold_edges_of_vert.resize(iso_pts.size());
             // get incident non-manifold edges for iso-vertices
             for (size_t i = 0; i < iso_edges.size(); i++) {
@@ -538,18 +580,20 @@ int main(int argc, const char* argv[])
             }
             // group non-manifold iso-edges into chains
             compute_chains(iso_edges, non_manifold_edges_of_vert, chains);
-            // std::cout << "num chains = " << chains.size() << std::endl;
+            timings.push_back(timer.toc());
         }
+        // std::cout << "num chains = " << chains.size() << std::endl;
+
 
         // compute list of incident tets for each vertex
         std::vector<std::vector<size_t>> incident_tets_of_vert;
         {
-            ScopedTimer<> timer("compute vertex-tet adjacency of input tet mesh");
+            timing_labels.emplace_back("vert-tet connectivity");
+            ScopedTimer<> timer("vert-tet connectivity");
             incident_tets_of_vert.resize(pts.size());
             // compute number of tets incident to each vertex
             std::vector<size_t> num_incident_tets(pts.size(), 0);
-            for (size_t i = 0; i < tets.size(); i++) {
-                const auto& tet = tets[i];
+            for (const auto & tet : tets) {
                 num_incident_tets[tet[0]] += 1;
                 num_incident_tets[tet[1]] += 1;
                 num_incident_tets[tet[2]] += 1;
@@ -571,13 +615,16 @@ int main(int argc, const char* argv[])
                 size_incident_tets[tet[2]] += 1;
                 size_incident_tets[tet[3]] += 1;
             }
+            timings.push_back(timer.toc());
         }
 
         // compute order of patches around chains
+        // pair<size_t, int> : pair (iso-face index, iso-face orientation)
         std::vector<std::vector<std::pair<size_t, int>>> half_faces_list;
         std::vector<std::vector<std::pair<size_t, int>>> half_patch_list;
         {
-            ScopedTimer<> timer("compute order of patches around chains");
+            timing_labels.emplace_back("order patches around chains");
+            ScopedTimer<> timer("order patches around chains");
             half_faces_list.resize(chains.size());
             half_patch_list.resize(half_faces_list.size());
             // pick representative iso-edge from each chain
@@ -586,8 +633,6 @@ int main(int argc, const char* argv[])
                 chain_representatives[i] = chains[i][0];
             }
             // order iso-faces incident to each representative iso-edge
-            // pair<size_t, int> : pair (iso-face index, iso-face orientation)
-            /*std::vector<std::vector<std::pair<size_t, int>>> half_faces_list(chains.size());*/
             for (size_t i = 0; i < chain_representatives.size(); i++) {
                 // first try: assume each representative edge is in the interior of a tetrahedron
                 const auto& iso_edge = iso_edges[chain_representatives[i]];
@@ -596,11 +641,7 @@ int main(int argc, const char* argv[])
                 compute_face_order_in_one_tet(
                     cut_results[tet_id], iso_faces, iso_edge, half_faces_list[i]);
             }
-
-
             // replace iso-face indices by patch indices
-            // std::vector<std::vector<std::pair<size_t, int>>>
-            // half_patch_list(half_faces_list.size());
             for (size_t i = 0; i < half_faces_list.size(); i++) {
                 half_patch_list[i].resize(half_faces_list[i].size());
                 for (size_t j = 0; j < half_faces_list[i].size(); j++) {
@@ -608,12 +649,17 @@ int main(int argc, const char* argv[])
                         patch_of_face[half_faces_list[i][j].first], half_faces_list[i][j].second);
                 }
             }
+            timings.push_back(timer.toc());
         }
 
         // group patches into arrangement cells
         // each cell is a represented as a list of patch indices
-        //std::vector<std::vector<size_t>> arrangement_cells;
-        compute_arrangement_cells(patches.size(), half_patch_list, arrangement_cells);
+        {
+            timing_labels.emplace_back("arrangement cells");
+            ScopedTimer<> timer("arrangement cells");
+            compute_arrangement_cells(patches.size(), half_patch_list, arrangement_cells);
+            timings.push_back(timer.toc());
+        }
         std::cout << "num arrangement cells = " << arrangement_cells.size() << std::endl;
 
         // test: export iso-mesh, patches, chains
@@ -627,6 +673,9 @@ int main(int argc, const char* argv[])
             non_manifold_edges_of_vert,
             half_patch_list,
             arrangement_cells);
+        // test: export timings
+        save_timings(dataDir + "timings_" + resolution + ".json",
+            timing_labels, timings);
     }
 
     if (use_group_simplicial_cells_into_arrangement_cells) {
