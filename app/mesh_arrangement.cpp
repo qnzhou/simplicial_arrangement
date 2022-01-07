@@ -59,12 +59,14 @@ void merge_meshes(const std::vector<IGL_Mesh>& meshes,
 int main(int argc, const char* argv[]) {
 //    std::string dataDir = "D:/research/simplicial_arrangement/data/";
     std::string dataDir = "/Users/charlesdu/Downloads/research/implicit_modeling/code/simplicial_arrangement/data/";
-    std::string resolution = "40k";
+    std::string resolution = "100k";
     // load tet mesh
     std::string tet_mesh_file = dataDir + "tet_mesh_" + resolution + ".json";
     std::vector<std::array<double, 3>> pts;
     std::vector<std::array<size_t, 4>> tets;
     load_tet_mesh(tet_mesh_file, pts, tets);
+    size_t n_pts = pts.size();
+    size_t n_tets = tets.size();
     std::cout << "tet mesh: " << pts.size() << " verts, " << tets.size() << " tets." << std::endl;
 
     // load implicit function values, or evaluate
@@ -76,9 +78,10 @@ int main(int argc, const char* argv[]) {
     centers[3] = {0, 0, 0.5};
     double radius = 0.5;
 
-    std::vector<std::vector<double>> funcVals(n_func);
+    std::vector<Eigen::VectorXd> funcVals;
     {
         ScopedTimer<> timer("evaluate implicit functions at vertices");
+        funcVals.resize(n_func);
         for (size_t i = 0; i < n_func; i++) {
             funcVals[i].resize(pts.size());
             for (size_t j = 0; j < pts.size(); j++) {
@@ -87,8 +90,8 @@ int main(int argc, const char* argv[]) {
         }
     }
 
+
     // convert tet mesh and function values to Eigen matrix
-//    Eigen::MatrixXd TV(pts.size(), 3);
     Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor> TV;
     TV.resize(pts.size(), Eigen::NoChange);
     for (size_t i = 0; i < pts.size(); ++i) {
@@ -96,7 +99,6 @@ int main(int argc, const char* argv[]) {
         TV(i,1) = pts[i][1];
         TV(i,2) = pts[i][2];
     }
-//    Eigen::MatrixXi TT(tets.size(), 4);
     Eigen::Matrix<int, Eigen::Dynamic, 4, Eigen::RowMajor> TT;
     TT.resize(tets.size(), Eigen::NoChange);
     for (size_t i = 0; i < tets.size(); ++i) {
@@ -105,22 +107,24 @@ int main(int argc, const char* argv[]) {
         TT(i, 2) = tets[i][2];
         TT(i, 3) = tets[i][3];
     }
-    std::vector<Eigen::VectorXd> func_S(n_func);
-    for (size_t i = 0; i < n_func; ++i) {
-        auto& S = func_S[i];
-        S.resize(pts.size());
-        for (size_t j = 0; j < pts.size(); ++j) {
-            S(j) = funcVals[i][j];
-        }
-    }
+//    std::vector<Eigen::VectorXd> func_S(n_func);
+//    for (size_t i = 0; i < n_func; ++i) {
+//        auto& S = func_S[i];
+//        S.resize(pts.size());
+//        for (size_t j = 0; j < pts.size(); ++j) {
+//            S(j) = funcVals[i][j];
+//        }
+//    }
 
     // marching tet
-    std::vector<Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>> SV(n_func);
-    std::vector<Eigen::Matrix<int, Eigen::Dynamic, 3, Eigen::RowMajor>> SF(n_func);
+    std::vector<Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>> SV;
+    std::vector<Eigen::Matrix<int, Eigen::Dynamic, 3, Eigen::RowMajor>> SF;
     {
         ScopedTimer<> timer("marching tet");
+        SV.resize(n_func);
+        SF.resize(n_func);
         for (size_t i = 0; i < n_func; ++i) {
-            igl::marching_tets(TV, TT, func_S[i], 0, SV[i], SF[i]);
+            igl::marching_tets(TV, TT, funcVals[i], 0, SV[i], SF[i]);
         }
     }
 
@@ -156,11 +160,12 @@ int main(int argc, const char* argv[]) {
     }
 
     // merge meshes
-    std::vector<IGL_Mesh> iso_meshes(n_func);
+    std::vector<IGL_Mesh> iso_meshes;
     IGL_Mesh merged_mesh;
     Eigen::VectorXi face_to_mesh;
     {
         ScopedTimer<> timer("merge meshes");
+        iso_meshes.resize(n_func);
         for (size_t i = 0; i < n_func; ++i) {
             iso_meshes[i].vertices = SV[i];
             iso_meshes[i].faces = SF[i];
