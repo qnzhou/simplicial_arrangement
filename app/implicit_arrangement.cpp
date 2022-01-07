@@ -1,7 +1,6 @@
 #include <simplicial_arrangement/simplicial_arrangement.h>
 #include <simplicial_arrangement/lookup_table.h>
 
-#include <stdlib.h>
 #include <iostream>
 #include <fstream>
 #include <queue>
@@ -9,6 +8,10 @@
 #include "ScopedTimer.h"
 #include <chrono>
 #include <absl/container/flat_hash_map.h>
+#include <absl/container/flat_hash_set.h>
+
+#include <Eigen/Core>
+
 
 #include "implicit_arrangement_util.h"
 
@@ -23,7 +26,7 @@ int main(int argc, const char* argv[])
     // choose method to obtain arrangement cell
     // 1. order patches around chains
     // 2. group simplicial cells into arrangement cells
-    bool use_group_simplicial_cells_into_arrangement_cells = true;
+    bool use_group_simplicial_cells_into_arrangement_cells = false;
 
     std::cout << "load table ..." << std::endl;
     bool loaded = load_lookup_table();
@@ -32,19 +35,21 @@ int main(int argc, const char* argv[])
     }
 
     // load tet mesh
-//    std::string dataDir = "D:/research/simplicial_arrangement/data/";
+    //    std::string dataDir = "D:/research/simplicial_arrangement/data/";
     std::string dataDir = "/Users/charlesdu/Downloads/research/implicit_modeling/code/simplicial_arrangement/data/";
-    std::string resolution = "80k";
+    std::string resolution = "100k";
     std::string tet_mesh_file = dataDir + "tet_mesh_" + resolution + ".json";
     std::vector<std::array<double, 3>> pts;
     std::vector<std::array<size_t, 4>> tets;
     load_tet_mesh(tet_mesh_file, pts, tets);
+    size_t n_tets = tets.size();
+    size_t n_pts = pts.size();
     std::cout << "tet mesh: " << pts.size() << " verts, " << tets.size() << " tets." << std::endl;
 
     // find all boundary triangles of the tet mesh
-     {
+    {
         ScopedTimer<> timer("find boundary triangles of tet mesh");
-        absl::flat_hash_map<std::array<size_t, 3>, size_t> tet_of_tri;
+        absl::flat_hash_set<std::array<size_t, 3>> unpaired_tris;
         std::vector<std::array<size_t, 3>> four_tris(4);
         for (size_t i = 0; i < tets.size(); i++) {
             auto tet = tets[i];
@@ -54,22 +59,73 @@ int main(int argc, const char* argv[])
             four_tris[2] = {tet[0], tet[1], tet[3]};
             four_tris[3] = {tet[0], tet[1], tet[2]};
             for (size_t j = 0; j < 4; j++) {
-                auto iter_inserted = tet_of_tri.try_emplace(four_tris[j], i);
+                auto iter_inserted = unpaired_tris.insert(four_tris[j]);
                 if (!iter_inserted.second) {
-                    // triangle inserted before, delete it
-                    tet_of_tri.erase(iter_inserted.first);
+                    // triangle inserted before, we found a pair of triangles, delete it
+                    unpaired_tris.erase(iter_inserted.first);
                 }
             }
         }
-        std::cout << "num boundary tris = " << tet_of_tri.size() << std::endl;
+        std::cout << "num boundary tris = " << unpaired_tris.size() << std::endl;
     }
 
+    // find all boundary triangles of the tet mesh
+//    {
+//        ScopedTimer<> timer("find boundary triangles of tet mesh (std::move)");
+//        absl::flat_hash_set<std::array<size_t, 3>> unpaired_tris;
+//        std::vector<std::array<size_t, 3>> four_tris(4);
+//        for (size_t i = 0; i < tets.size(); i++) {
+//            auto tet = tets[i];
+//            std::sort(tet.begin(), tet.end());
+//            four_tris[0] = {tet[1], tet[2], tet[3]};
+//            four_tris[1] = {tet[0], tet[2], tet[3]};
+//            four_tris[2] = {tet[0], tet[1], tet[3]};
+//            four_tris[3] = {tet[0], tet[1], tet[2]};
+//            for (size_t j = 0; j < 4; j++) {
+//                auto iter_inserted = unpaired_tris.insert(std::move(four_tris[j]));
+//                if (!iter_inserted.second) {
+//                    // triangle inserted before, we found a pair of triangles, delete it
+//                    unpaired_tris.erase(iter_inserted.first);
+//                }
+//            }
+//        }
+//        std::cout << "num boundary tris = " << unpaired_tris.size() << std::endl;
+//    }
+
+    // find all boundary triangles of the tet mesh
+//    {
+//        ScopedTimer<> timer("find boundary triangles of tet mesh (move + reserve)");
+//        absl::flat_hash_set<std::array<size_t, 3>> unpaired_tris;
+//        unpaired_tris.reserve(n_tets * 4);
+//        std::vector<std::array<size_t, 3>> four_tris(4);
+//        for (size_t i = 0; i < tets.size(); i++) {
+//            auto tet = tets[i];
+//            std::sort(tet.begin(), tet.end());
+//            four_tris[0] = {tet[1], tet[2], tet[3]};
+//            four_tris[1] = {tet[0], tet[2], tet[3]};
+//            four_tris[2] = {tet[0], tet[1], tet[3]};
+//            four_tris[3] = {tet[0], tet[1], tet[2]};
+//            for (size_t j = 0; j < 4; j++) {
+//                auto iter_inserted = unpaired_tris.insert(std::move(four_tris[j]));
+//                if (!iter_inserted.second) {
+//                    // triangle inserted before, we found a pair of triangles, delete it
+//                    unpaired_tris.erase(iter_inserted.first);
+//                }
+//            }
+//        }
+//        std::cout << "num boundary tris = " << unpaired_tris.size() << std::endl;
+//    }
+
+
+
+
     // extract tet boundary mesh
-    std::vector<std::array<double, 3>> boundary_pts;
-    std::vector<std::array<size_t, 3>> boundary_tris;
-    extract_tet_boundary_mesh(pts, tets, boundary_pts, boundary_tris);
-    save_tri_mesh(dataDir + "tet_bndry_mesh_" + resolution + ".json",
-        boundary_pts, boundary_tris);
+    //    std::vector<std::array<double, 3>> boundary_pts;
+    //    std::vector<std::array<size_t, 3>> boundary_tris;
+    //    extract_tet_boundary_mesh(pts, tets, boundary_pts, boundary_tris);
+    //    save_tri_mesh(dataDir + "tet_bndry_mesh_" + resolution + ".json",
+    //        boundary_pts, boundary_tris);
+
 
     // load implicit function values, or evaluate
     size_t n_func = 4;
@@ -80,57 +136,71 @@ int main(int argc, const char* argv[])
     centers[3] = {0, 0, 0.5};
     double radius = 0.5;
 
-    std::vector<std::vector<double>> funcVals(n_func);
+
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals;
     {
         ScopedTimer<> timer("evaluate implicit functions at vertices");
+        funcVals.resize(n_func, n_pts);
         for (size_t i = 0; i < n_func; i++) {
-            funcVals[i].resize(pts.size());
-            for (size_t j = 0; j < pts.size(); j++) {
-                funcVals[i][j] = sphere_function(centers[i], radius, pts[j]);
+            for (size_t j = 0; j < n_pts; j++) {
+                funcVals(i,j) = sphere_function(centers[i], radius, pts[j]);
             }
         }
     }
-    
+
 
     // function signs at vertices
-    std::vector<std::vector<int>> funcSigns(n_func);
+    Eigen::MatrixXi funcSigns;
     {
         ScopedTimer<> timer("compute function signs at vertices");
+        funcSigns.resize(n_func, n_pts);
         for (size_t i = 0; i < n_func; i++) {
-            funcSigns[i].resize(pts.size());
-            for (size_t j = 0; j < pts.size(); j++) {
-                funcSigns[i][j] = sign(funcVals[i][j]);
+            for (size_t j = 0; j < n_pts; j++) {
+                funcSigns(i,j) = sign(funcVals(i,j));
             }
         }
     }
+//    {
+//        ScopedTimer<> timer("compute function signs at vertices");
+//        funcSigns = funcVals.unaryExpr([](double x) { return sign(x); });
+//    }
+
 
     // find functions whose iso-surfaces intersect tets
-    std::vector<std::vector<size_t>> func_in_tet(tets.size());
+    Eigen::Matrix<size_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> func_in_tet;
+    Eigen::VectorXi num_func_in_tet;
     {
         ScopedTimer<> timer("filter out intersecting implicits in each tet");
-        for (size_t i = 0; i < tets.size(); i++) {
-            func_in_tet[i].reserve(n_func);
+        func_in_tet.resize(n_tets, n_func);
+        num_func_in_tet.setZero(n_tets);
+        int pos_count;
+        int neg_count;
+        int num_func;
+        for (size_t i = 0; i < n_tets; i++) {
+            num_func = 0;
             for (size_t j = 0; j < n_func; j++) {
-                int pos_count = 0;
-                int neg_count = 0;
+                pos_count = 0;
+                neg_count = 0;
                 for (const auto& vId : tets[i]) {
-                    if (funcSigns[j][vId] == 1) {
+                    if (funcSigns(j,vId) == 1) {
                         pos_count += 1;
-                    } else if (funcSigns[j][vId] == -1) {
+                    } else if (funcSigns(j,vId) == -1) {
                         neg_count += 1;
                     }
                 }
                 // tets[i].size() == 4
                 if (pos_count < 4 && neg_count < 4) {
-                    func_in_tet[i].push_back(j);
+                    func_in_tet(i, num_func) = j;
+                    ++num_func;
                 }
             }
+            num_func_in_tet[i] = num_func;
         }
     }
 
     // compute arrangement in each tet (iterative plane cut)
-    std::vector<bool> has_isosurface(tets.size(), false);
-    std::vector<Arrangement<3>> cut_results(tets.size());
+    std::vector<bool> has_isosurface;
+    std::vector<Arrangement<3>> cut_results;
     size_t num_intersecting_tet = 0;
     //
     Time_duration time_1_func = Time_duration::zero();
@@ -139,9 +209,13 @@ int main(int argc, const char* argv[])
     //
     {
         ScopedTimer<> timer("compute arrangement in all tets");
+        has_isosurface.resize(n_tets, false);
+        cut_results.resize(n_tets);
+        int num_func;
         for (size_t i = 0; i < tets.size(); i++) {
-            const auto& func_ids = func_in_tet[i];
-            if (!func_ids.empty()) {
+            const auto& func_ids = func_in_tet.row(i);
+            num_func = num_func_in_tet(i);
+            if (num_func != 0) {
                 std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
                 //
                 has_isosurface[i] = true;
@@ -150,22 +224,29 @@ int main(int argc, const char* argv[])
                 size_t v2 = tets[i][1];
                 size_t v3 = tets[i][2];
                 size_t v4 = tets[i][3];
-                std::vector<Plane<double, 3>> planes(func_ids.size());
-                for (size_t j = 0; j < func_ids.size(); j++) {
-                    size_t f_id = func_ids[j];
-                    planes[j] = {funcVals[f_id][v1],
-                        funcVals[f_id][v2],
-                        funcVals[f_id][v3],
-                        funcVals[f_id][v4]};
+                std::vector<Plane<double, 3>> planes(num_func);
+                for (size_t j = 0; j < num_func; j++) {
+                    size_t f_id = func_ids(j);
+                    planes[j] = {funcVals(f_id,v1),
+                        funcVals(f_id,v2),
+                        funcVals(f_id,v3),
+                        funcVals(f_id,v4)};
                 }
                 //
-                cut_results[i] = compute_arrangement(planes);
+                if (num_func == 2) {
+                    disable_lookup_table();
+                    cut_results[i] = compute_arrangement(planes);
+                    enable_lookup_table();
+                } else {
+                    cut_results[i] = compute_arrangement(planes);
+                }
+
                 //
                 std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
-                switch (func_ids.size()) {
-                    case 1: time_1_func += std::chrono::duration_cast<Time_duration>(t2 - t1); break;
-                    case 2: time_2_func += std::chrono::duration_cast<Time_duration>(t2 - t1); break;
-                    default: time_more_func += std::chrono::duration_cast<Time_duration>(t2 - t1); break;
+                switch (num_func) {
+                case 1: time_1_func += std::chrono::duration_cast<Time_duration>(t2 - t1); break;
+                case 2: time_2_func += std::chrono::duration_cast<Time_duration>(t2 - t1); break;
+                default: time_more_func += std::chrono::duration_cast<Time_duration>(t2 - t1); break;
                 }
             }
         }
@@ -185,13 +266,15 @@ int main(int argc, const char* argv[])
         extract_iso_mesh(has_isosurface,
             cut_results,
             func_in_tet,
+            num_func_in_tet,
             tets,
             iso_verts,
             iso_faces,
             global_vId_of_tet_vert,
             iso_fId_of_tet_face);
     } else {
-        extract_iso_mesh_pure(has_isosurface, cut_results, func_in_tet, tets, iso_verts, iso_faces);
+        extract_iso_mesh_pure(has_isosurface, cut_results,
+            func_in_tet, num_func_in_tet, tets, iso_verts, iso_faces);
     }
     
     //std::cout << "num iso-vertices = " << iso_verts.size() << std::endl;
@@ -212,9 +295,10 @@ int main(int argc, const char* argv[])
     //std::cout << "num patches = " << patches.size() << std::endl;    
 
     // compute map: iso-face Id --> patch Id
-    std::vector<size_t> patch_of_face(iso_faces.size());
+    std::vector<size_t> patch_of_face;
     {
         ScopedTimer<> timer("compute iso-face-id to patch-id map");
+        patch_of_face.resize(iso_faces.size());
         for (size_t i = 0; i < patches.size(); i++) {
             for (const auto& fId : patches[i]) {
                 patch_of_face[fId] = i;
@@ -436,10 +520,11 @@ int main(int argc, const char* argv[])
     // another approach: order patches around chains
     else {
         // group non-manifold iso-edges into chains
-        std::vector<std::vector<size_t>> non_manifold_edges_of_vert(iso_pts.size());
+        std::vector<std::vector<size_t>> non_manifold_edges_of_vert;
         std::vector<std::vector<size_t>> chains;
         {
             ScopedTimer<> timer("group non-manifold iso-edges into chains");
+            non_manifold_edges_of_vert.resize(iso_pts.size());
             // get incident non-manifold edges for iso-vertices
             for (size_t i = 0; i < iso_edges.size(); i++) {
                 if (iso_edges[i].face_edge_indices.size() >
@@ -457,9 +542,10 @@ int main(int argc, const char* argv[])
         }
 
         // compute list of incident tets for each vertex
-        std::vector<std::vector<size_t>> incident_tets_of_vert(pts.size());
+        std::vector<std::vector<size_t>> incident_tets_of_vert;
         {
             ScopedTimer<> timer("compute vertex-tet adjacency of input tet mesh");
+            incident_tets_of_vert.resize(pts.size());
             // compute number of tets incident to each vertex
             std::vector<size_t> num_incident_tets(pts.size(), 0);
             for (size_t i = 0; i < tets.size(); i++) {
@@ -488,10 +574,12 @@ int main(int argc, const char* argv[])
         }
 
         // compute order of patches around chains
-        std::vector<std::vector<std::pair<size_t, int>>> half_faces_list(chains.size());
-        std::vector<std::vector<std::pair<size_t, int>>> half_patch_list(half_faces_list.size());
+        std::vector<std::vector<std::pair<size_t, int>>> half_faces_list;
+        std::vector<std::vector<std::pair<size_t, int>>> half_patch_list;
         {
             ScopedTimer<> timer("compute order of patches around chains");
+            half_faces_list.resize(chains.size());
+            half_patch_list.resize(half_faces_list.size());
             // pick representative iso-edge from each chain
             std::vector<size_t> chain_representatives(chains.size());
             for (size_t i = 0; i < chains.size(); i++) {
@@ -526,7 +614,7 @@ int main(int argc, const char* argv[])
         // each cell is a represented as a list of patch indices
         //std::vector<std::vector<size_t>> arrangement_cells;
         compute_arrangement_cells(patches.size(), half_patch_list, arrangement_cells);
-        // std::cout << "num arrangement cells = " << arrangement_cells.size() << std::endl;
+        std::cout << "num arrangement cells = " << arrangement_cells.size() << std::endl;
 
         // test: export iso-mesh, patches, chains
         save_result(
