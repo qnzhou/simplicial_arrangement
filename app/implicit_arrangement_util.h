@@ -2,6 +2,8 @@
 #include <simplicial_arrangement/simplicial_arrangement.h>
 #include <string>
 
+#include <Eigen/Core>
+
 using namespace simplicial_arrangement;
 
 
@@ -135,7 +137,8 @@ void compute_iso_face_key(const std::vector<size_t>& face_verts, std::array<size
 // extract iso-mesh (topology only) and create map: local index --> global index
 void extract_iso_mesh(const std::vector<bool>& has_isosurface,
     const std::vector<Arrangement<3>>& cut_results,
-    const std::vector<std::vector<size_t>>& func_in_tet,
+    const Eigen::Matrix<size_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &func_in_tet,
+    const Eigen::VectorXi &num_func_in_tet,
     const std::vector<std::array<size_t, 4>>& tets,
     std::vector<IsoVert>& iso_verts,
     std::vector<IsoFace>& iso_faces,
@@ -145,7 +148,8 @@ void extract_iso_mesh(const std::vector<bool>& has_isosurface,
 // extract iso-mesh (topology only)
 void extract_iso_mesh_pure(const std::vector<bool>& has_isosurface,
     const std::vector<Arrangement<3>>& cut_results,
-    const std::vector<std::vector<size_t>>& func_in_tet,
+    const Eigen::Matrix<size_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &func_in_tet,
+    const Eigen::VectorXi &num_func_in_tet,
     const std::vector<std::array<size_t, 4>>& tets,
     std::vector<IsoVert>& iso_verts,
     std::vector<IsoFace>& iso_faces);
@@ -160,7 +164,7 @@ void extract_iso_mesh_marching_tet(const std::vector<bool>& has_isosurface,
 // compute xyz coordinates of iso-vertices
 void compute_iso_vert_xyz(
     const std::vector<IsoVert> &iso_verts, 
-    const std::vector<std::vector<double>> &funcVals,
+    const Eigen::MatrixXd &funcVals,
     const std::vector<std::array<double, 3>> &pts,
     std::vector<std::array<double, 3>>& iso_pts);
 

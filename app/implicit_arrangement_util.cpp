@@ -12,6 +12,7 @@
 #include <absl/container/flat_hash_set.h>
 
 
+
 bool load_tet_mesh(const std::string& filename,
     std::vector<std::array<double, 3>>& pts,
     std::vector<std::array<size_t, 4>>& tets)
@@ -329,7 +330,8 @@ void compute_iso_face_key(const std::vector<size_t>& face_verts, std::array<size
 
 void extract_iso_mesh(const std::vector<bool>& has_isosurface,
     const std::vector<Arrangement<3>>& cut_results,
-    const std::vector<std::vector<size_t>>& func_in_tet,
+    const Eigen::Matrix<size_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &func_in_tet,
+    const Eigen::VectorXi &num_func_in_tet,
     const std::vector<std::array<size_t, 4>>& tets,
     std::vector<IsoVert>& iso_verts,
     std::vector<IsoFace>& iso_faces,
@@ -381,8 +383,8 @@ void extract_iso_mesh(const std::vector<bool>& has_isosurface,
             const auto& arrangement = cut_results[i];
             const auto& vertices = arrangement.vertices;
             const auto& faces = arrangement.faces;
-            const auto& func_ids = func_in_tet[i];
-            auto num_func = func_ids.size();
+            const auto& func_ids = func_in_tet.row(i);
+            auto num_func = num_func_in_tet(i);
             // find vertices and faces on isosurface
             std::vector<bool> is_iso_vert(vertices.size(), false);
             std::vector<bool> is_iso_face(faces.size(), false);
@@ -413,7 +415,7 @@ void extract_iso_mesh(const std::vector<bool>& has_isosurface,
                     // vertex.size() == 3
                     for (size_t k = 0; k < 3; k++) {
                         if (vertex[k] > 3) { // plane 0,1,2,3 are tet boundaries
-                            implicit_pIds[num_impl_planes] = func_ids[vertex[k] - 4];
+                            implicit_pIds[num_impl_planes] = func_ids(vertex[k] - 4);
                             ++num_impl_planes;
                         } else {
                             bndry_pIds[num_bndry_planes] = vertex[k];
@@ -583,7 +585,8 @@ void extract_iso_mesh(const std::vector<bool>& has_isosurface,
 
 void extract_iso_mesh_pure(const std::vector<bool>& has_isosurface,
     const std::vector<Arrangement<3>>& cut_results,
-    const std::vector<std::vector<size_t>>& func_in_tet,
+    const Eigen::Matrix<size_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &func_in_tet,
+    const Eigen::VectorXi &num_func_in_tet,
     const std::vector<std::array<size_t, 4>>& tets,
     std::vector<IsoVert>& iso_verts,
     std::vector<IsoFace>& iso_faces)
@@ -617,8 +620,8 @@ void extract_iso_mesh_pure(const std::vector<bool>& has_isosurface,
             const auto& arrangement = cut_results[i];
             const auto& vertices = arrangement.vertices;
             const auto& faces = arrangement.faces;
-            const auto& func_ids = func_in_tet[i];
-            auto num_func = func_ids.size();
+            const auto& func_ids = func_in_tet.row(i);
+            auto num_func = num_func_in_tet(i);
             // find vertices and faces on isosurface
             std::vector<bool> is_iso_vert(vertices.size(), false);
             std::vector<bool> is_iso_face(faces.size(), false);
@@ -649,7 +652,7 @@ void extract_iso_mesh_pure(const std::vector<bool>& has_isosurface,
                     // vertex.size() == 3
                     for (size_t k = 0; k < 3; k++) {
                         if (vertex[k] > 3) { // plane 0,1,2,3 are tet boundaries
-                            implicit_pIds[num_impl_planes] = func_ids[vertex[k] - 4];
+                            implicit_pIds[num_impl_planes] = func_ids(vertex[k] - 4);
                             ++num_impl_planes;
                         } else {
                             bndry_pIds[num_bndry_planes] = vertex[k];
@@ -995,7 +998,7 @@ void extract_iso_mesh_marching_tet(const std::vector<bool>& has_isosurface,
 
 void compute_iso_vert_xyz(
     const std::vector<IsoVert>& iso_verts,
-    const std::vector<std::vector<double>>& funcVals,
+    const Eigen::MatrixXd &funcVals,
     const std::vector<std::array<double, 3>>& pts,
     std::vector<std::array<double, 3>>& iso_pts)
 {
@@ -1010,8 +1013,8 @@ void compute_iso_vert_xyz(
             auto vId1 = iso_vert.simplex_vert_indices[0];
             auto vId2 = iso_vert.simplex_vert_indices[1];
             auto fId = iso_vert.func_indices[0];
-            auto f1 = funcVals[fId][vId1];
-            auto f2 = funcVals[fId][vId2];
+            auto f1 = funcVals(fId,vId1);
+            auto f2 = funcVals(fId,vId2);
             std::array<double, 2> b;
             compute_barycentric_coords(f1, f2, b);
             iso_pts[i][0] = b[0] * pts[vId1][0] + b[1] * pts[vId2][0];
@@ -1027,9 +1030,9 @@ void compute_iso_vert_xyz(
             auto fId1 = iso_vert.func_indices[0];
             auto fId2 = iso_vert.func_indices[1];
             std::array<double, 3> f1s = {
-                funcVals[fId1][vId1], funcVals[fId1][vId2], funcVals[fId1][vId3]};
+                funcVals(fId1,vId1), funcVals(fId1,vId2), funcVals(fId1,vId3)};
             std::array<double, 3> f2s = {
-                funcVals[fId2][vId1], funcVals[fId2][vId2], funcVals[fId2][vId3]};
+                funcVals(fId2,vId1), funcVals(fId2,vId2), funcVals(fId2,vId3)};
             std::array<double, 3> b;
             compute_barycentric_coords(f1s, f2s, b);
             iso_pts[i][0] = b[0] * pts[vId1][0] + b[1] * pts[vId2][0] + b[2] * pts[vId3][0];
@@ -1046,18 +1049,18 @@ void compute_iso_vert_xyz(
             auto fId1 = iso_vert.func_indices[0];
             auto fId2 = iso_vert.func_indices[1];
             auto fId3 = iso_vert.func_indices[2];
-            std::array<double, 4> f1s = {funcVals[fId1][vId1],
-                funcVals[fId1][vId2],
-                funcVals[fId1][vId3],
-                funcVals[fId1][vId4]};
-            std::array<double, 4> f2s = {funcVals[fId2][vId1],
-                funcVals[fId2][vId2],
-                funcVals[fId2][vId3],
-                funcVals[fId2][vId4]};
-            std::array<double, 4> f3s = {funcVals[fId3][vId1],
-                funcVals[fId3][vId2],
-                funcVals[fId3][vId3],
-                funcVals[fId3][vId4]};
+            std::array<double, 4> f1s = {funcVals(fId1,vId1),
+                funcVals(fId1,vId2),
+                funcVals(fId1,vId3),
+                funcVals(fId1,vId4)};
+            std::array<double, 4> f2s = {funcVals(fId2,vId1),
+                funcVals(fId2,vId2),
+                funcVals(fId2,vId3),
+                funcVals(fId2,vId4)};
+            std::array<double, 4> f3s = {funcVals(fId3,vId1),
+                funcVals(fId3,vId2),
+                funcVals(fId3,vId3),
+                funcVals(fId3,vId4)};
             std::array<double, 4> b;
             compute_barycentric_coords(f1s, f2s, f3s, b);
             iso_pts[i][0] = b[0] * pts[vId1][0] + b[1] * pts[vId2][0] + b[2] * pts[vId3][0] +
