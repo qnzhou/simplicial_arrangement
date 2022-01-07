@@ -115,6 +115,10 @@ bool save_tri_mesh_list(const std::string& filename,
     const std::vector<std::vector<std::array<double, 3>>> &verts_list,
     const std::vector<std::vector<std::array<size_t, 3>>> &tris_list);
 
+bool save_timings(const std::string& filename,
+    const std::vector<std::string> &timing_labels,
+    const std::vector<double> &timings);
+
 // extract the boundary triangle mesh of a tet mesh
 // assume: the tet mesh represents a simply-connected 3D volume
 // assume: the triangles of the boundary mesh don't need to be consistently oriented

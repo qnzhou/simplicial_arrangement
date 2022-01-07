@@ -210,6 +210,24 @@ bool save_tri_mesh(const std::string& filename,
     return true;
 }
 
+bool save_timings(const std::string& filename,
+    const std::vector<std::string>& timing_labels,
+    const std::vector<double>& timings)
+{
+    // assert timing_labels.size() == timings.size()
+    using json = nlohmann::json;
+    std::ofstream fout(filename.c_str());
+    //
+    json jOut;
+    for (size_t i = 0; i < timings.size(); ++i) {
+        jOut[timing_labels[i]] = timings[i];
+    }
+    //
+    fout << jOut << std::endl;
+    fout.close();
+    return true;
+}
+
 // extract the boundary triangle mesh of a tet mesh
 // assume: the tet mesh represents a simply-connected 3D volume
 // assume: the triangles of the boundary mesh don't need to be consistently oriented
@@ -338,7 +356,7 @@ void extract_iso_mesh(const std::vector<bool>& has_isosurface,
     std::vector<std::vector<size_t>> &global_vId_of_tet_vert,
     std::vector<std::vector<size_t>>& iso_fId_of_tet_face)
 {
-    ScopedTimer<> timer("extract iso mesh (topology only)");
+    ScopedTimer<> timer("extract mesh");
     // hash table for vertices on the boundary of tetrahedron
     absl::flat_hash_map<size_t, size_t> vert_on_tetVert;
     absl::flat_hash_map<std::array<size_t, 3>, size_t> vert_on_tetEdge;
@@ -591,7 +609,6 @@ void extract_iso_mesh_pure(const std::vector<bool>& has_isosurface,
     std::vector<IsoVert>& iso_verts,
     std::vector<IsoFace>& iso_faces)
 {
-    ScopedTimer<> timer("extract iso mesh (topology only)");
     // hash table for vertices on the boundary of tetrahedron
     absl::flat_hash_map<size_t, size_t> vert_on_tetVert;
     absl::flat_hash_map<std::array<size_t, 3>, size_t> vert_on_tetEdge;
@@ -1002,7 +1019,6 @@ void compute_iso_vert_xyz(
     const std::vector<std::array<double, 3>>& pts,
     std::vector<std::array<double, 3>>& iso_pts)
 {
-    ScopedTimer<> timer("compute xyz of iso-vertices");    
     iso_pts.resize(iso_verts.size());
 
     for (size_t i = 0; i < iso_verts.size(); i++) {
@@ -1112,7 +1128,6 @@ void compute_iso_vert_xyz_marching_tet(const std::vector<IsoVert>& iso_verts,
 // compute iso-edges and edge-face connectivity
 void compute_iso_edges(std::vector<IsoFace>& iso_faces, std::vector<IsoEdge>& iso_edges)
 {
-    ScopedTimer<> timer("compute iso-edges and edge-face connectivity");
     size_t max_num_edge = 0;
     for (size_t i = 0; i < iso_faces.size(); i++) {
         max_num_edge += iso_faces[i].vert_indices.size();
@@ -1158,7 +1173,6 @@ void compute_patches(const std::vector<IsoFace>& iso_faces,
     const std::vector<IsoEdge>& iso_edges,
     std::vector<std::vector<size_t>>& patches)
 {
-    ScopedTimer<> timer("group iso-faces into patches");
     std::vector<bool> visisted_face(iso_faces.size(), false);
     for (size_t i = 0; i < iso_faces.size(); i++) {
         if (!visisted_face[i]) {
@@ -1293,7 +1307,6 @@ void compute_arrangement_cells(size_t num_patch,
     const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
     std::vector<std::vector<size_t>>& arrangement_cells)
 {
-    ScopedTimer<> timer("group patches into arrangement cells");
     // (patch i, 1) <--> 2i,  (patch i, -1) <--> 2i+1
     // compute half-patch adjacency list
     std::vector<std::vector<size_t>> half_patch_adj_list(2 * num_patch);
@@ -1348,6 +1361,4 @@ void compute_arrangement_cells(size_t num_patch,
         }
     }
 }
-
-
 
