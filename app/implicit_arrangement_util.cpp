@@ -1,6 +1,6 @@
 #include "implicit_arrangement_util.h"
 
-#include <stdlib.h>
+#include <cstdlib>
 #include <iostream>
 #include <fstream>
 #include <queue>
@@ -168,13 +168,13 @@ bool save_iso_mesh_list(const std::string& filename,
         const auto& iso_pts = iso_pts_list[i];
         const auto& iso_faces = iso_faces_list[i];
         json jPts;
-        for (size_t i = 0; i < iso_pts.size(); i++) {
-            jPts.push_back(json(iso_pts[i]));
+        for (size_t j = 0; j < iso_pts.size(); j++) {
+            jPts.push_back(json(iso_pts[j]));
         }
         //
         json jFaces;
-        for (size_t i = 0; i < iso_faces.size(); i++) {
-            jFaces.push_back(json(iso_faces[i].vert_indices));
+        for (size_t j = 0; j < iso_faces.size(); j++) {
+            jFaces.push_back(json(iso_faces[j].vert_indices));
         }
         //
         json jMesh = {jPts, jFaces};
@@ -301,13 +301,13 @@ bool save_tri_mesh_list(const std::string& filename,
         const auto& verts = verts_list[i];
         const auto& tris = tris_list[i];
         json jVerts;
-        for (size_t i = 0; i < verts.size(); i++) {
-            jVerts.push_back(json(verts[i]));
+        for (size_t j = 0; j < verts.size(); j++) {
+            jVerts.push_back(json(verts[j]));
         }
         //
         json jTris;
-        for (size_t i = 0; i < tris.size(); i++) {
-            jTris.push_back(json(tris[i]));
+        for (size_t j = 0; j < tris.size(); j++) {
+            jTris.push_back(json(tris[j]));
         }
         //
         json jMesh = {jVerts, jTris};
@@ -601,10 +601,11 @@ void extract_iso_mesh(const std::vector<bool>& has_isosurface,
     iso_faces.resize(num_iso_face);
 }
 
-void extract_iso_mesh_pure(const std::vector<bool>& has_isosurface,
+void extract_iso_mesh_pure(
     const std::vector<Arrangement<3>>& cut_results,
-    const Eigen::Matrix<size_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &func_in_tet,
-    const Eigen::VectorXi &num_func_in_tet,
+    const std::vector<size_t>& cut_result_index,
+    const std::vector<size_t>& func_in_tet,
+    const std::vector<size_t>& start_index_of_tet,
     const std::vector<std::array<size_t, 4>>& tets,
     std::vector<IsoVert>& iso_verts,
     std::vector<IsoFace>& iso_faces)
@@ -616,13 +617,13 @@ void extract_iso_mesh_pure(const std::vector<bool>& has_isosurface,
     // hash table for faces on the boundary of tetrahedron
     absl::flat_hash_map<std::array<size_t, 3>, size_t> face_on_tetFace;
     //
-    size_t num_tet = has_isosurface.size();
+    size_t n_tets = tets.size();
     size_t max_num_vert = 0;
     size_t max_num_face = 0;
-    for (size_t i = 0; i < num_tet; i++) {
-        if (has_isosurface[i]) {
-            max_num_vert += cut_results[i].vertices.size();
-            max_num_face += cut_results[i].faces.size();
+    for (size_t i = 0; i < n_tets; i++) {
+        if (cut_result_index[i] != Arrangement<3>::None) {
+            max_num_vert += cut_results[cut_result_index[i]].vertices.size();
+            max_num_face += cut_results[cut_result_index[i]].faces.size();
         }
     }
     iso_verts.resize(max_num_vert);
@@ -632,13 +633,15 @@ void extract_iso_mesh_pure(const std::vector<bool>& has_isosurface,
     size_t num_iso_vert = 0;
     size_t num_iso_face = 0;    
     //
-    for (size_t i = 0; i < num_tet; i++) {
-        if (has_isosurface[i]) {
-            const auto& arrangement = cut_results[i];
+    for (size_t i = 0; i < n_tets; i++) {
+        if (cut_result_index[i] != Arrangement<3>::None) {
+            const auto& arrangement = cut_results[cut_result_index[i]];
             const auto& vertices = arrangement.vertices;
             const auto& faces = arrangement.faces;
-            const auto& func_ids = func_in_tet.row(i);
-            auto num_func = num_func_in_tet(i);
+//            const auto& func_ids = func_in_tet.row(i);
+//            auto num_func = num_func_in_tet(i);
+            auto start_index = start_index_of_tet[i];
+            auto num_func = start_index_of_tet[i+1] - start_index;
             // find vertices and faces on isosurface
             std::vector<bool> is_iso_vert(vertices.size(), false);
             std::vector<bool> is_iso_face(faces.size(), false);
@@ -669,7 +672,8 @@ void extract_iso_mesh_pure(const std::vector<bool>& has_isosurface,
                     // vertex.size() == 3
                     for (size_t k = 0; k < 3; k++) {
                         if (vertex[k] > 3) { // plane 0,1,2,3 are tet boundaries
-                            implicit_pIds[num_impl_planes] = func_ids(vertex[k] - 4);
+//                            implicit_pIds[num_impl_planes] = func_ids(vertex[k] - 4);
+                            implicit_pIds[num_impl_planes] = func_in_tet[vertex[k] - 4 + start_index];
                             ++num_impl_planes;
                         } else {
                             bndry_pIds[num_bndry_planes] = vertex[k];

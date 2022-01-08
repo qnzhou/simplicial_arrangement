@@ -2,13 +2,9 @@
 #include <simplicial_arrangement/lookup_table.h>
 
 #include <iostream>
-#include <fstream>
 #include <queue>
-#include <nlohmann/json.hpp>
 #include "ScopedTimer.h"
 #include <chrono>
-#include <absl/container/flat_hash_map.h>
-#include <absl/container/flat_hash_set.h>
 
 #include <Eigen/Core>
 
@@ -26,7 +22,7 @@ int main(int argc, const char* argv[])
     // choose method to obtain arrangement cell
     // 1. order patches around chains
     // 2. group simplicial cells into arrangement cells
-    bool use_group_simplicial_cells_into_arrangement_cells = false;
+//    bool use_group_simplicial_cells_into_arrangement_cells = false;
 
     std::cout << "load table ..." << std::endl;
     bool loaded = load_lookup_table();
@@ -41,7 +37,7 @@ int main(int argc, const char* argv[])
     // load tet mesh
     //    std::string dataDir = "D:/research/simplicial_arrangement/data/";
     std::string dataDir = "/Users/charlesdu/Downloads/research/implicit_modeling/code/simplicial_arrangement/data/";
-    std::string resolution = "1000k";
+    std::string resolution = "10k";
     std::string tet_mesh_file = dataDir + "tet_mesh_" + resolution + ".json";
     std::vector<std::array<double, 3>> pts;
     std::vector<std::array<size_t, 4>> tets;
@@ -49,88 +45,6 @@ int main(int argc, const char* argv[])
     size_t n_tets = tets.size();
     size_t n_pts = pts.size();
     std::cout << "tet mesh: " << pts.size() << " verts, " << tets.size() << " tets." << std::endl;
-
-    // find all boundary triangles of the tet mesh
-//    {
-//        timing_labels.emplace_back("tet mesh boundary");
-//        ScopedTimer<> timer("tet mesh boundary");
-//        absl::flat_hash_set<std::array<size_t, 3>> unpaired_tris;
-//        std::vector<std::array<size_t, 3>> four_tris(4);
-//        for (size_t i = 0; i < tets.size(); i++) {
-//            auto tet = tets[i];
-//            std::sort(tet.begin(), tet.end());
-//            four_tris[0] = {tet[1], tet[2], tet[3]};
-//            four_tris[1] = {tet[0], tet[2], tet[3]};
-//            four_tris[2] = {tet[0], tet[1], tet[3]};
-//            four_tris[3] = {tet[0], tet[1], tet[2]};
-//            for (size_t j = 0; j < 4; j++) {
-//                auto iter_inserted = unpaired_tris.insert(four_tris[j]);
-//                if (!iter_inserted.second) {
-//                    // triangle inserted before, we found a pair of triangles, delete it
-//                    unpaired_tris.erase(iter_inserted.first);
-//                }
-//            }
-//        }
-//        timings.push_back(timer.toc());
-//        //std::cout << "num boundary tris = " << unpaired_tris.size() << std::endl;
-//    }
-
-    // find all boundary triangles of the tet mesh
-//    {
-//        ScopedTimer<> timer("find boundary triangles of tet mesh (std::move)");
-//        absl::flat_hash_set<std::array<size_t, 3>> unpaired_tris;
-//        std::vector<std::array<size_t, 3>> four_tris(4);
-//        for (size_t i = 0; i < tets.size(); i++) {
-//            auto tet = tets[i];
-//            std::sort(tet.begin(), tet.end());
-//            four_tris[0] = {tet[1], tet[2], tet[3]};
-//            four_tris[1] = {tet[0], tet[2], tet[3]};
-//            four_tris[2] = {tet[0], tet[1], tet[3]};
-//            four_tris[3] = {tet[0], tet[1], tet[2]};
-//            for (size_t j = 0; j < 4; j++) {
-//                auto iter_inserted = unpaired_tris.insert(std::move(four_tris[j]));
-//                if (!iter_inserted.second) {
-//                    // triangle inserted before, we found a pair of triangles, delete it
-//                    unpaired_tris.erase(iter_inserted.first);
-//                }
-//            }
-//        }
-//        std::cout << "num boundary tris = " << unpaired_tris.size() << std::endl;
-//    }
-
-    // find all boundary triangles of the tet mesh
-//    {
-//        ScopedTimer<> timer("find boundary triangles of tet mesh (move + reserve)");
-//        absl::flat_hash_set<std::array<size_t, 3>> unpaired_tris;
-//        unpaired_tris.reserve(n_tets * 4);
-//        std::vector<std::array<size_t, 3>> four_tris(4);
-//        for (size_t i = 0; i < tets.size(); i++) {
-//            auto tet = tets[i];
-//            std::sort(tet.begin(), tet.end());
-//            four_tris[0] = {tet[1], tet[2], tet[3]};
-//            four_tris[1] = {tet[0], tet[2], tet[3]};
-//            four_tris[2] = {tet[0], tet[1], tet[3]};
-//            four_tris[3] = {tet[0], tet[1], tet[2]};
-//            for (size_t j = 0; j < 4; j++) {
-//                auto iter_inserted = unpaired_tris.insert(std::move(four_tris[j]));
-//                if (!iter_inserted.second) {
-//                    // triangle inserted before, we found a pair of triangles, delete it
-//                    unpaired_tris.erase(iter_inserted.first);
-//                }
-//            }
-//        }
-//        std::cout << "num boundary tris = " << unpaired_tris.size() << std::endl;
-//    }
-
-
-
-
-    // extract tet boundary mesh
-    //    std::vector<std::array<double, 3>> boundary_pts;
-    //    std::vector<std::array<size_t, 3>> boundary_tris;
-    //    extract_tet_boundary_mesh(pts, tets, boundary_pts, boundary_tris);
-    //    save_tri_mesh(dataDir + "tet_bndry_mesh_" + resolution + ".json",
-    //        boundary_pts, boundary_tris);
 
 
     // load implicit function values, or evaluate
@@ -175,91 +89,15 @@ int main(int argc, const char* argv[])
 //        funcSigns = funcVals.unaryExpr([](double x) { return sign(x); });
 //    }
 
-
-    // find functions whose iso-surfaces intersect tets
-    Eigen::Matrix<size_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> func_in_tet;
-    Eigen::VectorXi num_func_in_tet;
-//    Time_duration t_mem = Time_duration::zero();
+    size_t num_intersecting_tet = 0;
+    std::vector<size_t> func_in_tet;
+    std::vector<size_t> start_index_of_tet;
     {
         timing_labels.emplace_back("filter");
-        ScopedTimer<> timer("filter");
-//        std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
-        func_in_tet.resize(n_tets, n_func);
-        num_func_in_tet.setZero(n_tets);
-//        std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
-//        t_mem = std::chrono::duration_cast<Time_duration>(t2 - t1);
-        int pos_count;
-        int neg_count;
-        int num_func;
-        for (size_t i = 0; i < n_tets; i++) {
-            num_func = 0;
-            for (size_t j = 0; j < n_func; j++) {
-                pos_count = 0;
-                neg_count = 0;
-                for (const auto& vId : tets[i]) {
-                    if (funcSigns(j,vId) == 1) {
-                        pos_count += 1;
-                    } else if (funcSigns(j,vId) == -1) {
-                        neg_count += 1;
-                    }
-                }
-                // tets[i].size() == 4
-                if (pos_count < 4 && neg_count < 4) {
-                    func_in_tet(i, num_func) = j;
-                    ++num_func;
-                }
-            }
-            num_func_in_tet[i] = num_func;
-        }
-        timings.push_back(timer.toc());
-//        std::cout << "num_func_in_tet[xxx] = " << num_func_in_tet[12910] << std::endl;
-    }
-//    std::cout << " -- [mem alloc]: " << t_mem.count() << std::endl;
-
-    // find functions whose iso-surfaces intersect tets
-    {
-        timing_labels.emplace_back("filter(flat 2D vector)");
-        ScopedTimer<> timer("filter(flat 2D vector)");
-        std::vector<int> func_in_tet(n_tets * n_func);
-        std::vector<int> num_func_in_tet(n_tets);
-        int pos_count;
-        int neg_count;
-        int num_func;
-        for (size_t i = 0; i < n_tets; i++) {
-            num_func = 0;
-            for (size_t j = 0; j < n_func; j++) {
-                pos_count = 0;
-                neg_count = 0;
-                for (const auto& vId : tets[i]) {
-                    if (funcSigns(j,vId) == 1) {
-                        pos_count += 1;
-                    } else if (funcSigns(j,vId) == -1) {
-                        neg_count += 1;
-                    }
-                }
-                // tets[i].size() == 4
-                if (pos_count < 4 && neg_count < 4) {
-                    func_in_tet[i*n_func + num_func] = j;
-                    ++num_func;
-                }
-            }
-            num_func_in_tet[i] = num_func;
-        }
-        timings.push_back(timer.toc());
-//        int tmp = num_func_in_tet[0];
-//        std::cout << "num_func_in_tet[xxx] = " << num_func_in_tet[12910] << std::endl;
-//        std::cout << "num_func_in_tet[xxx] = " << tmp << std::endl;
-    }
-
-    size_t num_intersecting_tet = 0;
-    {
-        timing_labels.emplace_back("filter(CRS vector)");
         ScopedTimer<> timer("filter(CRS vector)");
-        std::vector<size_t> func_in_tet;
-        std::vector<size_t> start_indices;
         func_in_tet.reserve(n_tets);
-        start_indices.reserve(n_tets+1);
-        start_indices.push_back(0);
+        start_index_of_tet.reserve(n_tets+1);
+        start_index_of_tet.push_back(0);
         int pos_count;
         int neg_count;
         for (size_t i = 0; i < n_tets; i++) {
@@ -278,10 +116,10 @@ int main(int argc, const char* argv[])
                     func_in_tet.push_back(j);
                 }
             }
-            if (func_in_tet.size() > start_indices.back()) {
+            if (func_in_tet.size() > start_index_of_tet.back()) {
                 ++num_intersecting_tet;
             }
-            start_indices.push_back(func_in_tet.size());
+            start_index_of_tet.push_back(func_in_tet.size());
         }
         timings.push_back(timer.toc());
     }
@@ -291,9 +129,8 @@ int main(int argc, const char* argv[])
 
 
     // compute arrangement in each tet (iterative plane cut)
-    std::vector<bool> has_isosurface;
     std::vector<Arrangement<3>> cut_results;
-    //size_t num_intersecting_tet = 0;
+    std::vector<size_t> cut_result_index;
     //
     Time_duration time_1_func = Time_duration::zero();
     Time_duration time_2_func = Time_duration::zero();
@@ -302,50 +139,53 @@ int main(int argc, const char* argv[])
     {
         timing_labels.emplace_back("simp_arr(other)");
         ScopedTimer<> timer("simp_arr");
-        has_isosurface.resize(n_tets, false);
-        cut_results.resize(n_tets);
-        int num_func;
+        cut_results.reserve(num_intersecting_tet);
+        cut_result_index.reserve(n_tets);
+        size_t start_index;
+        size_t num_func;
         for (size_t i = 0; i < tets.size(); i++) {
-            const auto& func_ids = func_in_tet.row(i);
-            num_func = num_func_in_tet(i);
-            if (num_func != 0) {
-                std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
-                //
-                has_isosurface[i] = true;
-//                ++num_intersecting_tet;
-                size_t v1 = tets[i][0];
-                size_t v2 = tets[i][1];
-                size_t v3 = tets[i][2];
-                size_t v4 = tets[i][3];
-                std::vector<Plane<double, 3>> planes(num_func);
-                for (size_t j = 0; j < num_func; j++) {
-                    size_t f_id = func_ids(j);
-                    planes[j] = {funcVals(f_id,v1),
-                        funcVals(f_id,v2),
-                        funcVals(f_id,v3),
-                        funcVals(f_id,v4)};
-                }
-                //
+            start_index = start_index_of_tet[i];
+            num_func = start_index_of_tet[i+1] - start_index;
+            if (num_func == 0) {
+                cut_result_index.push_back(Arrangement<3>::None);
+                continue;
+            }
+
+            std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+            //
+            size_t v1 = tets[i][0];
+            size_t v2 = tets[i][1];
+            size_t v3 = tets[i][2];
+            size_t v4 = tets[i][3];
+            std::vector<Plane<double, 3>> planes(num_func);
+            for (size_t j = 0; j < num_func; j++) {
+                size_t f_id = func_in_tet[start_index + j];
+                planes[j] = {funcVals(f_id,v1),
+                    funcVals(f_id,v2),
+                    funcVals(f_id,v3),
+                    funcVals(f_id,v4)};
+            }
+            //
 //                if (num_func == 2) {
 //                    disable_lookup_table();
 //                    cut_results[i] = compute_arrangement(planes);
 //                    enable_lookup_table();
 //                } else {
-                    cut_results[i] = compute_arrangement(planes);
+                cut_result_index.push_back(cut_results.size());
+                cut_results.emplace_back(std::move(compute_arrangement(planes)));
 //                }
 
-                //
-                std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
-                switch (num_func) {
-                case 1: time_1_func += std::chrono::duration_cast<Time_duration>(t2 - t1); break;
-                case 2: time_2_func += std::chrono::duration_cast<Time_duration>(t2 - t1); break;
-                default: time_more_func += std::chrono::duration_cast<Time_duration>(t2 - t1); break;
-                }
+            //
+            std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+            switch (num_func) {
+            case 1: time_1_func += std::chrono::duration_cast<Time_duration>(t2 - t1); break;
+            case 2: time_2_func += std::chrono::duration_cast<Time_duration>(t2 - t1); break;
+            default: time_more_func += std::chrono::duration_cast<Time_duration>(t2 - t1); break;
             }
+
         }
         timings.push_back(timer.toc() - time_1_func.count() - time_2_func.count() - time_more_func.count());
     }
-    //std::cout << "num_intersecting_tet = " << num_intersecting_tet << std::endl;
     timing_labels.emplace_back("simp_arr(1 func)");
     timings.push_back(time_1_func.count());
     timing_labels.emplace_back("simp_arr(2 func)");
@@ -359,25 +199,14 @@ int main(int argc, const char* argv[])
     // extract arrangement mesh
     std::vector<IsoVert> iso_verts;
     std::vector<IsoFace> iso_faces;
-    std::vector<std::vector<size_t>> global_vId_of_tet_vert;  // this is used later when we want to know the global vert index of a local vertex in a tet
-    std::vector<std::vector<size_t>> iso_fId_of_tet_face; // this is used later when we want to know the global face index of a local face in a tet
-    if (use_group_simplicial_cells_into_arrangement_cells) {
-        extract_iso_mesh(has_isosurface,
-            cut_results,
-            func_in_tet,
-            num_func_in_tet,
-            tets,
-            iso_verts,
-            iso_faces,
-            global_vId_of_tet_vert,
-            iso_fId_of_tet_face);
-    } else {
+    {
         timing_labels.emplace_back("extract mesh");
         ScopedTimer<> timer("extract mesh");
-        extract_iso_mesh_pure(has_isosurface, cut_results,
-            func_in_tet, num_func_in_tet, tets, iso_verts, iso_faces);
+        extract_iso_mesh_pure(
+            cut_results, cut_result_index, func_in_tet, start_index_of_tet, tets, iso_verts, iso_faces);
         timings.push_back(timer.toc());
     }
+
     
     //std::cout << "num iso-vertices = " << iso_verts.size() << std::endl;
     //std::cout << "num iso-faces = " << iso_faces.size() << std::endl;
@@ -427,218 +256,8 @@ int main(int argc, const char* argv[])
     }
 
     std::vector<std::vector<size_t>> arrangement_cells;
-    if (use_group_simplicial_cells_into_arrangement_cells)
-    // baseline approach: group simplicial cells into arrangement cells
-    {
-        {
-            ScopedTimer<> timer("assign global index to all vertices");
-            // ------------ assign a global index for every vertex (iso-vertices or tet vertices)
-            // ---------------- global index of iso-vertex = iso-vertex's index in 'iso_verts'
-            // global index of tet vertex = iso_verts.size() + vertex's index in 'pts'
-            /*size_t tmp_count_1 = 0;
-            size_t tmp_count_2 = 0;
-            size_t tmp_count_3 = 0;*/
-            size_t num_iso_vert = iso_verts.size();
-            for (size_t i = 0; i < tets.size(); i++) {
-                if (has_isosurface[i]) {
-                    auto& global_vId_of_vert = global_vId_of_tet_vert[i];
-                    for (size_t j = 0; j < global_vId_of_vert.size(); j++) {
-                        if (global_vId_of_vert[j] == Arrangement<3>::None) {
-                            global_vId_of_vert[j] = num_iso_vert + tets[i][j];
-                            /*if (j > 4) {
-                                ++tmp_count_1;
-                            } else {
-                                const auto &plane_Ids = cut_results[i].vertices[j];
-                                std::vector<bool> used_pId(4, false);
-                                for (const auto& pId : plane_Ids) {
-                                    used_pId[pId] = true;
-                                }
-                                size_t vId;
-                                for (size_t k = 0; k < 4; k++) {
-                                    if (!used_pId[k]) {
-                                        vId = k;
-                                        break;
-                                    }
-                                }
-                                if (vId == j) {
-                                    ++tmp_count_2;
-                                } else {
-                                    ++tmp_count_3;
-                                }
-                            }*/
-                        }
-                    }
-
-                } else { // tet i has no iso-surface
-                    global_vId_of_tet_vert[i][0] = num_iso_vert + tets[i][0];
-                    global_vId_of_tet_vert[i][1] = num_iso_vert + tets[i][1];
-                    global_vId_of_tet_vert[i][2] = num_iso_vert + tets[i][2];
-                    global_vId_of_tet_vert[i][3] = num_iso_vert + tets[i][3];
-                }
-            }
-            // test
-            // assert: tmp_count_1 == 0, tmp_count_3 == 0
-            /*std::cout << "count(j >  4) = " << tmp_count_1 << std::endl;
-            std::cout << "count(j <= 4 and j==vId) = " << tmp_count_2 << std::endl;
-            std::cout << "count(j <= 4 and j!=vId) = " << tmp_count_3 << std::endl;*/
-        }
-        // ------------------- build adjacency graph of simplicial cells ---------------
-        std::vector<Simplicial_Cell> simp_cells;
-        {
-            ScopedTimer<> timer("build adjacency graph of simplicial cells");
-            size_t num_simplicial_cells = 0;
-            for (size_t i = 0; i < tets.size(); i++) {
-                if (has_isosurface[i]) {
-                    num_simplicial_cells += cut_results[i].cells.size();
-                } else {
-                    ++num_simplicial_cells;
-                }
-            }
-            simp_cells.resize(num_simplicial_cells);
-            // hash table: face key --> (simplicial cell index, face index in simplicial cell)
-            absl::flat_hash_map<std::array<size_t, 3>, std::pair<size_t, size_t>>
-                incident_cell_of_face;
-            size_t cur_simp_cell_id = 0;
-            for (size_t i = 0; i < tets.size(); i++) {
-                if (has_isosurface[i]) {
-                    const auto& arrangement = cut_results[i];
-                    const auto& cells = arrangement.cells;
-                    for (size_t j = 0; j < cells.size(); j++) {
-                        // create a new simplicial cell
-                        const auto& cell = cells[j];
-                        auto& cur_simp_cell = simp_cells[cur_simp_cell_id];
-                        cur_simp_cell.tet_Id = i;
-                        cur_simp_cell.tet_cell_Id = j;
-                        cur_simp_cell.is_iso_face.resize(cell.faces.size(), false);
-                        cur_simp_cell.face_info.resize(cell.faces.size(), Arrangement<3>::None);
-                        for (size_t k = 0; k < cell.faces.size(); k++) {
-                            size_t fId = cell.faces[k];
-                            size_t iso_fId = iso_fId_of_tet_face[i][fId];
-                            if (iso_fId != Arrangement<3>::None) { // face k is on iso-surface
-                                cur_simp_cell.is_iso_face[k] = true;
-                                cur_simp_cell.face_info[k] = patch_of_face[iso_fId];
-                            } else { // face k is not on iso-surface
-                                std::vector<size_t> face_verts = arrangement.faces[fId].vertices;
-                                // convert from local vert index to global vert index
-                                for (size_t l = 0; l < face_verts.size(); l++) {
-                                    face_verts[l] = global_vId_of_tet_vert[i][face_verts[l]];
-                                }
-                                //
-                                std::array<size_t, 3> key;
-                                compute_iso_face_key(face_verts, key);
-                                auto iter_inserted = incident_cell_of_face.try_emplace(
-                                    key, std::make_pair(cur_simp_cell_id, k));
-                                if (!iter_inserted.second) { // same face has been inserted before
-                                    size_t opposite_simp_cell_id =
-                                        iter_inserted.first->second.first;
-                                    size_t opposite_cell_face_id =
-                                        iter_inserted.first->second.second;
-                                    // make neighbor
-                                    cur_simp_cell.face_info[k] = opposite_simp_cell_id;
-                                    simp_cells[opposite_simp_cell_id]
-                                        .face_info[opposite_cell_face_id] = cur_simp_cell_id;
-                                    // delete face in hash table since a face can only be shared by two cells 
-                                    incident_cell_of_face.erase(iter_inserted.first); // this actually makes it slower
-                                }
-                            }
-                        }
-                        ++cur_simp_cell_id;
-                    }
-                } else { // tet i has no isosurface
-                    auto& cur_simp_cell = simp_cells[cur_simp_cell_id];
-                    cur_simp_cell.tet_Id = i;
-                    cur_simp_cell.tet_cell_Id = 0;
-                    cur_simp_cell.is_iso_face.resize(
-                        4, false); // 4 triangles of tet i are not on isosurface
-                    cur_simp_cell.face_info.resize(4, Arrangement<3>::None);
-                    //
-                    const auto& global_vIds = global_vId_of_tet_vert[i];
-                    std::vector<std::array<size_t, 3>> four_face_verts(4);
-                    // face 0
-                    four_face_verts[0] = {global_vIds[1], global_vIds[2], global_vIds[3]};
-                    std::sort(four_face_verts[0].begin(), four_face_verts[0].end());
-                    // face 1
-                    four_face_verts[1] = {global_vIds[2], global_vIds[3], global_vIds[0]};
-                    std::sort(four_face_verts[1].begin(), four_face_verts[1].end());
-                    // face 2
-                    four_face_verts[2] = {global_vIds[3], global_vIds[0], global_vIds[1]};
-                    std::sort(four_face_verts[2].begin(), four_face_verts[2].end());
-                    // face 3
-                    four_face_verts[3] = {global_vIds[0], global_vIds[1], global_vIds[2]};
-                    std::sort(four_face_verts[3].begin(), four_face_verts[3].end());
-                    //
-                    for (size_t j = 0; j < 4; j++) {
-                        auto iter_inserted = incident_cell_of_face.try_emplace(
-                            four_face_verts[j], std::make_pair(cur_simp_cell_id, j));
-                        if (!iter_inserted.second) { // same face has been inserted before
-                            size_t opposite_simp_cell_id = iter_inserted.first->second.first;
-                            size_t opposite_cell_face_id = iter_inserted.first->second.second;
-                            // make neighbor
-                            cur_simp_cell.face_info[j] = opposite_simp_cell_id;
-                            simp_cells[opposite_simp_cell_id].face_info[opposite_cell_face_id] =
-                                cur_simp_cell_id;
-                            // delete face in hash table since a face can only be shared by two cells
-                            incident_cell_of_face.erase(iter_inserted.first); // this actually makes it slower
-                        }
-                    }
-                    ++cur_simp_cell_id;
-                }
-            }
-            //std::cout << "incident_cell_of_face.size() = " << incident_cell_of_face.size() << std::endl;
-        }
-        {
-            // ------------------- group simplical cells into arrangement cells ---------------
-            ScopedTimer<> timer("group simplical cells into arrangement cells");
-            std::vector<bool> visited_simp_cell(simp_cells.size(), false);
-            std::vector<std::vector<size_t>> simp_cells_of_arrangement_cell;
-            // arrangement_cell_incident_patch[i][j] == true if cell i is incident to patch j
-            std::vector<std::vector<bool>> arrangement_cell_incident_patch;
-            for (size_t i = 0; i < simp_cells.size(); i++) {
-                if (!visited_simp_cell[i]) {
-                    // new arrangement cell
-                    simp_cells_of_arrangement_cell.emplace_back();
-                    auto& simp_cell_list = simp_cells_of_arrangement_cell.back();
-                    arrangement_cell_incident_patch.emplace_back(patches.size(), false);
-                    auto& incident_patches = arrangement_cell_incident_patch.back();
-                    //
-                    std::queue<size_t> Q;
-                    Q.push(i);
-                    visited_simp_cell[i] = true;
-                    while (!Q.empty()) {
-                        size_t simp_cell_id = Q.front();
-                        //simp_cell_list.push_back(simp_cell_id);  // note: maybe this is not needed
-                        Q.pop();
-                        const auto& simp_cell = simp_cells[simp_cell_id];
-                        for (size_t j = 0; j < simp_cell.face_info.size(); j++) {
-                            if (simp_cell.is_iso_face[j]) {
-                                incident_patches[simp_cell.face_info[j]] = true;
-                            } else if (simp_cell.face_info[j] != Arrangement<3>::None &&
-                                       !visited_simp_cell[simp_cell.face_info[j]]) {
-                                // if the opposite cell exists and has not been visited
-                                size_t opposite_simp_cell_id = simp_cell.face_info[j];
-                                Q.push(opposite_simp_cell_id);
-                                visited_simp_cell[opposite_simp_cell_id] = true;
-                            }
-                        }
-                    }
-                }
-            }
-            // collect bounding patches for each arrangement cell
-            arrangement_cells.resize(arrangement_cell_incident_patch.size());
-            for (size_t i = 0; i < arrangement_cells.size(); i++) {
-                auto& arrangement_cell = arrangement_cells[i];
-                const auto& incident_patches = arrangement_cell_incident_patch[i];
-                for (size_t j = 0; j < incident_patches.size(); j++) {
-                    if (incident_patches[j]) {
-                        arrangement_cell.push_back(j);
-                    }
-                }
-            }
-            // std::cout << "num arrangement cells = " << arrangement_cells.size() << std::endl;
-        }
-    }
     // another approach: order patches around chains
-    else {
+
         // group non-manifold iso-edges into chains
         std::vector<std::vector<size_t>> non_manifold_edges_of_vert;
         std::vector<std::vector<size_t>> chains;
@@ -663,52 +282,6 @@ int main(int argc, const char* argv[])
         }
         // std::cout << "num chains = " << chains.size() << std::endl;
 
-
-//        {
-//            // this approach causes 'segmentation fault' for large tet mesh
-//            timing_labels.emplace_back("vert-tet connectivity(compact int[])");
-//            ScopedTimer<> timer("vert-tet connectivity(compact int[])");
-//            // compute number of tets incident to each vertex
-//            int num_incident_tets[n_pts];
-//            for (int i = 0; i < n_pts; ++i) {
-//                num_incident_tets[i] = 0;
-//            }
-//            for (const auto & tet : tets) {
-//                num_incident_tets[tet[0]] += 1;
-//                num_incident_tets[tet[1]] += 1;
-//                num_incident_tets[tet[2]] += 1;
-//                num_incident_tets[tet[3]] += 1;
-//            }
-//            // get index of pts in
-//            int pts_index[n_pts];
-//            int curr_index = 0;
-//            for (int i = 0; i < n_pts; ++i) {
-//                pts_index[i] = curr_index;
-//                curr_index += num_incident_tets[i];
-//            }
-//            //
-//            int size_incident_tets[n_pts];
-//            for (int i = 0; i < n_pts; ++i) {
-//                size_incident_tets[i] = 0;
-//            }
-//            int incident_tets[4 * n_tets];
-////            int incident_tets[26996132];  // 1000k verts, 6749033 tets, 26996132 = 4*6749033
-//            for (int i = 0; i < n_tets; ++i) {
-//                const auto &tet = tets[i];
-//                incident_tets[pts_index[tet[0]] + size_incident_tets[tet[0]]] = i;
-//                incident_tets[pts_index[tet[1]] + size_incident_tets[tet[1]]] = i;
-//                incident_tets[pts_index[tet[2]] + size_incident_tets[tet[2]]] = i;
-//                incident_tets[pts_index[tet[3]] + size_incident_tets[tet[3]]] = i;
-//                size_incident_tets[tet[0]] += 1;
-//                size_incident_tets[tet[1]] += 1;
-//                size_incident_tets[tet[2]] += 1;
-//                size_incident_tets[tet[3]] += 1;
-//            }
-//            timings.push_back(timer.toc());
-////            std::cout << "num_incident_tets[0] = " << num_incident_tets[0] << std::endl;
-////            std::cout << "pts_index[0] = " << pts_index[0] << std::endl;
-////            std::cout << "incident_tets[0] = " << incident_tets[0] << std::endl;
-//        }
 
         {
             timing_labels.emplace_back("vert-tet connectivity");
@@ -748,50 +321,46 @@ int main(int argc, const char* argv[])
 //            std::cout << "incident_tets[0] = " << incident_tets[0] << std::endl;
         }
 
-
-
-        {
-            timing_labels.emplace_back("vert-tet connectivity(Eigen)");
-            ScopedTimer<> timer("vert-tet connectivity(Eigen)");
-            Eigen::VectorXi num_incident_tets;
-            num_incident_tets.setZero(n_pts);
-            // compute number of tets incident to each vertex
-            for (const auto & tet : tets) {
-                num_incident_tets[tet[0]] += 1;
-                num_incident_tets[tet[1]] += 1;
-                num_incident_tets[tet[2]] += 1;
-                num_incident_tets[tet[3]] += 1;
-            }
-            // get max
-            int max_num_tets = num_incident_tets.maxCoeff();
-//            std::cout << "max_num_tets = " << max_num_tets << std::endl;
-            // compute indices of tets incident to each vertex
-            Eigen::MatrixXi incident_tets_of_vert(n_pts, max_num_tets);
-            Eigen::VectorXi size_incident_tets;
-            size_incident_tets.setZero(n_pts);
-            for (size_t i = 0; i < tets.size(); i++) {
-                const auto& tet = tets[i];
-                incident_tets_of_vert(tet[0],size_incident_tets[tet[0]]) = i;
-                incident_tets_of_vert(tet[1],size_incident_tets[tet[1]]) = i;
-                incident_tets_of_vert(tet[2],size_incident_tets[tet[2]]) = i;
-                incident_tets_of_vert(tet[3],size_incident_tets[tet[3]]) = i;
-                size_incident_tets[tet[0]] += 1;
-                size_incident_tets[tet[1]] += 1;
-                size_incident_tets[tet[2]] += 1;
-                size_incident_tets[tet[3]] += 1;
-            }
-            timings.push_back(timer.toc());
-//            std::cout << "incident_tets_of_vertA[x][y] = " << incident_tets_of_vert(0,0) << std::endl;
-        }
+//        {
+        // this approach is slower than (compact vec)
+//            timing_labels.emplace_back("vert-tet connectivity(Eigen)");
+//            ScopedTimer<> timer("vert-tet connectivity(Eigen)");
+//            Eigen::VectorXi num_incident_tets;
+//            num_incident_tets.setZero(n_pts);
+//            // compute number of tets incident to each vertex
+//            for (const auto & tet : tets) {
+//                num_incident_tets[tet[0]] += 1;
+//                num_incident_tets[tet[1]] += 1;
+//                num_incident_tets[tet[2]] += 1;
+//                num_incident_tets[tet[3]] += 1;
+//            }
+//            // get max
+//            int max_num_tets = num_incident_tets.maxCoeff();
+////            std::cout << "max_num_tets = " << max_num_tets << std::endl;
+//            // compute indices of tets incident to each vertex
+//            Eigen::MatrixXi incident_tets_of_vert(n_pts, max_num_tets);
+//            Eigen::VectorXi size_incident_tets;
+//            size_incident_tets.setZero(n_pts);
+//            for (size_t i = 0; i < tets.size(); i++) {
+//                const auto& tet = tets[i];
+//                incident_tets_of_vert(tet[0],size_incident_tets[tet[0]]) = i;
+//                incident_tets_of_vert(tet[1],size_incident_tets[tet[1]]) = i;
+//                incident_tets_of_vert(tet[2],size_incident_tets[tet[2]]) = i;
+//                incident_tets_of_vert(tet[3],size_incident_tets[tet[3]]) = i;
+//                size_incident_tets[tet[0]] += 1;
+//                size_incident_tets[tet[1]] += 1;
+//                size_incident_tets[tet[2]] += 1;
+//                size_incident_tets[tet[3]] += 1;
+//            }
+//            timings.push_back(timer.toc());
+////            std::cout << "incident_tets_of_vertA[x][y] = " << incident_tets_of_vert(0,0) << std::endl;
+//        }
 
 //        {
-//            // this approach will cause 'segmentation fault' for large tet grid
-//            timing_labels.emplace_back("vert-tet connectivity(int[][])");
-//            ScopedTimer<> timer("vert-tet connectivity(int[][])");
-//            int num_incident_tetsA[n_pts];
-//            for (int i = 0; i < n_pts; ++i) {
-//                num_incident_tetsA[i] = 0;
-//            }
+        // this approach cost more memory than (compact vec)
+//            timing_labels.emplace_back("vert-tet connectivity(flat 2D vector)");
+//            ScopedTimer<> timer("vert-tet connectivity(flat 2D vector)");
+//            std::vector<int> num_incident_tetsA(n_pts,0);
 //            // compute number of tets incident to each vertex
 //            for (const auto & tet : tets) {
 //                num_incident_tetsA[tet[0]] += 1;
@@ -800,179 +369,25 @@ int main(int argc, const char* argv[])
 //                num_incident_tetsA[tet[3]] += 1;
 //            }
 //            // get max
-//            int max_num_tets = 0;
-//            for (int i = 0; i < n_pts; ++i) {
-//                if (num_incident_tetsA[i] > max_num_tets) {
-//                    max_num_tets = num_incident_tetsA[i];
-//                }
-//            }
+//            int max_num_tets = *(std::max_element(num_incident_tetsA.begin(), num_incident_tetsA.end()));
 ////            std::cout << "max_num_tets = " << max_num_tets << std::endl;
 //            // compute indices of tets incident to each vertex
-//            int incident_tets_of_vertA[n_pts][max_num_tets];
-//            int size_incident_tetsA[n_pts];
-//            for (int i = 0; i < n_pts; ++i) {
-//                size_incident_tetsA[i] = 0;
-//            }
+//            std::vector<int> incident_tets_of_vertA(n_pts * max_num_tets);
+//            std::vector<int> size_incident_tetsA(n_pts,0);
 //            for (size_t i = 0; i < tets.size(); i++) {
 //                const auto& tet = tets[i];
-//                incident_tets_of_vertA[tet[0]][size_incident_tetsA[tet[0]]] = i;
-//                incident_tets_of_vertA[tet[1]][size_incident_tetsA[tet[1]]] = i;
-//                incident_tets_of_vertA[tet[2]][size_incident_tetsA[tet[2]]] = i;
-//                incident_tets_of_vertA[tet[3]][size_incident_tetsA[tet[3]]] = i;
+//                incident_tets_of_vertA[tet[0]*max_num_tets + size_incident_tetsA[tet[0]]] = i;
+//                incident_tets_of_vertA[tet[1]*max_num_tets + size_incident_tetsA[tet[1]]] = i;
+//                incident_tets_of_vertA[tet[2]*max_num_tets + size_incident_tetsA[tet[2]]] = i;
+//                incident_tets_of_vertA[tet[3]*max_num_tets + size_incident_tetsA[tet[3]]] = i;
 //                size_incident_tetsA[tet[0]] += 1;
 //                size_incident_tetsA[tet[1]] += 1;
 //                size_incident_tetsA[tet[2]] += 1;
 //                size_incident_tetsA[tet[3]] += 1;
 //            }
-//            timings.push_back(timer.toc());
-////            std::cout << "incident_tets_of_vertA[x][y]" << incident_tets_of_vertA[0][0] << std::endl;
-//        }
-
-        int* incident_tets_of_vertA;
-        {
-            timing_labels.emplace_back("vert-tet connectivity(new int[])");
-            ScopedTimer<> timer("vert-tet connectivity(new int[])");
-            int num_incident_tetsA[n_pts];
-            for (int i = 0; i < n_pts; ++i) {
-                num_incident_tetsA[i] = 0;
-            }
-            // compute number of tets incident to each vertex
-            for (const auto & tet : tets) {
-                num_incident_tetsA[tet[0]] += 1;
-                num_incident_tetsA[tet[1]] += 1;
-                num_incident_tetsA[tet[2]] += 1;
-                num_incident_tetsA[tet[3]] += 1;
-            }
-            // get max
-            int max_num_tets = 0;
-            for (int i = 0; i < n_pts; ++i) {
-                if (num_incident_tetsA[i] > max_num_tets) {
-                    max_num_tets = num_incident_tetsA[i];
-                }
-            }
-            //            std::cout << "max_num_tets = " << max_num_tets << std::endl;
-            // compute indices of tets incident to each vertex
-//            int incident_tets_of_vertA[n_pts][max_num_tets];
-            incident_tets_of_vertA = new int [n_pts * max_num_tets];
-            int size_incident_tetsA[n_pts];
-            for (int i = 0; i < n_pts; ++i) {
-                size_incident_tetsA[i] = 0;
-            }
-            for (size_t i = 0; i < tets.size(); i++) {
-                const auto& tet = tets[i];
-                incident_tets_of_vertA[tet[0]*max_num_tets + size_incident_tetsA[tet[0]]] = i;
-                incident_tets_of_vertA[tet[1]*max_num_tets + size_incident_tetsA[tet[1]]] = i;
-                incident_tets_of_vertA[tet[2]*max_num_tets + size_incident_tetsA[tet[2]]] = i;
-                incident_tets_of_vertA[tet[3]*max_num_tets + size_incident_tetsA[tet[3]]] = i;
-                size_incident_tetsA[tet[0]] += 1;
-                size_incident_tetsA[tet[1]] += 1;
-                size_incident_tetsA[tet[2]] += 1;
-                size_incident_tetsA[tet[3]] += 1;
-            }
-            //            std::cout << "incident_tets_of_vertA[x][y]" << incident_tets_of_vertA[0][0] << std::endl;
-//            int tmp = incident_tets_of_vertA[0] + 1;
-//            std::cout << "tmp = " << tmp << std::endl;
-            //
-//            delete[] incident_tets_of_vertA;
-            timings.push_back(timer.toc());
-        }
-        std::cout << "incident_tets_of_vertA[0] = " << incident_tets_of_vertA[0] << std::endl;
-        delete[] incident_tets_of_vertA;
-
-        {
-            timing_labels.emplace_back("vert-tet connectivity(flat 2D vector)");
-            ScopedTimer<> timer("vert-tet connectivity(flat 2D vector)");
-            std::vector<int> num_incident_tetsA(n_pts,0);
-            // compute number of tets incident to each vertex
-            for (const auto & tet : tets) {
-                num_incident_tetsA[tet[0]] += 1;
-                num_incident_tetsA[tet[1]] += 1;
-                num_incident_tetsA[tet[2]] += 1;
-                num_incident_tetsA[tet[3]] += 1;
-            }
-            // get max
-            int max_num_tets = *(std::max_element(num_incident_tetsA.begin(), num_incident_tetsA.end()));
-//            std::cout << "max_num_tets = " << max_num_tets << std::endl;
-            // compute indices of tets incident to each vertex
-            std::vector<int> incident_tets_of_vertA(n_pts * max_num_tets);
-            std::vector<int> size_incident_tetsA(n_pts,0);
-            for (size_t i = 0; i < tets.size(); i++) {
-                const auto& tet = tets[i];
-                incident_tets_of_vertA[tet[0]*max_num_tets + size_incident_tetsA[tet[0]]] = i;
-                incident_tets_of_vertA[tet[1]*max_num_tets + size_incident_tetsA[tet[1]]] = i;
-                incident_tets_of_vertA[tet[2]*max_num_tets + size_incident_tetsA[tet[2]]] = i;
-                incident_tets_of_vertA[tet[3]*max_num_tets + size_incident_tetsA[tet[3]]] = i;
-                size_incident_tetsA[tet[0]] += 1;
-                size_incident_tetsA[tet[1]] += 1;
-                size_incident_tetsA[tet[2]] += 1;
-                size_incident_tetsA[tet[3]] += 1;
-            }
-//            std::cout << "incident_tets_of_vertA[0] = " << incident_tets_of_vertA[0] << std::endl;
-            timings.push_back(timer.toc());
-        }
-
-        // compute list of incident tets for each vertex
-//        {
-//            timing_labels.emplace_back("vert-tet connectivity(4)");
-//            ScopedTimer<> timer("vert-tet connectivity(4)");
-//            //            incident_tets_of_vertE.resize(pts.size(),100);
-//            // compute number of tets incident to each vertex
-//
-//            // compute indices of tets incident to each vertex
-//            int incident_tets_of_vertA[n_pts][122];   // (oracle) 122 is an upper bound for tet vertex degree
-//            int size_incident_tetsA[n_pts];
-//            for (int i = 0; i < n_pts; ++i) {
-//                size_incident_tetsA[i] = 0;
-//            }
-//            for (size_t i = 0; i < tets.size(); i++) {
-//                const auto& tet = tets[i];
-//                incident_tets_of_vertA[tet[0]][size_incident_tetsA[tet[0]]] = i;
-//                incident_tets_of_vertA[tet[1]][size_incident_tetsA[tet[1]]] = i;
-//                incident_tets_of_vertA[tet[2]][size_incident_tetsA[tet[2]]] = i;
-//                incident_tets_of_vertA[tet[3]][size_incident_tetsA[tet[3]]] = i;
-//                size_incident_tetsA[tet[0]] += 1;
-//                size_incident_tetsA[tet[1]] += 1;
-//                size_incident_tetsA[tet[2]] += 1;
-//                size_incident_tetsA[tet[3]] += 1;
-//            }
+////            std::cout << "incident_tets_of_vertA[0] = " << incident_tets_of_vertA[0] << std::endl;
 //            timings.push_back(timer.toc());
 //        }
-
-        // compute list of incident tets for each vertex
-        std::vector<std::vector<size_t>> incident_tets_of_vert;
-        std::vector<size_t> num_incident_tets;
-        {
-            timing_labels.emplace_back("vert-tet connectivity(vec of vec)");
-            ScopedTimer<> timer("vert-tet connectivity(vec of vec)");
-            incident_tets_of_vert.resize(pts.size());
-            // compute number of tets incident to each vertex
-            num_incident_tets.resize(pts.size(), 0);
-            for (const auto & tet : tets) {
-                num_incident_tets[tet[0]] += 1;
-                num_incident_tets[tet[1]] += 1;
-                num_incident_tets[tet[2]] += 1;
-                num_incident_tets[tet[3]] += 1;
-            }
-            //            auto maxIter = std::max_element(num_incident_tets.begin(), num_incident_tets.end());
-            //            std::cout << "max num incident tets = " << *maxIter << std::endl;
-            // compute indices of tets incident to each vertex
-            std::vector<size_t> size_incident_tets(pts.size(), 0);
-            for (size_t i = 0; i < pts.size(); i++) {
-                incident_tets_of_vert[i].resize(num_incident_tets[i]);
-            }
-            for (size_t i = 0; i < tets.size(); i++) {
-                const auto& tet = tets[i];
-                incident_tets_of_vert[tet[0]][size_incident_tets[tet[0]]] = i;
-                incident_tets_of_vert[tet[1]][size_incident_tets[tet[1]]] = i;
-                incident_tets_of_vert[tet[2]][size_incident_tets[tet[2]]] = i;
-                incident_tets_of_vert[tet[3]][size_incident_tets[tet[3]]] = i;
-                size_incident_tets[tet[0]] += 1;
-                size_incident_tets[tet[1]] += 1;
-                size_incident_tets[tet[2]] += 1;
-                size_incident_tets[tet[3]] += 1;
-            }
-            timings.push_back(timer.toc());
-        }
 
 
         // compute order of patches around chains
@@ -996,7 +411,7 @@ int main(int argc, const char* argv[])
                 auto iso_face_id = iso_edge.face_edge_indices[0].first;
                 auto tet_id = iso_faces[iso_face_id].tet_face_indices[0].first;
                 compute_face_order_in_one_tet(
-                    cut_results[tet_id], iso_faces, iso_edge, half_faces_list[i]);
+                    cut_results[cut_result_index[tet_id]], iso_faces, iso_edge, half_faces_list[i]);
             }
             // replace iso-face indices by patch indices
             for (size_t i = 0; i < half_faces_list.size(); i++) {
@@ -1033,17 +448,9 @@ int main(int argc, const char* argv[])
         // test: export timings
         save_timings(dataDir + "timings_" + resolution + ".json",
             timing_labels, timings);
-    }
 
-    if (use_group_simplicial_cells_into_arrangement_cells) {
-        save_result_mini(
-            dataDir + "iso_mesh_" + resolution + ".json",
-            iso_pts,
-            iso_faces,
-            patches,
-            arrangement_cells);
-    }
-    
+
+
     
     return 0;
 }
