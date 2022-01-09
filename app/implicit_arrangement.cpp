@@ -52,10 +52,6 @@ int main(int argc, const char* argv[])
     parse_config_file(args.config_file, tet_mesh_file, sphere_file, output_dir, use_2func_lookup);
 
     // load tet mesh
-    //    std::string dataDir = "D:/research/simplicial_arrangement/data/";
-//    std::string dataDir = "/Users/charlesdu/Downloads/research/implicit_modeling/code/simplicial_arrangement/data/";
-//    std::string resolution = "1000k";
-//    std::string tet_mesh_file = dataDir + "tet_mesh_" + resolution + ".json";
     std::vector<std::array<double, 3>> pts;
     std::vector<std::array<size_t, 4>> tets;
     load_tet_mesh(tet_mesh_file, pts, tets);
@@ -67,28 +63,6 @@ int main(int argc, const char* argv[])
     // load implicit function values, or evaluate
     std::vector<Sphere> spheres;
     load_spheres(sphere_file, spheres);
-//    double radius = 0.5;
-//    std::vector<std::array<double,3>> centers;
-//    centers.push_back({0, 0, 0});
-//    centers.push_back({0.5, 0, 0});
-//    centers.push_back({0, 0.5, 0});
-//    centers.push_back({0, 0, 0.5});
-    //
-//    for (double x : {-0.4, 0., 0.4}) {
-//        for (double y: {-0.4, 0., 0.4}) {
-//            for (double z : {-0.4, 0., 0.4}) {
-//                centers.push_back({x,y,z});
-//            }
-//        }
-//    }
-    //
-//    for (double x : {-0.4, 0.4}) {
-//        for (double y: {-0.4, 0.4}) {
-//            for (double z : {-0.4, 0.4}) {
-//                centers.push_back({x,y,z});
-//            }
-//        }
-//    }
     size_t n_func = spheres.size();
 
 
