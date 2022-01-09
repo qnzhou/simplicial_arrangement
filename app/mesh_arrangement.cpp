@@ -10,6 +10,8 @@
 #include "PyMesh/Arrangement.h"
 
 #include "ScopedTimer.h"
+#include <CLI/CLI.hpp>
+
 
 struct IGL_Mesh {
     Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor> vertices;
@@ -57,11 +59,28 @@ void merge_meshes(const std::vector<IGL_Mesh>& meshes,
 
 
 int main(int argc, const char* argv[]) {
-//    std::string dataDir = "D:/research/simplicial_arrangement/data/";
-    std::string dataDir = "/Users/charlesdu/Downloads/research/implicit_modeling/code/simplicial_arrangement/data/";
-    std::string resolution = "100k";
+    struct {
+        std::string config_file;
+        bool timing_only = false;
+    } args;
+    CLI::App app{"Mesh Arrangement Command Line"};
+    app.add_option("config_file", args.config_file, "Configuration file")
+        ->required();
+    app.add_option("-T,--timing-only", args.timing_only, "Record timing without output result" );
+    CLI11_PARSE(app, argc, argv);
+
+    // record timings
+    std::vector<std::string> timing_labels;
+    std::vector<double> timings;
+
+    // parse configure file
+    std::string tet_mesh_file;
+    std::string sphere_file;
+    std::string output_dir;
+    bool b_place_holder;
+    parse_config_file(args.config_file, tet_mesh_file, sphere_file, output_dir, b_place_holder);
+
     // load tet mesh
-    std::string tet_mesh_file = dataDir + "tet_mesh_" + resolution + ".json";
     std::vector<std::array<double, 3>> pts;
     std::vector<std::array<size_t, 4>> tets;
     load_tet_mesh(tet_mesh_file, pts, tets);
@@ -69,18 +88,11 @@ int main(int argc, const char* argv[]) {
     size_t n_tets = tets.size();
     std::cout << "tet mesh: " << pts.size() << " verts, " << tets.size() << " tets." << std::endl;
 
-    // record timings
-    std::vector<std::string> timing_labels;
-    std::vector<double> timings;
 
     // load implicit function values, or evaluate
-    size_t n_func = 4;
-    std::vector<std::array<double, 3>> centers(n_func);
-    centers[0] = {0, 0, 0};
-    centers[1] = {0.5, 0, 0};
-    centers[2] = {0, 0.5, 0};
-    centers[3] = {0, 0, 0.5};
-    double radius = 0.5;
+    std::vector<Sphere> spheres;
+    load_spheres(sphere_file, spheres);
+    size_t n_func = spheres.size();
 
     std::vector<Eigen::VectorXd> funcVals;
     {
@@ -90,7 +102,7 @@ int main(int argc, const char* argv[]) {
         for (size_t i = 0; i < n_func; i++) {
             funcVals[i].resize(pts.size());
             for (size_t j = 0; j < pts.size(); j++) {
-                funcVals[i][j] = sphere_function(centers[i], radius, pts[j]);
+                funcVals[i][j] = sphere_function(spheres[i].first, spheres[i].second, pts[j]);
             }
         }
         timings.push_back(timer.toc());
@@ -129,6 +141,7 @@ int main(int argc, const char* argv[]) {
     }
 
     // test: export iso-meshes
+    if (!args.timing_only)
     {
         // convert marching tet results back to c++ vector
         std::vector<std::vector<std::array<double, 3>>> iso_pts_list(n_func);
@@ -154,7 +167,7 @@ int main(int argc, const char* argv[]) {
             }
         }
         // export iso-mesh
-        save_tri_mesh_list(dataDir + "marching_tet_iso_mesh_" + resolution + ".json",
+        save_tri_mesh_list(output_dir + "/marching_tet_iso_mesh.json",
             iso_pts_list,
             iso_faces_list);
     }
@@ -178,20 +191,28 @@ int main(int argc, const char* argv[]) {
     // compute arrangement
     std::shared_ptr<PyMesh::Arrangement> engine;
     {
-        timing_labels.emplace_back("mesh arrangement");
         ScopedTimer<> timer("mesh arrangement");
         engine = PyMesh::Arrangement::create_fast_arrangement(
             merged_mesh.vertices, merged_mesh.faces, face_to_mesh);
 //        engine = PyMesh::Arrangement::create_mesh_arrangement(
 //            merged_mesh.vertices, merged_mesh.faces, face_to_mesh);
-        engine->run();
+//        engine->run();
+        engine->run_with_timer(timing_labels, timings);
         timings.push_back(timer.toc());
     }
+    timing_labels.emplace_back("arrangement(other)");
+    double resolve_time = timings[timings.size()-3];
+    double extract_time = timings[timings.size()-2];
+    timings.back() = timings.back() - extract_time - resolve_time;
+    std::cout << "Arrangement: resolving self-intersection: " << resolve_time << " s" <<  std::endl;
+    std::cout << "Arrangement: extracting arrangement: " << extract_time << " s" << std::endl;
+
 
     // test: export arrangement cells
+    size_t num_cells = engine->get_num_cells();
+    std::cout << "num_cells = " << num_cells << std::endl;
+    if (!args.timing_only)
     {
-        size_t num_cells = engine->get_num_cells();
-        std::cout << "num_cells = " << num_cells << std::endl;
         // convert mesh arrangement cells to c++ vector
         std::vector<std::vector<std::array<double, 3>>> iso_pts_list(num_cells);
         for (size_t i = 0; i < num_cells; ++i) {
@@ -216,13 +237,13 @@ int main(int argc, const char* argv[]) {
             }
         }
         // export iso-mesh
-        save_tri_mesh_list(dataDir + "mesh_arr_cells_" + resolution + ".json",
-            iso_pts_list,
-            iso_faces_list);
-        // export timings
-        save_timings(dataDir + "mesh_timings_" + resolution + ".json",
-            timing_labels, timings);
+        save_tri_mesh_list(
+                output_dir + "/mesh_arr_cells.json", iso_pts_list, iso_faces_list);
     }
+
+    // export timings
+    save_timings(output_dir + "/mesh_timings.json",
+        timing_labels, timings);
 
 
     return 0;
