@@ -24,6 +24,9 @@ public:
     virtual ~Arrangement() = default;
 
     virtual void run() = 0;
+    virtual void run_with_timer(std::vector<std::string> &timing_labels, std::vector<double> &timings) {
+        run();
+    }
 
     const MatrixFr& get_vertices() const { return m_vertices; }
     const MatrixIr& get_faces() const { return m_faces; }

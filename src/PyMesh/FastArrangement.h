@@ -19,6 +19,8 @@ public:
     __attribute__((optnone))
 #endif
     void run() override;
+    void run_with_timer(std::vector<std::string> &timing_labels,
+        std::vector<double> &timings) override;
 
 private:
     using Base::m_cells;
