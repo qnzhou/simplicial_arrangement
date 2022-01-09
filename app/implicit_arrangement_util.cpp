@@ -12,6 +12,29 @@
 #include <absl/container/flat_hash_set.h>
 
 
+bool parse_config_file(const std::string& filename,
+    std::string& tet_mesh_file,
+    std::string& sphere_file,
+    std::string& output_dir,
+    bool& use_2func_lookup)
+{
+    using json = nlohmann::json;
+    std::ifstream fin(filename.c_str());
+    if (!fin) {
+        std::cout << "tet mesh file not exist!" << std::endl;
+        return false;
+    }
+    json data;
+    fin >> data;
+    fin.close();
+    //
+    tet_mesh_file = data["tetMeshFile"];
+    sphere_file = data["sphereFile"];
+    output_dir = data["outputDir"];
+    use_2func_lookup = data["use2funcLookup"];
+    return true;
+}
+
 
 bool load_tet_mesh(const std::string& filename,
     std::vector<std::array<double, 3>>& pts,
@@ -39,6 +62,30 @@ bool load_tet_mesh(const std::string& filename,
         for (size_t k = 0; k < 4; k++) {
             tets[j][k] = data[1][j][k].get<size_t>();
         }
+    }
+    return true;
+}
+
+bool load_spheres(const std::string& filename, std::vector<Sphere>& spheres)
+{
+    using json = nlohmann::json;
+    std::ifstream fin(filename.c_str());
+    if (!fin) {
+        std::cout << "spheres file not exist!" << std::endl;
+        return false;
+    }
+    json data;
+    fin >> data;
+    fin.close();
+    //
+    spheres.resize(data.size());
+    for (size_t i = 0; i < spheres.size(); i++) {
+        // center: {x,y,z}
+        for (int j = 0; j < 3; ++j) {
+            spheres[i].first[j] = data[i][0][j].get<double>();
+        }
+        // radius
+        spheres[i].second = data[i][1];
     }
     return true;
 }

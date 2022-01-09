@@ -60,9 +60,21 @@ struct Simplicial_Cell
     std::vector<size_t> face_info;
 };
 
+// Sphere: (center, radius)
+typedef std::pair<std::array<double,3>, double> Sphere;
+
+bool parse_config_file(const std::string &filename,
+    std::string& tet_mesh_file,
+    std::string& sphere_file,
+    std::string& output_dir,
+    bool& use_2func_lookup);
+
 bool load_tet_mesh(const std::string &filename,
     std::vector<std::array<double, 3>> &pts,
     std::vector<std::array<size_t, 4>> &tets);
+
+bool load_spheres(const std::string &filename,
+    std::vector<Sphere> &spheres);
 
 bool save_result(const std::string& filename,
     const std::vector<std::array<double, 3>>& iso_pts,
