@@ -10,6 +10,8 @@ include(spdlog)
 include(nlohmann-json)
 include(sanitizers)
 include(fast_arrangement)
+include(cli11)
+
 
 option(LIBIGL_COPYLEFT_WITH_CGAL "Build CGAL support in libigl" On)
 include(libigl)
@@ -81,7 +83,7 @@ target_link_libraries(impl_arrangement_util PUBLIC simplicial_arrangement::simpl
 
 add_executable(impl_arrangement "app/implicit_arrangement.cpp")
 target_compile_features(impl_arrangement PRIVATE cxx_std_17)
-target_link_libraries(impl_arrangement simplicial_arrangement::simplicial_arrangement impl_arrangement_util igl::core)
+target_link_libraries(impl_arrangement simplicial_arrangement::simplicial_arrangement impl_arrangement_util igl::core CLI11::CLI11)
 if (SIMPLICIAL_ARRANGEMENT_TEST_COVERAGE)
     if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
         target_compile_options(impl_arrangement PRIVATE -fprofile-instr-generate -fcoverage-mapping)
@@ -102,7 +104,7 @@ endif()
 
 add_executable(mesh_arrangement "app/mesh_arrangement.cpp")
 target_include_directories(mesh_arrangement PUBLIC ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(mesh_arrangement impl_arrangement_util igl::core arrangement)
+target_link_libraries(mesh_arrangement impl_arrangement_util igl::core arrangement CLI11::CLI11)
 target_compile_features(mesh_arrangement PRIVATE cxx_std_17)
 if (SIMPLICIAL_ARRANGEMENT_TEST_COVERAGE)
     if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")

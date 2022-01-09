@@ -7,6 +7,7 @@
 #include <chrono>
 
 #include <Eigen/Core>
+#include <CLI/CLI.hpp>
 
 
 #include "implicit_arrangement_util.h"
@@ -19,26 +20,42 @@ using namespace simplicial_arrangement;
 
 int main(int argc, const char* argv[])
 {
-    // choose method to obtain arrangement cell
-    // 1. order patches around chains
-    // 2. group simplicial cells into arrangement cells
-//    bool use_group_simplicial_cells_into_arrangement_cells = false;
+    struct {
+        std::string config_file;
+        bool timing_only = false;
+    } args;
+    CLI::App app{"Implicit Arrangement Command Line"};
+    app.add_option("config_file", args.config_file, "Configuration file")
+        ->required();
+    app.add_option("-T,--timing-only", args.timing_only, "Record timing without output result" );
+    CLI11_PARSE(app, argc, argv);
 
+    // load lookup table
     std::cout << "load table ..." << std::endl;
     bool loaded = load_lookup_table();
     if (loaded) {
-        std::cout << "loading complete." << std::endl;
+        std::cout << "loading finished." << std::endl;
+    } else {
+        std::cout << "loading failed." << std::endl;
+        return -1;
     }
 
     // record timings
     std::vector<std::string> timing_labels;
     std::vector<double> timings;
 
+    // parse configure file
+    std::string tet_mesh_file;
+    std::string sphere_file;
+    std::string output_dir;
+    bool use_2func_lookup;
+    parse_config_file(args.config_file, tet_mesh_file, sphere_file, output_dir, use_2func_lookup);
+
     // load tet mesh
     //    std::string dataDir = "D:/research/simplicial_arrangement/data/";
-    std::string dataDir = "/Users/charlesdu/Downloads/research/implicit_modeling/code/simplicial_arrangement/data/";
-    std::string resolution = "10k";
-    std::string tet_mesh_file = dataDir + "tet_mesh_" + resolution + ".json";
+//    std::string dataDir = "/Users/charlesdu/Downloads/research/implicit_modeling/code/simplicial_arrangement/data/";
+//    std::string resolution = "1000k";
+//    std::string tet_mesh_file = dataDir + "tet_mesh_" + resolution + ".json";
     std::vector<std::array<double, 3>> pts;
     std::vector<std::array<size_t, 4>> tets;
     load_tet_mesh(tet_mesh_file, pts, tets);
@@ -48,13 +65,31 @@ int main(int argc, const char* argv[])
 
 
     // load implicit function values, or evaluate
-    size_t n_func = 4;
-    std::vector<std::array<double,3>> centers(n_func);
-    centers[0] = {0, 0, 0};
-    centers[1] = {0.5, 0, 0};
-    centers[2] = {0, 0.5, 0};
-    centers[3] = {0, 0, 0.5};
-    double radius = 0.5;
+    std::vector<Sphere> spheres;
+    load_spheres(sphere_file, spheres);
+//    double radius = 0.5;
+//    std::vector<std::array<double,3>> centers;
+//    centers.push_back({0, 0, 0});
+//    centers.push_back({0.5, 0, 0});
+//    centers.push_back({0, 0.5, 0});
+//    centers.push_back({0, 0, 0.5});
+    //
+//    for (double x : {-0.4, 0., 0.4}) {
+//        for (double y: {-0.4, 0., 0.4}) {
+//            for (double z : {-0.4, 0., 0.4}) {
+//                centers.push_back({x,y,z});
+//            }
+//        }
+//    }
+    //
+//    for (double x : {-0.4, 0.4}) {
+//        for (double y: {-0.4, 0.4}) {
+//            for (double z : {-0.4, 0.4}) {
+//                centers.push_back({x,y,z});
+//            }
+//        }
+//    }
+    size_t n_func = spheres.size();
 
 
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals;
@@ -64,7 +99,7 @@ int main(int argc, const char* argv[])
         funcVals.resize(n_func, n_pts);
         for (size_t i = 0; i < n_func; i++) {
             for (size_t j = 0; j < n_pts; j++) {
-                funcVals(i,j) = sphere_function(centers[i], radius, pts[j]);
+                funcVals(i,j) = sphere_function(spheres[i].first, spheres[i].second, pts[j]);
             }
         }
         timings.push_back(timer.toc());
@@ -150,7 +185,6 @@ int main(int argc, const char* argv[])
                 cut_result_index.push_back(Arrangement<3>::None);
                 continue;
             }
-
             std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
             //
             size_t v1 = tets[i][0];
@@ -166,14 +200,15 @@ int main(int argc, const char* argv[])
                     funcVals(f_id,v4)};
             }
             //
-//                if (num_func == 2) {
-//                    disable_lookup_table();
-//                    cut_results[i] = compute_arrangement(planes);
-//                    enable_lookup_table();
-//                } else {
-                cut_result_index.push_back(cut_results.size());
-                cut_results.emplace_back(std::move(compute_arrangement(planes)));
-//                }
+                if (!use_2func_lookup && num_func == 2) {
+                    cut_result_index.push_back(cut_results.size());
+                    disable_lookup_table();
+                    cut_results.emplace_back(std::move(compute_arrangement(planes)));
+                    enable_lookup_table();
+                } else {
+                    cut_result_index.push_back(cut_results.size());
+                    cut_results.emplace_back(std::move(compute_arrangement(planes)));
+                }
 
             //
             std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
@@ -206,8 +241,6 @@ int main(int argc, const char* argv[])
             cut_results, cut_result_index, func_in_tet, start_index_of_tet, tets, iso_verts, iso_faces);
         timings.push_back(timer.toc());
     }
-
-    
     //std::cout << "num iso-vertices = " << iso_verts.size() << std::endl;
     //std::cout << "num iso-faces = " << iso_faces.size() << std::endl;
     
@@ -269,7 +302,7 @@ int main(int argc, const char* argv[])
             for (size_t i = 0; i < iso_edges.size(); i++) {
                 if (iso_edges[i].face_edge_indices.size() >
                     2) { // non-manifold edge (not a boundary edge)
-                    // there is only one patch indicent to a boundary edge,
+                    // there is only one patch incident to a boundary edge,
                     // so there is no need to figure out the "order" of patches around a boundary
                     // edge
                     non_manifold_edges_of_vert[iso_edges[i].v1].push_back(i);
@@ -435,22 +468,20 @@ int main(int argc, const char* argv[])
         std::cout << "num arrangement cells = " << arrangement_cells.size() << std::endl;
 
         // test: export iso-mesh, patches, chains
-        save_result(
-            dataDir + "iso_mesh_" + resolution + ".json",
-            iso_pts,
-            iso_faces,
-            patches,
-            iso_edges,
-            chains,
-            non_manifold_edges_of_vert,
-            half_patch_list,
-            arrangement_cells);
+        if (!args.timing_only) {
+            save_result(output_dir + "/iso_mesh.json",
+                iso_pts,
+                iso_faces,
+                patches,
+                iso_edges,
+                chains,
+                non_manifold_edges_of_vert,
+                half_patch_list,
+                arrangement_cells);
+        }
         // test: export timings
-        save_timings(dataDir + "timings_" + resolution + ".json",
+        save_timings(output_dir + "/timings.json",
             timing_labels, timings);
-
-
-
     
     return 0;
 }
