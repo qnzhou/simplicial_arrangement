@@ -5,6 +5,7 @@
 
 #include <absl/container/flat_hash_map.h>
 #include <absl/container/flat_hash_set.h>
+#include <algorithm>
 #include <array>
 #include <vector>
 
@@ -313,7 +314,12 @@ size_t mi_union_2_faces(MIComplex<DIM>& mi_complex,
             v2e[start_vid] = eid;
         }
 
+#ifdef SIMPLICIAL_ARRANGEMENT_DETERMINISTIC
+        // Always start from the lowest index to remove randomness in hash map.
+        combined_face.edges.push_back(*std::min_element(bd_edges.begin(), bd_edges.end()));
+#else
         combined_face.edges.push_back(*bd_edges.begin());
+#endif
         while (combined_face.edges.size() < num_bd_edges) {
             size_t eid = combined_face.edges.back();
             const auto& e = edges[eid];
@@ -430,6 +436,11 @@ size_t mi_union_3_faces(
     for (auto fid : bd_faces) {
         combined_cell.faces.push_back(fid);
     }
+
+#ifdef SIMPLICIAL_ARRANGEMENT_DETERMINISTIC
+    // Sort is to ensure deterministic output.
+    std::sort(combined_cell.faces.begin(), combined_cell.faces.end());
+#endif
 
     cells.push_back(std::move(combined_cell));
     return cells.size() - 1;

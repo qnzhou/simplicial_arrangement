@@ -89,16 +89,20 @@ private:
                     mi_compute_outer_index(materials[0], materials[1], materials[2]);
                 if (outer_index == INVALID) return nullptr;
 
+                logger().debug("MI lookup outer index: {}", outer_index);
                 const size_t start_idx = mi_indices[outer_index];
                 const size_t end_idx = mi_indices[outer_index + 1];
                 if (end_idx == start_idx + 1) {
-                    return &mi_data[mi_indices[start_idx]];
+                    logger().debug("MI lookup data index: {}", start_idx);
+                    return &mi_data[start_idx];
                 } else if (end_idx > start_idx) {
                     const size_t inner_index =
                         mi_compute_inner_index(outer_index, materials[0], materials[1], materials[2]);
                     if (inner_index == INVALID) return nullptr;
                     assert(inner_index < end_idx - start_idx);
-                    return &mi_data[mi_indices[start_idx + inner_index]];
+                    logger().debug("MI lookup inner index: {}", inner_index);
+                    logger().debug("MI lookup data index: {}", start_idx + inner_index);
+                    return &mi_data[start_idx + inner_index];
                 }
             }
         }

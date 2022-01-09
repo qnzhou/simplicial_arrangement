@@ -4,6 +4,7 @@
 #include <vector>
 
 #include <nlohmann/json.hpp>
+#include <spdlog/spdlog.h>
 
 #include <simplicial_arrangement/material_interface.h>
 
@@ -191,6 +192,9 @@ void serialize(const std::vector<simplicial_arrangement::MaterialInterface<3>>& 
     std::ofstream fl(filename.c_str(), std::ios::out | std::ios::binary);
     fl.write(reinterpret_cast<char*>(msgpack.data()), msgpack.size());
     std::cout << "Lookup table outputed to " << filename << std::endl;
+
+    std::ofstream fout("tmp.json", std::ios::out);
+    fout << std::setw(4) << json;
 }
 
 #endif
@@ -242,6 +246,7 @@ int main(int argc, char** argv)
     std::cout << "with 4 ambiguous edge: " << ambiguous_cases[4] << std::endl;
 
     serialize(data, start_index);
+
     return 0;
 #endif
 }
