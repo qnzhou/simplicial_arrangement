@@ -9,6 +9,9 @@ include(spdlog)
 include(nlohmann-json)
 include(sanitizers)
 
+option(SIMPLICIAL_ARRANGEMENT_LOOKUP_TABLE_GEN
+    "Lookup table generation mode (for developers only)" OFF)
+
 file(GLOB INC_FILES ${CMAKE_CURRENT_LIST_DIR}/include/*.h)
 file(GLOB SRC_FILES ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp)
 
@@ -19,6 +22,9 @@ target_link_libraries(simplicial_arrangement
     PUBLIC absl::numeric absl::flat_hash_map nlohmann_json::nlohmann_json
     PRIVATE implicit_predicates::implicit_predicates spdlog::spdlog)
 target_compile_features(simplicial_arrangement PRIVATE cxx_std_17)
+if (SIMPLICIAL_ARRANGEMENT_LOOKUP_TABLE_GEN)
+    target_compile_definitions(simplicial_arrangement PUBLIC -DLOOKUP_TABLE_GEN)
+endif()
 if (NOT MSVC)
     target_compile_options(simplicial_arrangement PRIVATE "-Wall" "-Werror")
 endif()
@@ -68,3 +74,9 @@ if (SIMPLICIAL_ARRANGEMENT_TEST_COVERAGE)
         target_link_options(impl_arrangement PRIVATE -fprofile-instr-generate -fcoverage-mapping)
     endif()
 endif()
+
+add_executable(generate_material_interface_lookup_table
+    "app/generate_material_interface_lookup_table.cpp")
+target_link_libraries(generate_material_interface_lookup_table PRIVATE
+    simplicial_arrangement::simplicial_arrangement nlohmann_json::nlohmann_json)
+target_compile_features(generate_material_interface_lookup_table PRIVATE cxx_std_17)

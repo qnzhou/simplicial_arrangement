@@ -310,6 +310,17 @@ void test_3D()
             REQUIRE(mi.vertices.size() == 11);
             validate(mi);
         }
+        SECTION("Case 4")
+        {
+            materials.push_back({1, 0, 0, 2});
+            materials.push_back({0, 2, 2, 1});
+            materials.push_back({2, 1, 1, 0});
+            auto mi = compute_material_interface(materials);
+            REQUIRE(mi.cells.size() == 3);
+            REQUIRE(mi.faces.size() == 13);
+            REQUIRE(mi.vertices.size() == 11);
+            validate(mi);
+        }
     }
     SECTION("4 implicits")
     {
