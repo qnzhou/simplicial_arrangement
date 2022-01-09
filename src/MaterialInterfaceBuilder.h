@@ -82,8 +82,17 @@ private:
 
         if constexpr (DIM == 3) {
             if (num_materials == 2) {
-                // TODO
-                return nullptr;
+                const size_t outer_index =
+                    mi_compute_outer_index(materials[0], materials[1]);
+                if (outer_index == INVALID) return nullptr;
+
+                logger().debug("MI lookup outer index: {}", outer_index);
+                const size_t start_idx = mi_indices[outer_index];
+                const size_t end_idx = mi_indices[outer_index + 1];
+                assert(end_idx == start_idx + 1);
+
+                logger().debug("MI lookup data index: {}", start_idx);
+                return &mi_data[start_idx];
             } else if (num_materials == 3) {
                 const size_t outer_index =
                     mi_compute_outer_index(materials[0], materials[1], materials[2]);
