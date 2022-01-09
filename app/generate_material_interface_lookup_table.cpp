@@ -20,6 +20,8 @@ auto generate_lookup_table()
     using namespace simplicial_arrangement;
     constexpr size_t INVALID = std::numeric_limits<size_t>::max();
     std::vector<Material<Int, 3>> dummy_materials(3);
+
+    // Special ordering so MaterialInterfaceBuilder will insert planes in order.
     dummy_materials[0] = {{1, 0, 0, 0}};
     dummy_materials[1] = {{3, 0, 0, 0}};
     dummy_materials[2] = {{2, 0, 0, 0}};
@@ -119,23 +121,17 @@ auto generate_lookup_table()
         if (ambiguous_edges.empty()) {
             data.push_back(compute_material_interface(dummy_materials));
         } else if (ambiguous_edges.size() == 1) {
-            edge_signs[ambiguous_edges[0]] = true;
-            data.push_back(compute_material_interface(dummy_materials));
             edge_signs[ambiguous_edges[0]] = false;
+            data.push_back(compute_material_interface(dummy_materials));
+            edge_signs[ambiguous_edges[0]] = true;
             data.push_back(compute_material_interface(dummy_materials));
         } else if (ambiguous_edges.size() == 2) {
-            edge_signs[ambiguous_edges[0]] = true;
-            edge_signs[ambiguous_edges[1]] = true;
-            data.push_back(compute_material_interface(dummy_materials));
-            edge_signs[ambiguous_edges[0]] = true;
-            edge_signs[ambiguous_edges[1]] = false;
-            data.push_back(compute_material_interface(dummy_materials));
-            edge_signs[ambiguous_edges[0]] = false;
-            edge_signs[ambiguous_edges[1]] = true;
-            data.push_back(compute_material_interface(dummy_materials));
-            edge_signs[ambiguous_edges[0]] = false;
-            edge_signs[ambiguous_edges[1]] = false;
-            data.push_back(compute_material_interface(dummy_materials));
+            size_t num_cases = 1 << 2;
+            for (size_t j = 0; j < num_cases; j++) {
+                edge_signs[ambiguous_edges[0]] = j | 1;
+                edge_signs[ambiguous_edges[1]] = j | 2;
+                data.push_back(compute_material_interface(dummy_materials));
+            }
         } else if (ambiguous_edges.size() == 3) {
             size_t num_cases = 1 << 3;
             for (size_t j = 0; j < num_cases; j++) {

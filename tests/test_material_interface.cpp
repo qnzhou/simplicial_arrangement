@@ -1,3 +1,4 @@
+#include <simplicial_arrangement/lookup_table.h>
 #include <simplicial_arrangement/material_interface.h>
 
 #include <implicit_predicates/implicit_predicates.h>
@@ -321,6 +322,17 @@ void test_3D()
             REQUIRE(mi.vertices.size() == 11);
             validate(mi);
         }
+        SECTION("Case 5")
+        {
+            materials.push_back({1, 1, 1, 2});
+            materials.push_back({2, 2, 2, 1});
+            materials.push_back({0, 0, 0, 0});
+            auto mi = compute_material_interface(materials);
+            REQUIRE(mi.cells.size() == 2);
+            REQUIRE(mi.faces.size() == 8);
+            REQUIRE(mi.vertices.size() == 7);
+            validate(mi);
+        }
     }
     SECTION("4 implicits")
     {
@@ -414,6 +426,34 @@ TEST_CASE("Material interface 2D", "[material_interface][2D]")
 TEST_CASE("Material interface 3D", "[material_interface][3D]")
 {
     using namespace simplicial_arrangement;
-    SECTION("Int") { test_3D<Int>(); }
-    SECTION("double") { test_3D<double>(); }
+    REQUIRE(load_lookup_table());
+
+    SECTION("Int")
+    {
+        SECTION("Without lookup")
+        {
+            disable_lookup_table();
+            test_3D<Int>();
+        }
+        SECTION("With lookup")
+        {
+            enable_lookup_table();
+            test_3D<Int>();
+        }
+        disable_lookup_table();
+    }
+    SECTION("double")
+    {
+        SECTION("Without lookup")
+        {
+            disable_lookup_table();
+            test_3D<double>();
+        }
+        SECTION("With lookup")
+        {
+            enable_lookup_table();
+            test_3D<double>();
+        }
+        disable_lookup_table();
+    }
 }
