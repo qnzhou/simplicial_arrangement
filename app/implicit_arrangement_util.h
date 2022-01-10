@@ -193,6 +193,8 @@ void compute_iso_vert_xyz_marching_tet(const std::vector<IsoVert>& iso_verts,
 
 // compute iso-edges and edge-face connectivity
 void compute_iso_edges(std::vector<IsoFace>& iso_faces, std::vector<IsoEdge>& iso_edges);
+void compute_iso_edges_r(std::vector<IsoFace>& iso_faces, std::vector<IsoEdge>& iso_edges);
+
 
 // group iso-faces into patches
 void compute_patches(const std::vector<IsoFace>& iso_faces,

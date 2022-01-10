@@ -1219,6 +1219,48 @@ void compute_iso_edges(std::vector<IsoFace>& iso_faces, std::vector<IsoEdge>& is
     iso_edges.resize(num_iso_edge);
 }
 
+// compute iso-edges and edge-face connectivity (reserve instead of resize)
+void compute_iso_edges_r(std::vector<IsoFace>& iso_faces, std::vector<IsoEdge>& iso_edges)
+{
+    size_t max_num_edge = 0;
+    for (size_t i = 0; i < iso_faces.size(); i++) {
+        max_num_edge += iso_faces[i].vert_indices.size();
+    }
+    iso_edges.reserve(max_num_edge/2);
+    size_t num_iso_edge = 0;
+    // map: (v1, v2) -> iso-edge index
+    absl::flat_hash_map<std::pair<size_t, size_t>, size_t> edge_id;
+    for (size_t i = 0; i < iso_faces.size(); i++) {
+        auto& face = iso_faces[i];
+        size_t num_edge = face.vert_indices.size();
+        face.edge_indices.resize(num_edge);
+        for (size_t j = 0; j < num_edge; j++) {
+            size_t v1 = face.vert_indices[j];
+            size_t v2 = (j + 1 == num_edge) ? face.vert_indices[0] : face.vert_indices[j + 1];
+            // swap if v1 > v2
+            size_t tmp = v1;
+            if (v1 > v2) {
+                v1 = v2;
+                v2 = tmp;
+            }
+            //
+            num_iso_edge = iso_edges.size();
+            auto iter_inserted = edge_id.try_emplace(std::make_pair(v1, v2), num_iso_edge);
+            if (iter_inserted.second) { // new iso-edge
+                iso_edges.emplace_back();
+                iso_edges.back().v1 = v1;
+                iso_edges.back().v2 = v2;
+                iso_edges.back().face_edge_indices.emplace_back(i,j);
+                face.edge_indices[j] = num_iso_edge;
+            } else { // existing iso-edge
+                size_t eId = iter_inserted.first->second;
+                iso_edges[eId].face_edge_indices.emplace_back(i, j);
+                face.edge_indices[j] = eId;
+            }
+        }
+    }
+}
+
 // group iso-faces into patches
 void compute_patches(const std::vector<IsoFace>& iso_faces,
     const std::vector<IsoEdge>& iso_edges,
