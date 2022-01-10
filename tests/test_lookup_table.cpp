@@ -12,7 +12,7 @@ TEST_CASE("Lookup table", "[lookup]")
 {
     using namespace simplicial_arrangement;
 
-    bool loaded = load_lookup_table();
+    bool loaded = load_lookup_table(ARRANGEMENT);
     REQUIRE(loaded);
 
     REQUIRE(one_func_lookup_table->size() == 16);
@@ -23,7 +23,7 @@ TEST_CASE("Material Interface lookup", "[mi][lookup]")
 {
     using namespace simplicial_arrangement;
     std::vector<Material<Int, 3>> materials;
-    REQUIRE(load_lookup_table());
+    REQUIRE(load_lookup_table(MATERIAL_INTERFACE));
     spdlog::set_level(spdlog::level::info);
 
     auto assert_same = [](const MaterialInterface<3>& mi0, const MaterialInterface<3>& mi1) {

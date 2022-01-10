@@ -87,8 +87,7 @@ private:
 
                 logger().debug("MI lookup outer index: {}", outer_index);
                 const size_t start_idx = mi_indices[outer_index];
-                const size_t end_idx = mi_indices[outer_index + 1];
-                assert(end_idx == start_idx + 1);
+                assert(mi_indices[outer_index + 1] == start_idx + 1);
 
                 logger().debug("MI lookup data index: {}", start_idx);
                 return &mi_data[start_idx];

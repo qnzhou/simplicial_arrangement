@@ -31,6 +31,13 @@ std::vector<MaterialInterface<3>> mi_data;
 std::vector<size_t> mi_indices;
 bool use_lookup_table = false;
 
+#ifdef LOOKUP_TABLE_GEN
+// Lookup-table-generation-related variables.
+// These global varaibles are for predefined `mi_cut_0_face` function.
+std::array<std::array<bool, 3>, 4> vertex_signs;
+std::array<bool, 6> edge_signs;
+#endif
+
 // Forward declarations.
 bool load_one_func_lookup_table(const std::string& filename);
 bool load_to_check_edge_table(const std::string& filename);
@@ -47,7 +54,7 @@ void disable_lookup_table()
     use_lookup_table = false;
 }
 
-bool load_lookup_table()
+bool load_lookup_table(LookupTableType table_type)
 {
     use_lookup_table = false;
 #ifndef LOOKUP_TABLE_PATH
@@ -55,18 +62,22 @@ bool load_lookup_table()
 #endif // !LOOKUP_TABLE_PATH
     std::string lookup_table_path = LOOKUP_TABLE_PATH;
 
-    std::string one_func_table_file = lookup_table_path + "/1_func_lookup_table.json";
-    if (!load_one_func_lookup_table(one_func_table_file)) return false;
+    if (table_type & ARRANGEMENT) {
+        std::string one_func_table_file = lookup_table_path + "/1_func_lookup_table.json";
+        if (!load_one_func_lookup_table(one_func_table_file)) return false;
 
-    std::string to_check_edge_table_file = lookup_table_path + "/to_check_edge_table.json";
-    if (!load_to_check_edge_table(to_check_edge_table_file)) return false;
+        std::string to_check_edge_table_file = lookup_table_path + "/to_check_edge_table.json";
+        if (!load_to_check_edge_table(to_check_edge_table_file)) return false;
 
-    std::string two_func_table_file = lookup_table_path + "/2_func_lookup_table.json";
-    if (!load_two_func_lookup_table(two_func_table_file)) return false;
+        std::string two_func_table_file = lookup_table_path + "/2_func_lookup_table.json";
+        if (!load_two_func_lookup_table(two_func_table_file)) return false;
+    }
 
-    std::string material_interface_lookup_table_file =
-        lookup_table_path + "/material_interface_lookup_table.msgpack";
-    if (!load_material_interface_lookup_table(material_interface_lookup_table_file)) return false;
+    if (table_type & MATERIAL_INTERFACE) {
+        std::string material_interface_lookup_table_file =
+            lookup_table_path + "/material_interface_lookup_table.msgpack";
+        if (!load_material_interface_lookup_table(material_interface_lookup_table_file)) return false;
+    }
 
     use_lookup_table = true;
     return true;
@@ -76,6 +87,7 @@ bool load_lookup_table()
 bool load_one_func_lookup_table(const std::string& filename)
 {
     if (one_func_lookup_table != nullptr) return true;
+    auto t0 = std::chrono::high_resolution_clock::now();
     using json = nlohmann::json;
     std::ifstream fin(filename.c_str());
     if (!fin) {
@@ -93,12 +105,16 @@ bool load_one_func_lookup_table(const std::string& filename)
         auto& arrangement = (*one_func_lookup_table)[i];
         load_arrangement(arrangement, input[i]);
     }
+    auto t1 = std::chrono::high_resolution_clock::now();
+    logger().info("Arrangement 1 function lookup table load time: {}s",
+            std::chrono::duration<double>(t1 - t0).count());
     return true;
 }
 
 bool load_to_check_edge_table(const std::string& filename)
 {
     if (to_check_edge_table != nullptr) return true;
+    auto t0 = std::chrono::high_resolution_clock::now();
     using json = nlohmann::json;
     std::ifstream fin(filename.c_str());
     if (!fin) {
@@ -124,12 +140,16 @@ bool load_to_check_edge_table(const std::string& filename)
             }
         }
     }
+    auto t1 = std::chrono::high_resolution_clock::now();
+    logger().info("Arrangement check edge lookup table load time: {}s",
+            std::chrono::duration<double>(t1 - t0).count());
     return true;
 }
 
 bool load_two_func_lookup_table(const std::string& filename)
 {
     if (two_func_lookup_table != nullptr) return true;
+    auto t0 = std::chrono::high_resolution_clock::now();
     using json = nlohmann::json;
     std::ifstream fin(filename.c_str());
     if (!fin) {
@@ -153,6 +173,9 @@ bool load_two_func_lookup_table(const std::string& filename)
             }
         }
     }
+    auto t1 = std::chrono::high_resolution_clock::now();
+    logger().info("Arrangement 2 function lookup table load time: {}s",
+            std::chrono::duration<double>(t1 - t0).count());
     return true;
 }
 

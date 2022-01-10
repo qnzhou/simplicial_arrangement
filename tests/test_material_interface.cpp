@@ -426,7 +426,7 @@ TEST_CASE("Material interface 2D", "[material_interface][2D]")
 TEST_CASE("Material interface 3D", "[material_interface][3D]")
 {
     using namespace simplicial_arrangement;
-    REQUIRE(load_lookup_table());
+    REQUIRE(load_lookup_table(MATERIAL_INTERFACE));
 
     SECTION("Int")
     {
