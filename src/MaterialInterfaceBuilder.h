@@ -82,8 +82,7 @@ private:
 
         if constexpr (DIM == 3) {
             if (num_materials == 2) {
-                const size_t outer_index =
-                    mi_compute_outer_index(materials[0], materials[1]);
+                const size_t outer_index = mi_compute_outer_index(materials[0], materials[1]);
                 if (outer_index == INVALID) return nullptr;
 
                 logger().debug("MI lookup outer index: {}", outer_index);
@@ -105,8 +104,8 @@ private:
                     logger().debug("MI lookup data index: {}", start_idx);
                     return &mi_data[start_idx];
                 } else if (end_idx > start_idx) {
-                    const size_t inner_index =
-                        mi_compute_inner_index(outer_index, materials[0], materials[1], materials[2]);
+                    const size_t inner_index = mi_compute_inner_index(
+                        outer_index, materials[0], materials[1], materials[2]);
                     if (inner_index == INVALID) return nullptr;
                     assert(inner_index < end_idx - start_idx);
                     logger().debug("MI lookup inner index: {}", inner_index);

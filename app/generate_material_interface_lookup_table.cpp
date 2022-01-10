@@ -3,8 +3,8 @@
 #include <iostream>
 #include <vector>
 
-#include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
+#include <nlohmann/json.hpp>
 
 #include <simplicial_arrangement/material_interface.h>
 
@@ -60,7 +60,7 @@ auto generate_lookup_table()
         if (v0 == 6 && v1 == 6) return true;
         if (v0 == 6 && v1 == 7) return true;
 
-        if (v0 == 7 && v1 == 7) return false;
+        if (v0 == 7 && v1 == 7) return true;
         throw std::runtime_error("Invalid edge state!");
     };
 
@@ -129,25 +129,30 @@ auto generate_lookup_table()
         } else if (ambiguous_edges.size() == 2) {
             size_t num_cases = 1 << 2;
             for (size_t j = 0; j < num_cases; j++) {
-                edge_signs[ambiguous_edges[0]] = j | 1;
-                edge_signs[ambiguous_edges[1]] = j | 2;
+                edge_signs[ambiguous_edges[0]] = j & 1;
+                edge_signs[ambiguous_edges[1]] = j & 2;
                 data.push_back(compute_material_interface(dummy_materials));
             }
         } else if (ambiguous_edges.size() == 3) {
             size_t num_cases = 1 << 3;
             for (size_t j = 0; j < num_cases; j++) {
-                edge_signs[ambiguous_edges[0]] = j | 1;
-                edge_signs[ambiguous_edges[1]] = j | 2;
-                edge_signs[ambiguous_edges[2]] = j | 4;
+                edge_signs[ambiguous_edges[0]] = j & 1;
+                edge_signs[ambiguous_edges[1]] = j & 2;
+                edge_signs[ambiguous_edges[2]] = j & 4;
                 data.push_back(compute_material_interface(dummy_materials));
             }
         } else if (ambiguous_edges.size() == 4) {
+            // It is impossible for ambiguous to form a loop. (Need proof.)
+            if (ambiguous_edges == std::vector<size_t>({0, 1, 4, 5})) continue;
+            if (ambiguous_edges == std::vector<size_t>({0, 2, 3, 5})) continue;
+            if (ambiguous_edges == std::vector<size_t>({1, 2, 3, 4})) continue;
+            if (ambiguous_edges == std::vector<size_t>({1, 2, 3, 4})) continue;
             size_t num_cases = 1 << 4;
             for (size_t j = 0; j < num_cases; j++) {
-                edge_signs[ambiguous_edges[0]] = j | 1;
-                edge_signs[ambiguous_edges[1]] = j | 2;
-                edge_signs[ambiguous_edges[2]] = j | 4;
-                edge_signs[ambiguous_edges[3]] = j | 8;
+                edge_signs[ambiguous_edges[0]] = j & 1;
+                edge_signs[ambiguous_edges[1]] = j & 2;
+                edge_signs[ambiguous_edges[2]] = j & 4;
+                edge_signs[ambiguous_edges[3]] = j & 8;
                 data.push_back(compute_material_interface(dummy_materials));
             }
         } else {
@@ -172,9 +177,7 @@ void serialize(const std::vector<simplicial_arrangement::MaterialInterface<3>>& 
         j.push_back(nlohmann::json::array());
 
         for (const auto& f : mi.faces) {
-            j[1].push_back({f.vertices,
-                f.positive_material_label,
-                f.negative_material_label});
+            j[1].push_back({f.vertices, f.positive_material_label, f.negative_material_label});
         }
 
         for (const auto& c : mi.cells) {

@@ -91,6 +91,7 @@ int8_t mi_cut_0_face([[maybe_unused]] const MaterialRepo<Scalar, 3>& materials,
         edge_key = 0;
     }
 
+    logger().debug("mi_cut_0d: {}, {}, {} at edge {} -> {}", m0, m1, material_index, edge_key, edge_signs[edge_key]);
     return edge_signs[edge_key] ? 1 : -1;
 }
 
