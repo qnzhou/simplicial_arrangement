@@ -16,6 +16,32 @@ typedef std::chrono::duration<double> Time_duration;
 
 using namespace simplicial_arrangement;
 
+// indexed point: (x,y,z, index)
+bool point_xyz_less1(const std::array<double,4> &a, const std::array<double,4> &b) {
+    if (a[0] == b[0]) {
+        if (a[1] == b[1]) {
+            return a[2] < b[2];
+        } else {
+            return a[1] < b[1];
+        }
+    } else {
+        return a[0] < b[0];
+    }
+}
+
+bool point_xyz_less2(const std::pair<std::array<double,3>,size_t> &p, const std::pair<std::array<double,3>,size_t> &q) {
+    const std::array<double,3> &a = p.first;
+    const std::array<double,3> &b = q.first;
+    if (a[0] == b[0]) {
+        if (a[1] == b[1]) {
+            return a[2] < b[2];
+        } else {
+            return a[1] < b[1];
+        }
+    } else {
+        return a[0] < b[0];
+    }
+}
 
 int main(int argc, const char* argv[])
 {
@@ -57,6 +83,53 @@ int main(int argc, const char* argv[])
     size_t n_tets = tets.size();
     size_t n_pts = pts.size();
     std::cout << "tet mesh: " << pts.size() << " verts, " << tets.size() << " tets." << std::endl;
+
+    // sort tet vertices by (x,y,z)
+//    std::vector<size_t> sorted_index_of_pts;
+//    {
+//        ScopedTimer<> timer("sort tet vertices by xyz");
+//        std::vector<std::pair<std::array<double, 3>, size_t>> indexed_pts;
+//        indexed_pts.reserve(n_pts);
+//        for (size_t i = 0; i < n_pts; ++i) {
+//            indexed_pts.emplace_back(pts[i], i);
+//        }
+//        std::sort(indexed_pts.begin(), indexed_pts.end(), point_xyz_less2);
+//        // map: pts index --> index after sorting
+//        sorted_index_of_pts.resize(n_pts);
+//        for (size_t i = 0; i < n_pts; ++i) {
+//            sorted_index_of_pts[indexed_pts[i].second] = i;
+//        }
+////        std::cout << "pId with smallest xyz = " << indexed_pts[0].second << std::endl;
+////        std::cout << "(" << indexed_pts[0].first[0] << "," << indexed_pts[0].first[1] << "," << indexed_pts[0].first[2] << ")" << std::endl;
+//    }
+
+    // map: tet vert index --> index of adjacent tet vert with smallest (x,y,z)
+//    std::vector<size_t> smallest_neighbor_of_pts;
+//    {
+//        ScopedTimer<> timer("find smallest neighbor for each tet vertex");
+//        smallest_neighbor_of_pts.resize(n_pts);
+//        std::vector<size_t> min_index_of_pts(n_pts, Arrangement<3>::None);
+//        for (const auto& tet : tets) {
+//            size_t min = sorted_index_of_pts[tet[0]];
+//            size_t min_id = 0;
+//            for (size_t i = 1; i < 4; ++i) {
+//                if (sorted_index_of_pts[tet[i]] < min) {
+//                    min = sorted_index_of_pts[tet[i]];
+//                    min_id = i;
+//                }
+//            }
+//            //
+//            size_t g_min_id = tet[min_id];
+//            for (size_t i = 0; i < 4; ++i) {
+//                if (i != min_id && min < min_index_of_pts[tet[i]] ) {
+//                    min_index_of_pts[tet[i]] = min;
+//                    smallest_neighbor_of_pts[tet[i]] = g_min_id;
+//                }
+//            }
+//        }
+//    }
+
+
 
 
     // load implicit function values, or evaluate
@@ -233,6 +306,7 @@ int main(int argc, const char* argv[])
         timing_labels.emplace_back("isoEdge-face connectivity");
         ScopedTimer<> timer("isoEdge-face connectivity");
         compute_iso_edges(iso_faces, iso_edges);
+//        compute_iso_edges_r(iso_faces, iso_edges);
         timings.push_back(timer.toc());
     }
     // std::cout << "num iso-edges = " << iso_edges.size() << std::endl;
