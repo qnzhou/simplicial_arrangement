@@ -2,6 +2,8 @@
 #include <simplicial_arrangement/material_interface.h>
 #include <simplicial_arrangement/simplicial_arrangement.h>
 
+#include <memory>
+
 namespace simplicial_arrangement {
 
 // one function look up table
