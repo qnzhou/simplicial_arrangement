@@ -173,10 +173,6 @@ int main(int argc, const char* argv[])
         }
         timings.push_back(timer.toc());
     }
-    //    {
-    //        ScopedTimer<> timer("compute function signs at vertices");
-    //        funcSigns = funcVals.unaryExpr([](double x) { return sign(x); });
-    //    }
 
     size_t num_intersecting_tet = 0;
     std::vector<size_t> func_in_tet;
@@ -233,6 +229,8 @@ int main(int argc, const char* argv[])
         cut_result_index.reserve(n_tets);
         size_t start_index;
         size_t num_func;
+        std::vector<Plane<double, 3>> planes;
+        planes.reserve(3);
         for (size_t i = 0; i < tets.size(); i++) {
             start_index = start_index_of_tet[i];
             num_func = start_index_of_tet[i + 1] - start_index;
@@ -246,11 +244,18 @@ int main(int argc, const char* argv[])
             size_t v2 = tets[i][1];
             size_t v3 = tets[i][2];
             size_t v4 = tets[i][3];
-            std::vector<Plane<double, 3>> planes(num_func);
+//            std::vector<Plane<double, 3>> planes(num_func);
+            planes.clear();
             for (size_t j = 0; j < num_func; j++) {
                 size_t f_id = func_in_tet[start_index + j];
-                planes[j] = {
-                    funcVals(f_id, v1), funcVals(f_id, v2), funcVals(f_id, v3), funcVals(f_id, v4)};
+//                planes[j] = {
+//                    funcVals(f_id, v1), funcVals(f_id, v2), funcVals(f_id, v3), funcVals(f_id, v4)};
+                planes.emplace_back();
+                auto& plane = planes.back();
+                plane[0] = funcVals(f_id, v1);
+                plane[1] = funcVals(f_id, v2);
+                plane[2] = funcVals(f_id, v3);
+                plane[3] = funcVals(f_id, v4);
             }
             //
             if (!use_2func_lookup && num_func == 2) {
@@ -446,74 +451,6 @@ int main(int argc, const char* argv[])
 //    std::cout << "found_degenerate_vertex = " << found_degenerate_vertex << std::endl;
     std::cout << "incident_tets.size() = " << incident_tets.size() << std::endl;
 
-    //        {
-    // this approach is slower than (compact vec)
-    //            timing_labels.emplace_back("vert-tet connectivity(Eigen)");
-    //            ScopedTimer<> timer("vert-tet connectivity(Eigen)");
-    //            Eigen::VectorXi num_incident_tets;
-    //            num_incident_tets.setZero(n_pts);
-    //            // compute number of tets incident to each vertex
-    //            for (const auto & tet : tets) {
-    //                num_incident_tets[tet[0]] += 1;
-    //                num_incident_tets[tet[1]] += 1;
-    //                num_incident_tets[tet[2]] += 1;
-    //                num_incident_tets[tet[3]] += 1;
-    //            }
-    //            // get max
-    //            int max_num_tets = num_incident_tets.maxCoeff();
-    ////            std::cout << "max_num_tets = " << max_num_tets << std::endl;
-    //            // compute indices of tets incident to each vertex
-    //            Eigen::MatrixXi incident_tets_of_vert(n_pts, max_num_tets);
-    //            Eigen::VectorXi size_incident_tets;
-    //            size_incident_tets.setZero(n_pts);
-    //            for (size_t i = 0; i < tets.size(); i++) {
-    //                const auto& tet = tets[i];
-    //                incident_tets_of_vert(tet[0],size_incident_tets[tet[0]]) = i;
-    //                incident_tets_of_vert(tet[1],size_incident_tets[tet[1]]) = i;
-    //                incident_tets_of_vert(tet[2],size_incident_tets[tet[2]]) = i;
-    //                incident_tets_of_vert(tet[3],size_incident_tets[tet[3]]) = i;
-    //                size_incident_tets[tet[0]] += 1;
-    //                size_incident_tets[tet[1]] += 1;
-    //                size_incident_tets[tet[2]] += 1;
-    //                size_incident_tets[tet[3]] += 1;
-    //            }
-    //            timings.push_back(timer.toc());
-    ////            std::cout << "incident_tets_of_vertA[x][y] = " << incident_tets_of_vert(0,0) << std::endl;
-    //        }
-
-    //        {
-    // this approach cost more memory than (compact vec)
-    //            timing_labels.emplace_back("vert-tet connectivity(flat 2D vector)");
-    //            ScopedTimer<> timer("vert-tet connectivity(flat 2D vector)");
-    //            std::vector<int> num_incident_tetsA(n_pts,0);
-    //            // compute number of tets incident to each vertex
-    //            for (const auto & tet : tets) {
-    //                num_incident_tetsA[tet[0]] += 1;
-    //                num_incident_tetsA[tet[1]] += 1;
-    //                num_incident_tetsA[tet[2]] += 1;
-    //                num_incident_tetsA[tet[3]] += 1;
-    //            }
-    //            // get max
-    //            int max_num_tets = *(std::max_element(num_incident_tetsA.begin(),
-    //            num_incident_tetsA.end()));
-    ////            std::cout << "max_num_tets = " << max_num_tets << std::endl;
-    //            // compute indices of tets incident to each vertex
-    //            std::vector<int> incident_tets_of_vertA(n_pts * max_num_tets);
-    //            std::vector<int> size_incident_tetsA(n_pts,0);
-    //            for (size_t i = 0; i < tets.size(); i++) {
-    //                const auto& tet = tets[i];
-    //                incident_tets_of_vertA[tet[0]*max_num_tets + size_incident_tetsA[tet[0]]] = i;
-    //                incident_tets_of_vertA[tet[1]*max_num_tets + size_incident_tetsA[tet[1]]] = i;
-    //                incident_tets_of_vertA[tet[2]*max_num_tets + size_incident_tetsA[tet[2]]] = i;
-    //                incident_tets_of_vertA[tet[3]*max_num_tets + size_incident_tetsA[tet[3]]] = i;
-    //                size_incident_tetsA[tet[0]] += 1;
-    //                size_incident_tetsA[tet[1]] += 1;
-    //                size_incident_tetsA[tet[2]] += 1;
-    //                size_incident_tetsA[tet[3]] += 1;
-    //            }
-    ////            std::cout << "incident_tets_of_vertA[0] = " << incident_tets_of_vertA[0] << std::endl;
-    //            timings.push_back(timer.toc());
-    //        }
 
 
     // compute order of patches around chains
