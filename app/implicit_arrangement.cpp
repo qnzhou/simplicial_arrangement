@@ -8,6 +8,7 @@
 
 #include <CLI/CLI.hpp>
 #include <Eigen/Core>
+#include <absl/container/flat_hash_map.h>
 
 
 #include "implicit_arrangement_util.h"
@@ -154,13 +155,20 @@ int main(int argc, const char* argv[])
 
     // function signs at vertices
     Eigen::MatrixXi funcSigns;
+    std::vector<bool> is_degenerate_vertex;
+    bool found_degenerate_vertex = false;
     {
         timing_labels.emplace_back("func signs");
         ScopedTimer<> timer("func signs");
+        is_degenerate_vertex.resize(n_pts, false);
         funcSigns.resize(n_func, n_pts);
         for (Eigen::Index i = 0; i < n_func; i++) {
             for (Eigen::Index j = 0; j < n_pts; j++) {
                 funcSigns(i, j) = sign(funcVals(i, j));
+                if (funcSigns(i,j) == 0) {
+                    is_degenerate_vertex[j] = true;
+                    found_degenerate_vertex = true;
+                }
             }
         }
         timings.push_back(timer.toc());
@@ -214,6 +222,9 @@ int main(int argc, const char* argv[])
     Time_duration time_1_func = Time_duration::zero();
     Time_duration time_2_func = Time_duration::zero();
     Time_duration time_more_func = Time_duration::zero();
+    size_t num_1_func = 0;
+    size_t num_2_func = 0;
+    size_t num_more_func = 0;
     //
     {
         timing_labels.emplace_back("simp_arr(other)");
@@ -255,9 +266,15 @@ int main(int argc, const char* argv[])
             //
             std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
             switch (num_func) {
-            case 1: time_1_func += std::chrono::duration_cast<Time_duration>(t2 - t1); break;
-            case 2: time_2_func += std::chrono::duration_cast<Time_duration>(t2 - t1); break;
-            default: time_more_func += std::chrono::duration_cast<Time_duration>(t2 - t1); break;
+            case 1: time_1_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                ++num_1_func;
+                break;
+            case 2: time_2_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                ++num_2_func;
+                break;
+            default: time_more_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                ++num_more_func;
+                break;
             }
         }
         timings.push_back(
@@ -279,7 +296,15 @@ int main(int argc, const char* argv[])
     {
         timing_labels.emplace_back("extract mesh");
         ScopedTimer<> timer("extract mesh");
-        extract_iso_mesh_pure(cut_results,
+//        extract_iso_mesh_pure(cut_results,
+//            cut_result_index,
+//            func_in_tet,
+//            start_index_of_tet,
+//            tets,
+//            iso_verts,
+//            iso_faces);
+        extract_iso_mesh_pure_2(num_1_func, num_2_func, num_more_func,
+            cut_results,
             cut_result_index,
             func_in_tet,
             start_index_of_tet,
@@ -288,8 +313,8 @@ int main(int argc, const char* argv[])
             iso_faces);
         timings.push_back(timer.toc());
     }
-    // std::cout << "num iso-vertices = " << iso_verts.size() << std::endl;
-    // std::cout << "num iso-faces = " << iso_faces.size() << std::endl;
+    std::cout << "num iso-vertices = " << iso_verts.size() << std::endl;
+    std::cout << "num iso-faces = " << iso_faces.size() << std::endl;
 
     // compute xyz of iso-vertices
     std::vector<std::array<double, 3>> iso_pts;
@@ -302,11 +327,13 @@ int main(int argc, const char* argv[])
 
     //  compute iso-edges and edge-face connectivity
     std::vector<IsoEdge> iso_edges;
+    std::vector<std::vector<size_t>> edges_of_iso_face;
     {
         timing_labels.emplace_back("isoEdge-face connectivity");
         ScopedTimer<> timer("isoEdge-face connectivity");
-        compute_iso_edges(iso_faces, iso_edges);
+//        compute_iso_edges(iso_faces, iso_edges);
 //        compute_iso_edges_r(iso_faces, iso_edges);
+        compute_iso_edges(iso_faces, edges_of_iso_face, iso_edges);
         timings.push_back(timer.toc());
     }
     // std::cout << "num iso-edges = " << iso_edges.size() << std::endl;
@@ -317,7 +344,8 @@ int main(int argc, const char* argv[])
     {
         timing_labels.emplace_back("patches");
         ScopedTimer<> timer("patches");
-        compute_patches(iso_faces, iso_edges, patches);
+//        compute_patches(iso_faces, iso_edges, patches);
+        compute_patches(edges_of_iso_face, iso_edges, patches);
         timings.push_back(timer.toc());
     }
     // std::cout << "num patches = " << patches.size() << std::endl;
@@ -364,43 +392,59 @@ int main(int argc, const char* argv[])
     // std::cout << "num chains = " << chains.size() << std::endl;
 
 
+//    {
+//        timing_labels.emplace_back("vert-tet connectivity");
+//        ScopedTimer<> timer("vert-tet connectivity(compact vec)");
+//        // compute number of tets incident to each vertex
+//        std::vector<int> num_incident_tets(n_pts, 0);
+//        for (const auto& tet : tets) {
+//            num_incident_tets[tet[0]] += 1;
+//            num_incident_tets[tet[1]] += 1;
+//            num_incident_tets[tet[2]] += 1;
+//            num_incident_tets[tet[3]] += 1;
+//        }
+//        // get index of pts in
+//        std::vector<int> pts_index(n_pts);
+//        int curr_index = 0;
+//        for (int i = 0; i < n_pts; ++i) {
+//            pts_index[i] = curr_index;
+//            curr_index += num_incident_tets[i];
+//        }
+//        //
+//        std::vector<int> size_incident_tets(n_pts, 0);
+//        std::vector<int> incident_tets(4 * n_tets);
+//        for (int i = 0; i < n_tets; ++i) {
+//            const auto& tet = tets[i];
+//            incident_tets[pts_index[tet[0]] + size_incident_tets[tet[0]]] = i;
+//            incident_tets[pts_index[tet[1]] + size_incident_tets[tet[1]]] = i;
+//            incident_tets[pts_index[tet[2]] + size_incident_tets[tet[2]]] = i;
+//            incident_tets[pts_index[tet[3]] + size_incident_tets[tet[3]]] = i;
+//            size_incident_tets[tet[0]] += 1;
+//            size_incident_tets[tet[1]] += 1;
+//            size_incident_tets[tet[2]] += 1;
+//            size_incident_tets[tet[3]] += 1;
+//        }
+//        timings.push_back(timer.toc());
+//    }
+
+    absl::flat_hash_map<size_t, std::vector<size_t>> incident_tets;
     {
         timing_labels.emplace_back("vert-tet connectivity");
-        ScopedTimer<> timer("vert-tet connectivity(compact vec)");
-        // compute number of tets incident to each vertex
-        std::vector<int> num_incident_tets(n_pts, 0);
-        for (const auto& tet : tets) {
-            num_incident_tets[tet[0]] += 1;
-            num_incident_tets[tet[1]] += 1;
-            num_incident_tets[tet[2]] += 1;
-            num_incident_tets[tet[3]] += 1;
-        }
-        // get index of pts in
-        std::vector<int> pts_index(n_pts);
-        int curr_index = 0;
-        for (int i = 0; i < n_pts; ++i) {
-            pts_index[i] = curr_index;
-            curr_index += num_incident_tets[i];
-        }
-        //
-        std::vector<int> size_incident_tets(n_pts, 0);
-        std::vector<int> incident_tets(4 * n_tets);
-        for (int i = 0; i < n_tets; ++i) {
-            const auto& tet = tets[i];
-            incident_tets[pts_index[tet[0]] + size_incident_tets[tet[0]]] = i;
-            incident_tets[pts_index[tet[1]] + size_incident_tets[tet[1]]] = i;
-            incident_tets[pts_index[tet[2]] + size_incident_tets[tet[2]]] = i;
-            incident_tets[pts_index[tet[3]] + size_incident_tets[tet[3]]] = i;
-            size_incident_tets[tet[0]] += 1;
-            size_incident_tets[tet[1]] += 1;
-            size_incident_tets[tet[2]] += 1;
-            size_incident_tets[tet[3]] += 1;
+        ScopedTimer<> timer("vert-tet connectivity(degenerate vert only)");
+        if (found_degenerate_vertex) {
+            for (size_t i = 0; i < n_tets; ++i) {
+                const auto& tet = tets[i];
+                for (size_t j = 0; j < 4; ++j) {
+                    if (is_degenerate_vertex[tet[j]]) {
+                        incident_tets[tet[j]].push_back(i);
+                    }
+                }
+            }
         }
         timings.push_back(timer.toc());
-        //            std::cout << "num_incident_tets[0] = " << num_incident_tets[0] << std::endl;
-        //            std::cout << "pts_index[0] = " << pts_index[0] << std::endl;
-        //            std::cout << "incident_tets[0] = " << incident_tets[0] << std::endl;
     }
+//    std::cout << "found_degenerate_vertex = " << found_degenerate_vertex << std::endl;
+    std::cout << "incident_tets.size() = " << incident_tets.size() << std::endl;
 
     //        {
     // this approach is slower than (compact vec)
