@@ -17,7 +17,7 @@ struct IsoFace
     // each pair is (tet_Id, tet_face_Id)
     std::vector<std::pair<size_t, size_t>> tet_face_indices;
     // list of indices of bounding iso-edges (index into a global list of iso-edges)
-    std::vector<size_t> edge_indices;
+//    std::vector<size_t> edge_indices;
 };
 
 // vertex of isosurface
@@ -170,6 +170,15 @@ void extract_iso_mesh_pure(
     const std::vector<std::array<size_t, 4>>& tets,
     std::vector<IsoVert>& iso_verts,
     std::vector<IsoFace>& iso_faces);
+void extract_iso_mesh_pure_2(
+    size_t num_1_func, size_t num_2_func, size_t num_more_func,
+    const std::vector<Arrangement<3>>& cut_results,
+    const std::vector<size_t>& cut_result_index,
+    const std::vector<size_t>& func_in_tet,
+    const std::vector<size_t>& start_index_of_tet,
+    const std::vector<std::array<size_t, 4>>& tets,
+    std::vector<IsoVert>& iso_verts,
+    std::vector<IsoFace>& iso_faces);
 
 // extract iso-mesh from marching tet (topology only)
 void extract_iso_mesh_marching_tet(const std::vector<bool>& has_isosurface,
@@ -192,12 +201,20 @@ void compute_iso_vert_xyz_marching_tet(const std::vector<IsoVert>& iso_verts,
     std::vector<std::array<double, 3>>& iso_pts);
 
 // compute iso-edges and edge-face connectivity
-void compute_iso_edges(std::vector<IsoFace>& iso_faces, std::vector<IsoEdge>& iso_edges);
-void compute_iso_edges_r(std::vector<IsoFace>& iso_faces, std::vector<IsoEdge>& iso_edges);
+//void compute_iso_edges(std::vector<IsoFace>& iso_faces, std::vector<IsoEdge>& iso_edges);
+//void compute_iso_edges_r(std::vector<IsoFace>& iso_faces, std::vector<IsoEdge>& iso_edges);
+
+void compute_iso_edges(const std::vector<IsoFace>& iso_faces,
+    std::vector<std::vector<size_t>> &edges_of_iso_face,
+    std::vector<IsoEdge>& iso_edges);
 
 
 // group iso-faces into patches
-void compute_patches(const std::vector<IsoFace>& iso_faces,
+//void compute_patches(const std::vector<IsoFace>& iso_faces,
+//    const std::vector<IsoEdge>& iso_edges,
+//    std::vector<std::vector<size_t>>& patches);
+
+void compute_patches(const std::vector<std::vector<size_t>> &edges_of_iso_face,
     const std::vector<IsoEdge>& iso_edges,
     std::vector<std::vector<size_t>>& patches);
 
