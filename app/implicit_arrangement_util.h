@@ -86,6 +86,16 @@ bool save_result(const std::string& filename,
     const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
     const std::vector<std::vector<size_t>>& arrangement_cells);
 
+bool save_result_msh(const std::string& filename,
+    const std::vector<std::array<double, 3>>& iso_pts,
+    const std::vector<IsoFace>& iso_faces,
+    const std::vector<std::vector<size_t>>& patches,
+    const std::vector<IsoEdge>& iso_edges,
+    const std::vector<std::vector<size_t>>& chains,
+    const std::vector<std::vector<size_t>>& non_manifold_edges_of_vert,
+    const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
+    const std::vector<std::vector<size_t>>& arrangement_cells);
+
 bool save_result_mini(const std::string& filename,
     const std::vector<std::array<double, 3>>& iso_pts,
     const std::vector<IsoFace>& iso_faces,

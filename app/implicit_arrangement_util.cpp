@@ -7,6 +7,7 @@
 #include <queue>
 
 #include "ScopedTimer.h"
+#include "io.h"
 
 #include <absl/container/flat_hash_map.h>
 #include <absl/container/flat_hash_set.h>
@@ -160,6 +161,24 @@ bool save_result(const std::string& filename,
     jOut.push_back(jArrCells);
     fout << jOut << std::endl;
     fout.close();
+    return true;
+}
+
+bool save_result_msh(const std::string& filename,
+    const std::vector<std::array<double, 3>>& iso_pts,
+    const std::vector<IsoFace>& iso_faces,
+    const std::vector<std::vector<size_t>>& patches,
+    const std::vector<IsoEdge>& iso_edges,
+    const std::vector<std::vector<size_t>>& chains,
+    const std::vector<std::vector<size_t>>& non_manifold_edges_of_vert,
+    const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
+    const std::vector<std::vector<size_t>>& arrangement_cells)
+{
+    wmtk::MshData msh;
+    msh.add_edge_vertices(iso_pts.size(), [&](size_t i) {
+            return iso_pts[i];
+            });
+    msh.save(filename);
     return true;
 }
 

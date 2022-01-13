@@ -508,6 +508,15 @@ int main(int argc, const char* argv[])
             non_manifold_edges_of_vert,
             half_patch_list,
             arrangement_cells);
+        save_result_msh(output_dir + "/iso_mesh.json",
+            iso_pts,
+            iso_faces,
+            patches,
+            iso_edges,
+            chains,
+            non_manifold_edges_of_vert,
+            half_patch_list,
+            arrangement_cells);
     }
     // test: export timings
     save_timings(output_dir + "/timings.json", timing_labels, timings);
