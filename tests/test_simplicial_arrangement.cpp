@@ -710,7 +710,7 @@ TEST_CASE("Arrangement 3D", "[arrangement][3d]")
 TEST_CASE("Lookup 3D", "[lookup][3D]")
 {
     using namespace simplicial_arrangement;
-    bool loaded = load_lookup_table();
+    bool loaded = load_lookup_table(ARRANGEMENT);
     REQUIRE(loaded == true);
 
     SECTION("Int") { test_3D<Int>(); }
