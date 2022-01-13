@@ -17,25 +17,9 @@ typedef std::chrono::duration<double> Time_duration;
 
 using namespace simplicial_arrangement;
 
-// indexed point: (x,y,z, index)
-bool point_xyz_less1(const std::array<double, 4>& a, const std::array<double, 4>& b)
+// point (x,y,z)
+bool point_xyz_less(const std::array<double, 3>& a, const std::array<double, 3>& b)
 {
-    if (a[0] == b[0]) {
-        if (a[1] == b[1]) {
-            return a[2] < b[2];
-        } else {
-            return a[1] < b[1];
-        }
-    } else {
-        return a[0] < b[0];
-    }
-}
-
-bool point_xyz_less2(const std::pair<std::array<double, 3>, size_t>& p,
-    const std::pair<std::array<double, 3>, size_t>& q)
-{
-    const std::array<double, 3>& a = p.first;
-    const std::array<double, 3>& b = q.first;
     if (a[0] == b[0]) {
         if (a[1] == b[1]) {
             return a[2] < b[2];
@@ -484,29 +468,6 @@ int main(int argc, const char* argv[])
                 arrangement_cells.back()[0] = i;
             }
         } else { // resolve nesting order
-            // sort tet vertices by (x,y,z)
-            std::vector<size_t> sorted_index_of_vert;
-            {
-                timing_labels.emplace_back("arrCells(sort tet vertices)");
-                ScopedTimer<> timer("arrangement cells: sort tet vertices by xyz");
-                std::vector<std::pair<std::array<double, 3>, size_t>> indexed_pts;
-                indexed_pts.reserve(n_pts);
-                for (size_t i = 0; i < n_pts; ++i) {
-                    indexed_pts.emplace_back(pts[i], i);
-                }
-                std::sort(indexed_pts.begin(), indexed_pts.end(), point_xyz_less2);
-                // map: vert index --> index after sorting
-                sorted_index_of_vert.resize(n_pts);
-                for (size_t i = 0; i < n_pts; ++i) {
-                    sorted_index_of_vert[indexed_pts[i].second] = i;
-                }
-                timings.push_back(timer.toc());
-                //        std::cout << "pId with smallest xyz = " << indexed_pts[0].second <<
-                //        std::endl; std::cout << "(" << indexed_pts[0].first[0] << "," <<
-                //        indexed_pts[0].first[1] << "," << indexed_pts[0].first[2] << ")" <<
-                //        std::endl;
-            }
-
             // map: tet vert index --> index of next vert (with smaller (x,y,z))
 //            std::vector<size_t> next_vert;
             {
@@ -514,13 +475,12 @@ int main(int argc, const char* argv[])
                 ScopedTimer<> timer("arrangement cells: find next vert for each tet vertex");
                 next_vert.resize(n_pts, Arrangement<3>::None);
                 //               std::vector<size_t> min_index_of_pts(n_pts, Arrangement<3>::None);
+                std::array<double,3> min;
                 for (const auto& tet : tets) {
                     // find the smallest vertex of tet
-                    size_t min = sorted_index_of_vert[tet[0]];
                     size_t min_id = 0;
                     for (size_t i = 1; i < 4; ++i) {
-                        if (sorted_index_of_vert[tet[i]] < min) {
-                            min = sorted_index_of_vert[tet[i]];
+                        if (point_xyz_less(pts[tet[i]], pts[tet[min_id]])) {
                             min_id = i;
                         }
                     }
@@ -585,12 +545,12 @@ int main(int argc, const char* argv[])
                                             u2 = v2;
                                         } else {
                                             if (v2 == u2) {
-                                                if (sorted_index_of_vert[v1] <
-                                                    sorted_index_of_vert[u1]) {
+                                                if (point_xyz_less(pts[v1], pts[u1]))
+                                                {
                                                     u1 = v1;
                                                 }
-                                            } else if (sorted_index_of_vert[v2] <
-                                                       sorted_index_of_vert[u2]) {
+                                            } else if (point_xyz_less(pts[v2], pts[u2]))
+                                            {
                                                 u1 = v1;
                                                 u2 = v2;
                                             }
@@ -608,12 +568,12 @@ int main(int argc, const char* argv[])
                                             u2 = v1;
                                         } else {
                                             if (v1 == u2) {
-                                                if (sorted_index_of_vert[v2] <
-                                                    sorted_index_of_vert[u1]) {
+                                                if (point_xyz_less(pts[v2], pts[u1]))
+                                                {
                                                     u1 = v2;
                                                 }
-                                            } else if (sorted_index_of_vert[v1] <
-                                                       sorted_index_of_vert[u2]) {
+                                            } else if (point_xyz_less(pts[v1], pts[u2]))
+                                            {
                                                 u1 = v2;
                                                 u2 = v1;
                                             }
