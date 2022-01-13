@@ -84,7 +84,14 @@ bool save_result(const std::string& filename,
     const std::vector<std::vector<size_t>>& chains,
     const std::vector<std::vector<size_t>>& non_manifold_edges_of_vert,
     const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
+    const std::vector<std::vector<size_t>>& shells,
+    const std::vector<std::vector<size_t>>& components,
     const std::vector<std::vector<size_t>>& arrangement_cells);
+
+bool save_nesting_data(const std::string& filename,
+    const std::vector<size_t> &next_vert,
+    const std::vector<size_t> &extremal_edge_of_component);
+
 
 bool save_result_mini(const std::string& filename,
     const std::vector<std::array<double, 3>>& iso_pts,
@@ -232,10 +239,45 @@ void compute_face_order_in_one_tet(const Arrangement<3>& tet_cut_result,
     const IsoEdge& iso_edge,
     std::vector<std::pair<size_t, int>>& ordered_faces);
 
+// compute the order of iso-vertices on a tet edge v->u, v,u in {0,1,2,3}
+// return a list of sorted vertex indices {v_id, i1, i2, ..., u_id}
+void compute_edge_intersection_order(const Arrangement<3>& tet_cut_result, size_t v, size_t u,
+    std::vector<size_t> &vert_indices);
 
-void compute_arrangement_cells(size_t num_patch,
-    const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
+// find the face passing v, v->u is part of a tet edge, and u is a tet vertex
+void compute_passing_face(const Arrangement<3>& tet_cut_result,
+    size_t v, size_t u,
+    std::pair<size_t,int> &face_orient);
+
+// find the two faces passing v1 and v2, v1->v2 is part of a tet edge
+void compute_passing_face_pair(const Arrangement<3>& tet_cut_result,
+    size_t v1, size_t v2,
+    std::pair<size_t,int> &face_orient1,
+    std::pair<size_t,int> &face_orient2);
+
+//void compute_arrangement_cells(size_t num_patch,
+//    const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
+//    std::vector<std::vector<size_t>>& arrangement_cells);
+
+// group shells into arrangement cells
+void compute_arrangement_cells(size_t num_shell,
+    const std::vector<std::pair<size_t,size_t>> &shell_links,
     std::vector<std::vector<size_t>>& arrangement_cells);
+
+// compute shells and connected components of isosurfaces
+// each shell is a list of half-patches
+// each component is a list of patches
+// we also build maps: half-patch --> shell,  patch --> component
+void compute_shells_and_components(size_t num_patch,
+    const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
+    std::vector<std::vector<size_t>>& shells,
+    std::vector<size_t>& shell_of_half_patch,
+    std::vector<std::vector<size_t>>& components,
+    std::vector<size_t>& component_of_patch
+);
+
+
+
 
 
 // compute barycentric coordinate of Point (intersection of three planes)
