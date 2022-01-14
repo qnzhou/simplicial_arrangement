@@ -186,6 +186,8 @@ bool save_result_msh(const std::string& filename,
     const std::vector<std::vector<size_t>>& chains,
     const std::vector<std::vector<size_t>>& non_manifold_edges_of_vert,
     const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
+    const std::vector<std::vector<size_t>>& shells,
+    const std::vector<std::vector<size_t>>& components,
     const std::vector<std::vector<size_t>>& arrangement_cells)
 {
     constexpr size_t INVALID = std::numeric_limits<size_t>::max();
@@ -307,16 +309,20 @@ bool save_result_msh(const std::string& filename,
             }
         };
 
-        for (auto patch_id : cell) {
-            const auto& patch = patches[patch_id];
-            for (auto poly_id : patch) {
-                const auto& f = iso_faces[poly_id];
-                const size_t s = f.vert_indices.size();
-                add_vertex(f.vert_indices[0]);
-                add_vertex(f.vert_indices[1]);
-                for (size_t i = 2; i < s; i++) {
-                    triangles.push_back({f.vert_indices[0], f.vert_indices[i - 1], f.vert_indices[i]});
-                    add_vertex(f.vert_indices[i]);
+        for (auto shell_id: cell) {
+            const auto& shell = shells[shell_id];
+            for (auto half_patch_id : shell) {
+                size_t patch_id = half_patch_id / 2;
+                const auto& patch = patches[patch_id];
+                for (auto poly_id : patch) {
+                    const auto& f = iso_faces[poly_id];
+                    const size_t s = f.vert_indices.size();
+                    add_vertex(f.vert_indices[0]);
+                    add_vertex(f.vert_indices[1]);
+                    for (size_t i = 2; i < s; i++) {
+                        triangles.push_back({f.vert_indices[0], f.vert_indices[i - 1], f.vert_indices[i]});
+                        add_vertex(f.vert_indices[i]);
+                    }
                 }
             }
         }

@@ -96,6 +96,8 @@ bool save_result_msh(const std::string& filename,
     const std::vector<std::vector<size_t>>& chains,
     const std::vector<std::vector<size_t>>& non_manifold_edges_of_vert,
     const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
+    const std::vector<std::vector<size_t>>& shells,
+    const std::vector<std::vector<size_t>>& components,
     const std::vector<std::vector<size_t>>& arrangement_cells);
 
 bool save_nesting_data(const std::string& filename,

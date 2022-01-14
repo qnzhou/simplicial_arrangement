@@ -770,6 +770,8 @@ int main(int argc, const char* argv[])
             chains,
             non_manifold_edges_of_vert,
             half_patch_list,
+            shells,
+            components,
             arrangement_cells);
         //
         if (components.size() > 1) {
