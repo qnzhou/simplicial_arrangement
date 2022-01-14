@@ -174,57 +174,165 @@ bool save_result_msh(const std::string& filename,
     const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
     const std::vector<std::vector<size_t>>& arrangement_cells)
 {
-    wmtk::MshData msh;
+    constexpr size_t INVALID = std::numeric_limits<size_t>::max();
+    std::vector<size_t> vertex_map(iso_pts.size(), INVALID);
+    wmtk::MshData msh, msh2;
 
     // Save chains.
-    msh.add_edge_vertices(iso_pts.size(), [&](size_t i) { return iso_pts[i]; });
-    for (const auto& chain : chains) {
-        msh.add_edges(chain.size(), [&](size_t i) -> std::array<size_t, 2> {
-            const auto& e = iso_edges[chain[i]];
-            return {e.v1, e.v2};
-        });
-    }
-
-    // Save patches
-    std::vector<std::array<size_t, 3>> triangles;
-    std::vector<size_t> polygon_start_indices;
-    triangles.reserve(iso_faces.size() * 2);
-    polygon_start_indices.reserve(iso_faces.size() + 1);
-    polygon_start_indices.push_back(0);
-    for (const auto& f : iso_faces) {
-        const size_t s = f.vert_indices.size();
-        for (size_t i = 2; i < s; i++) {
-            triangles.push_back({f.vert_indices[0], f.vert_indices[i - 1], f.vert_indices[i]});
-        }
-        polygon_start_indices.push_back(triangles.size());
-    }
-
-    std::vector<size_t> patch_ids;
-    patch_ids.reserve(triangles.size());
-    msh.add_face_vertices(iso_pts.size(), [&](size_t i) { return iso_pts[i]; });
-
-    std::vector<size_t> triangles_in_patch;
-    triangles_in_patch.reserve(iso_faces.size());
-
-    size_t patch_id = 0;
-    for (const auto& patch : patches) {
-        triangles_in_patch.clear();
-        for (const auto polygon_id : patch) {
-            const size_t begin_index = polygon_start_indices[polygon_id];
-            const size_t end_index = polygon_start_indices[polygon_id + 1];
-            for (size_t j = begin_index; j < end_index; j++) {
-                triangles_in_patch.push_back(j);
-                patch_ids.push_back(patch_id);
+    auto extract_chain = [&](size_t i) {
+        std::fill(vertex_map.begin(), vertex_map.end(), INVALID);
+        const auto& chain = chains[i];
+        size_t num_vertices = 0;
+        for (auto eid : chain) {
+            const auto& e = iso_edges[eid];
+            if (vertex_map[e.v1] == INVALID) {
+                vertex_map[e.v1] = num_vertices;
+                num_vertices++;
+            }
+            if (vertex_map[e.v2] == INVALID) {
+                vertex_map[e.v2] = num_vertices;
+                num_vertices++;
             }
         }
 
+        std::vector<std::array<double, 3>> vertices(num_vertices);
+        for (size_t j=0; j<vertex_map.size(); j++) {
+            if (vertex_map[j]  == INVALID) continue;
+            vertices[vertex_map[j]] = iso_pts[j];
+        }
+
+        msh.add_edge_vertices(num_vertices, [&](size_t j) { return vertices[j]; });
+        msh.add_edges(chain.size(), [&](size_t j) -> std::array<size_t, 2> {
+                const auto eid = chain[j];
+                const auto& e = iso_edges[eid];
+                return {vertex_map[e.v1], vertex_map[e.v2]};
+                });
+    };
+    for (size_t i = 0; i < chains.size(); i++) {
+        extract_chain(i);
+    }
+
+    // Save patches
+    auto extract_patch = [&](size_t i) -> std::tuple<std::vector<std::array<double, 3>>,
+                                           std::vector<std::array<size_t, 3>>,
+                                           std::vector<size_t>> {
+        std::fill(vertex_map.begin(), vertex_map.end(), INVALID);
+        std::vector<std::array<double, 3>> vertices;
+        std::vector<std::array<size_t, 3>> triangles;
+        std::vector<size_t> polygon_ids;
+
+        size_t num_vertices = 0;
+        auto add_vertex = [&](size_t vi) {
+            if (vertex_map[vi] == INVALID) {
+                vertex_map[vi] = num_vertices;
+                num_vertices++;
+            }
+        };
+
+        const auto& patch = patches[i];
+        triangles.reserve(patch.size() * 2);
+        polygon_ids.reserve(patch.size() * 2);
+
+        for (const auto poly_id : patch) {
+            const auto& f = iso_faces[poly_id];
+            const size_t s = f.vert_indices.size();
+            add_vertex(f.vert_indices[0]);
+            add_vertex(f.vert_indices[1]);
+            for (size_t i = 2; i < s; i++) {
+                triangles.push_back({f.vert_indices[0], f.vert_indices[i - 1], f.vert_indices[i]});
+                polygon_ids.push_back(poly_id);
+                add_vertex(f.vert_indices[i]);
+            }
+        }
+
+        vertices.resize(num_vertices);
+        for (size_t j = 0; j < iso_pts.size(); j++) {
+            if (vertex_map[j] == INVALID) continue;
+            const auto& p = iso_pts[j];
+            vertices[vertex_map[j]] = p;
+        }
+
+        for (auto& t : triangles) {
+            t[0] = vertex_map[t[0]];
+            t[1] = vertex_map[t[1]];
+            t[2] = vertex_map[t[2]];
+        }
+        return {vertices, triangles, polygon_ids};
+    };
+
+    std::vector<size_t> patch_ids;
+    std::vector<size_t> polygon_ids;
+    for (size_t i=0; i<patches.size(); i++) {
+        auto r = extract_patch(i);
+        const auto& vertices = std::get<0>(r);
+        const auto& triangles = std::get<1>(r);
+        const auto& local_polygon_ids = std::get<2>(r);
+        msh.add_face_vertices(vertices.size(), [&](size_t j) { return vertices[j]; });
         msh.add_faces(
-            triangles_in_patch.size(), [&](size_t i) { return triangles[triangles_in_patch[i]]; });
-        patch_id++;
+            triangles.size(), [&](size_t j) { return triangles[j]; });
+        patch_ids.insert(patch_ids.end(), triangles.size(), i);
+        polygon_ids.insert(polygon_ids.end(), local_polygon_ids.begin(), local_polygon_ids.end());
     }
 
     msh.add_face_attribute<1>("patch_id", [&](size_t i) { return patch_ids[i]; });
-    msh.save(filename);
+    msh.add_face_attribute<1>("polygon_id", [&](size_t i) { return polygon_ids[i]; });
+    msh2.save(filename + "_patches.msh");
+
+    auto extract_cell = [&](size_t i) {
+        const auto& cell = arrangement_cells[i];
+
+        std::fill(vertex_map.begin(), vertex_map.end(), INVALID);
+        std::vector<std::array<double, 3>> vertices;
+        std::vector<std::array<size_t, 3>> triangles;
+
+        size_t num_vertices = 0;
+        auto add_vertex = [&](size_t vi) {
+            if (vertex_map[vi] == INVALID) {
+                vertex_map[vi] = num_vertices;
+                num_vertices++;
+            }
+        };
+
+        for (auto patch_id : cell) {
+            const auto& patch = patches[patch_id];
+            for (auto poly_id : patch) {
+                const auto& f = iso_faces[poly_id];
+                const size_t s = f.vert_indices.size();
+                add_vertex(f.vert_indices[0]);
+                add_vertex(f.vert_indices[1]);
+                for (size_t i = 2; i < s; i++) {
+                    triangles.push_back({f.vert_indices[0], f.vert_indices[i - 1], f.vert_indices[i]});
+                    add_vertex(f.vert_indices[i]);
+                }
+            }
+        }
+
+        vertices.resize(num_vertices);
+        for (size_t j = 0; j < iso_pts.size(); j++) {
+            if (vertex_map[j] == INVALID) continue;
+            const auto& p = iso_pts[j];
+            vertices[vertex_map[j]] = p;
+        }
+
+        for (auto& t : triangles) {
+            t[0] = vertex_map[t[0]];
+            t[1] = vertex_map[t[1]];
+            t[2] = vertex_map[t[2]];
+        }
+
+        msh2.add_face_vertices(num_vertices, [&](size_t j) { return vertices[j]; });
+        msh2.add_faces(triangles.size(), [&](size_t j) { return triangles[j]; });
+        return triangles.size();
+    };
+
+    std::vector<size_t> cell_ids;
+    for (size_t i=0; i< arrangement_cells.size(); i++) {
+        size_t num_faces = extract_cell(i);
+        cell_ids.insert(cell_ids.end(), num_faces, i);
+    }
+    msh2.add_face_attribute<1>("cell_id", [&](size_t i) { return cell_ids[i]; });
+    msh2.save(filename + "_cells.msh");
+
     return true;
 }
 
