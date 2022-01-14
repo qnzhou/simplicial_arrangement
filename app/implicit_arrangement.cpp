@@ -63,6 +63,10 @@ int main(int argc, const char* argv[])
     std::string output_dir;
     bool use_2func_lookup;
     parse_config_file(args.config_file, tet_mesh_file, sphere_file, output_dir, use_2func_lookup);
+    std::string config_path = args.config_file.substr(0, args.config_file.find_last_of('/'));
+    std::cout << "config path: " << config_path << std::endl;
+    tet_mesh_file = config_path + "/" + tet_mesh_file;
+    sphere_file = config_path + "/" + sphere_file;
 
     // load tet mesh
     std::vector<std::array<double, 3>> pts;
@@ -748,6 +752,17 @@ int main(int argc, const char* argv[])
     // test: export iso-mesh, patches, chains
     if (!args.timing_only) {
         save_result(output_dir + "/iso_mesh.json",
+            iso_pts,
+            iso_faces,
+            patches,
+            iso_edges,
+            chains,
+            non_manifold_edges_of_vert,
+            half_patch_list,
+            shells,
+            components,
+            arrangement_cells);
+        save_result_msh(output_dir + "/iso_mesh",
             iso_pts,
             iso_faces,
             patches,
