@@ -197,13 +197,9 @@ int main(int argc, const char* argv[])
             size_t v2 = tets[i][1];
             size_t v3 = tets[i][2];
             size_t v4 = tets[i][3];
-            //            std::vector<Plane<double, 3>> planes(num_func);
             planes.clear();
             for (size_t j = 0; j < num_func; j++) {
                 size_t f_id = func_in_tet[start_index + j];
-                //                planes[j] = {
-                //                    funcVals(f_id, v1), funcVals(f_id, v2), funcVals(f_id, v3),
-                //                    funcVals(f_id, v4)};
                 planes.emplace_back();
                 auto& plane = planes.back();
                 plane[0] = funcVals(f_id, v1);
@@ -295,8 +291,6 @@ int main(int argc, const char* argv[])
     {
         timing_labels.emplace_back("isoEdge-face connectivity");
         ScopedTimer<> timer("isoEdge-face connectivity");
-        //        compute_iso_edges(iso_faces, iso_edges);
-        //        compute_iso_edges_r(iso_faces, iso_edges);
         compute_iso_edges(iso_faces, edges_of_iso_face, iso_edges);
         timings.push_back(timer.toc());
     }
@@ -308,7 +302,6 @@ int main(int argc, const char* argv[])
     {
         timing_labels.emplace_back("patches");
         ScopedTimer<> timer("patches");
-        //        compute_patches(iso_faces, iso_edges, patches);
         compute_patches(edges_of_iso_face, iso_edges, patches);
         timings.push_back(timer.toc());
     }
@@ -454,7 +447,6 @@ int main(int argc, const char* argv[])
     {
         timing_labels.emplace_back("shells and components");
         ScopedTimer<> timer("shells and components");
-        //        compute_arrangement_cells(patches.size(), half_patch_list, arrangement_cells);
         compute_shells_and_components(patches.size(),
             half_patch_list,
             shells,
@@ -487,8 +479,6 @@ int main(int argc, const char* argv[])
                 timing_labels.emplace_back("arrCells(build next_vert)");
                 ScopedTimer<> timer("arrangement cells: find next vert for each tet vertex");
                 next_vert.resize(n_pts, Arrangement<3>::None);
-                //               std::vector<size_t> min_index_of_pts(n_pts, Arrangement<3>::None);
-                std::array<double,3> min;
                 for (const auto& tet : tets) {
                     // find the smallest vertex of tet
                     size_t min_id = 0;
@@ -504,14 +494,6 @@ int main(int argc, const char* argv[])
                             next_vert[tet[i]] = min_vId;
                         }
                     }
-                    // this finds the smallest neighbor vertex, not necessary, but may lead to
-                    // shorter ray
-                    //                   for (size_t i = 0; i < 4; ++i) {
-                    //                       if (i != min_id && min < min_index_of_pts[tet[i]] ) {
-                    //                           min_index_of_pts[tet[i]] = min;
-                    //                           next_vert[tet[i]] = min_vId;
-                    //                       }
-                    //                   }
                 }
                 timings.push_back(timer.toc());
             }
@@ -649,6 +631,7 @@ int main(int argc, const char* argv[])
 //                        std::cout << "(" << iso_vId_compId.first << "," << iso_vId_compId.second << ") ";
 //                    }
 //                    std::cout << std::endl;
+                    //
                     // find the vertex v_start on v1->v2
                     // 1. on current component
                     // 2. nearest to v2
