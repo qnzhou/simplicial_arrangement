@@ -17,7 +17,11 @@ bool parse_config_file(const std::string& filename,
     std::string& tet_mesh_file,
     std::string& sphere_file,
     std::string& output_dir,
-    bool& use_2func_lookup)
+    bool& use_lookup,
+    bool& use_2func_lookup,
+    bool& use_bbox,
+    std::array<double,3> &bbox_min,
+    std::array<double,3> &bbox_max)
 {
     using json = nlohmann::json;
     std::ifstream fin(filename.c_str());
@@ -32,7 +36,17 @@ bool parse_config_file(const std::string& filename,
     tet_mesh_file = data["tetMeshFile"];
     sphere_file = data["sphereFile"];
     output_dir = data["outputDir"];
+    use_lookup = data["useLookup"];
     use_2func_lookup = data["use2funcLookup"];
+    if (data.contains("useBBox")) {
+        use_bbox = data["useBBox"];
+    }
+    if (data.contains("bboxMin")) {
+        bbox_min = data["bboxMin"];
+    }
+    if (data.contains("bboxMax")) {
+        bbox_max = data["bboxMax"];
+    }
     return true;
 }
 

@@ -67,7 +67,11 @@ bool parse_config_file(const std::string &filename,
     std::string& tet_mesh_file,
     std::string& sphere_file,
     std::string& output_dir,
-    bool& use_2func_lookup);
+    bool& use_lookup,
+    bool& use_2func_lookup,
+    bool& use_bbox,
+    std::array<double,3> &bbox_min,
+    std::array<double,3> &bbox_max);
 
 bool load_tet_mesh(const std::string &filename,
     std::vector<std::array<double, 3>> &pts,
