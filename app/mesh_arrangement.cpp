@@ -56,6 +56,26 @@ void merge_meshes(const std::vector<IGL_Mesh>& meshes,
 
 }
 
+IGL_Mesh generate_cube(const std::array<double,3> & bbox_min, const std::array<double,3> & bbox_max) {
+    IGL_Mesh cube;
+    cube.vertices.resize(8, 3);
+    cube.vertices <<
+        bbox_min[0], bbox_min[1], bbox_max[2],
+        bbox_min[0], bbox_min[1], bbox_min[2],
+        bbox_max[0], bbox_min[1], bbox_min[2],
+        bbox_max[0], bbox_min[1], bbox_max[2],
+        bbox_min[0], bbox_max[1], bbox_max[2],
+        bbox_max[0], bbox_max[1], bbox_max[2],
+        bbox_max[0], bbox_max[1], bbox_min[2],
+        bbox_min[0], bbox_max[1], bbox_min[2];
+
+    cube.faces.resize(12, 3);
+    cube.faces << 0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 0, 3, 5, 0, 5, 4, 1, 7, 6,
+        1, 6, 2, 2, 6, 5, 2, 5, 3, 0, 4, 7, 0, 7, 1;
+
+    return cube;
+}
+
 
 
 int main(int argc, const char* argv[]) {
@@ -77,8 +97,12 @@ int main(int argc, const char* argv[]) {
     std::string tet_mesh_file;
     std::string sphere_file;
     std::string output_dir;
+    std::array<double,3> bbox_min, bbox_max;
+    bool use_bbox = true;
     bool b_place_holder;
-    parse_config_file(args.config_file, tet_mesh_file, sphere_file, output_dir, b_place_holder);
+    parse_config_file(args.config_file, tet_mesh_file, sphere_file, output_dir,
+        b_place_holder, b_place_holder,
+        use_bbox, bbox_min, bbox_max);
 
     // load tet mesh
     std::vector<std::array<double, 3>> pts;
@@ -183,6 +207,9 @@ int main(int argc, const char* argv[]) {
         for (size_t i = 0; i < n_func; ++i) {
             iso_meshes[i].vertices = SV[i];
             iso_meshes[i].faces = SF[i];
+        }
+        if (use_bbox) {
+            iso_meshes.push_back(generate_cube(bbox_min, bbox_max));
         }
         merge_meshes(iso_meshes, merged_mesh, face_to_mesh);
         timings.push_back(timer.toc());
