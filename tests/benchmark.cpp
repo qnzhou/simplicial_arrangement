@@ -9,7 +9,7 @@
 TEST_CASE("benchmark", "[arrangement][.benchmark]")
 {
     using namespace simplicial_arrangement;
-    load_lookup_table();
+    load_lookup_table(BOTH);
 
     SECTION("2D")
     {
@@ -314,7 +314,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
                 static_cast<double>(v3)});
         }
 
-        BENCHMARK_ADVANCED("3D material interface(int, 1 planes, w/o lookup)")(Catch::Benchmark::Chronometer meter)
+        BENCHMARK_ADVANCED("3D material interface(int, 1 materials)")(Catch::Benchmark::Chronometer meter)
         {
             std::vector<Material<Int, 3>> materials;
             materials.reserve(1);
@@ -322,8 +322,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 
             meter.measure([&]() { return compute_material_interface(materials); });
         };
-
-        BENCHMARK_ADVANCED("3D material interface (double, 1 planes, w/o lookup)")(Catch::Benchmark::Chronometer meter)
+        BENCHMARK_ADVANCED("3D material interface (double, 1 materials)")(Catch::Benchmark::Chronometer meter)
         {
             std::vector<Material<double, 3>> materials;
             materials.reserve(1);
@@ -332,8 +331,9 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
             meter.measure([&]() { return compute_material_interface(materials); });
         };
 
-        BENCHMARK_ADVANCED("3D arrangement (int, 2 planes, w/o lookup)")(Catch::Benchmark::Chronometer meter)
+        BENCHMARK_ADVANCED("3D material interface (int, 2 materials, w/o lookup)")(Catch::Benchmark::Chronometer meter)
         {
+            disable_lookup_table();
             std::vector<Material<Int, 3>> materials;
             materials.reserve(2);
             materials.push_back(int_data[rand_index(gen)]);
@@ -341,9 +341,29 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 
             meter.measure([&]() { return compute_material_interface(materials); });
         };
-
-        BENCHMARK_ADVANCED("3D arrangement (double, 2 planes, w/o lookup)")(Catch::Benchmark::Chronometer meter)
+        BENCHMARK_ADVANCED("3D material interface (int, 2 materials, with lookup)")(Catch::Benchmark::Chronometer meter)
         {
+            enable_lookup_table();
+            std::vector<Material<Int, 3>> materials;
+            materials.reserve(2);
+            materials.push_back(int_data[rand_index(gen)]);
+            materials.push_back(int_data[rand_index(gen)]);
+
+            meter.measure([&]() { return compute_material_interface(materials); });
+        };
+        BENCHMARK_ADVANCED("3D material interface (double, 2 materials, w/o lookup)")(Catch::Benchmark::Chronometer meter)
+        {
+            disable_lookup_table();
+            std::vector<Material<double, 3>> materials;
+            materials.reserve(2);
+            materials.push_back(double_data[rand_index(gen)]);
+            materials.push_back(double_data[rand_index(gen)]);
+
+            meter.measure([&]() { return compute_material_interface(materials); });
+        };
+        BENCHMARK_ADVANCED("3D material interface (double, 2 materials, with lookup)")(Catch::Benchmark::Chronometer meter)
+        {
+            enable_lookup_table();
             std::vector<Material<double, 3>> materials;
             materials.reserve(2);
             materials.push_back(double_data[rand_index(gen)]);
@@ -352,8 +372,9 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
             meter.measure([&]() { return compute_material_interface(materials); });
         };
 
-        BENCHMARK_ADVANCED("3D arrangement (int, 3 planes)")(Catch::Benchmark::Chronometer meter)
+        BENCHMARK_ADVANCED("3D material interface (int, 3 materials, w/o lookup)")(Catch::Benchmark::Chronometer meter)
         {
+            disable_lookup_table();
             std::vector<Material<Int, 3>> materials;
             materials.reserve(3);
             materials.push_back(int_data[rand_index(gen)]);
@@ -362,8 +383,31 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 
             meter.measure([&]() { return compute_material_interface(materials); });
         };
-        BENCHMARK_ADVANCED("3D arrangement (double, 3 planes)")(Catch::Benchmark::Chronometer meter)
+        BENCHMARK_ADVANCED("3D material interface (int, 3 materials, with lookup)")(Catch::Benchmark::Chronometer meter)
         {
+            enable_lookup_table();
+            std::vector<Material<Int, 3>> materials;
+            materials.reserve(3);
+            materials.push_back(int_data[rand_index(gen)]);
+            materials.push_back(int_data[rand_index(gen)]);
+            materials.push_back(int_data[rand_index(gen)]);
+
+            meter.measure([&]() { return compute_material_interface(materials); });
+        };
+        BENCHMARK_ADVANCED("3D material interface (double, 3 materials, w/o lookup)")(Catch::Benchmark::Chronometer meter)
+        {
+            disable_lookup_table();
+            std::vector<Material<double, 3>> materials;
+            materials.reserve(3);
+            materials.push_back(double_data[rand_index(gen)]);
+            materials.push_back(double_data[rand_index(gen)]);
+            materials.push_back(double_data[rand_index(gen)]);
+
+            meter.measure([&]() { return compute_material_interface(materials); });
+        };
+        BENCHMARK_ADVANCED("3D material interface (double, 3 materials, with lookup)")(Catch::Benchmark::Chronometer meter)
+        {
+            enable_lookup_table();
             std::vector<Material<double, 3>> materials;
             materials.reserve(3);
             materials.push_back(double_data[rand_index(gen)]);
