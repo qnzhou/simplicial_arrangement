@@ -512,7 +512,7 @@ int main(int argc, const char* argv[])
             non_manifold_edges_of_vert,
             half_patch_list,
             arrangement_cells);
-        save_result_msh(output_dir + "/iso_mesh.json",
+        save_result_msh(output_dir + "/iso_mesh.msh",
             iso_pts,
             iso_faces,
             patches,

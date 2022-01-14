@@ -105,27 +105,27 @@ bool save_result(const std::string& filename,
     std::ofstream fout(filename.c_str());
     //
     json jPts;
-    for (const auto & iso_pt : iso_pts) {
+    for (const auto& iso_pt : iso_pts) {
         jPts.push_back(json(iso_pt));
     }
     //
     json jFaces;
-    for (const auto & iso_face : iso_faces) {
+    for (const auto& iso_face : iso_faces) {
         jFaces.push_back(json(iso_face.vert_indices));
     }
     //
     json jPatches;
-    for (const auto & patch : patches) {
+    for (const auto& patch : patches) {
         jPatches.push_back(json(patch));
     }
     //
     json jEdges;
-    for (const auto & iso_edge : iso_edges) {
+    for (const auto& iso_edge : iso_edges) {
         jEdges.push_back({iso_edge.v1, iso_edge.v2});
     }
     //
     json jChains;
-    for (const auto & chain : chains) {
+    for (const auto& chain : chains) {
         jChains.push_back(json(chain));
     }
     //
@@ -137,16 +137,16 @@ bool save_result(const std::string& filename,
     }
     //
     json jHalfPatchsList;
-    for (const auto & i : half_patch_list) {
+    for (const auto& i : half_patch_list) {
         json jHalfPatchs;
-        for (const auto & j : i) {
+        for (const auto& j : i) {
             jHalfPatchs.push_back(json(j));
         }
         jHalfPatchsList.push_back(jHalfPatchs);
     }
     //
     json jArrCells;
-    for (const auto & arrangement_cell : arrangement_cells) {
+    for (const auto& arrangement_cell : arrangement_cells) {
         jArrCells.push_back(json(arrangement_cell));
     }
     //
@@ -175,9 +175,55 @@ bool save_result_msh(const std::string& filename,
     const std::vector<std::vector<size_t>>& arrangement_cells)
 {
     wmtk::MshData msh;
-    msh.add_edge_vertices(iso_pts.size(), [&](size_t i) {
-            return iso_pts[i];
-            });
+
+    // Save chains.
+    msh.add_edge_vertices(iso_pts.size(), [&](size_t i) { return iso_pts[i]; });
+    for (const auto& chain : chains) {
+        msh.add_edges(chain.size(), [&](size_t i) -> std::array<size_t, 2> {
+            const auto& e = iso_edges[chain[i]];
+            return {e.v1, e.v2};
+        });
+    }
+
+    // Save patches
+    std::vector<std::array<size_t, 3>> triangles;
+    std::vector<size_t> polygon_start_indices;
+    triangles.reserve(iso_faces.size() * 2);
+    polygon_start_indices.reserve(iso_faces.size() + 1);
+    polygon_start_indices.push_back(0);
+    for (const auto& f : iso_faces) {
+        const size_t s = f.vert_indices.size();
+        for (size_t i = 2; i < s; i++) {
+            triangles.push_back({f.vert_indices[0], f.vert_indices[i - 1], f.vert_indices[i]});
+        }
+        polygon_start_indices.push_back(triangles.size());
+    }
+
+    std::vector<size_t> patch_ids;
+    patch_ids.reserve(triangles.size());
+    msh.add_face_vertices(iso_pts.size(), [&](size_t i) { return iso_pts[i]; });
+
+    std::vector<size_t> triangles_in_patch;
+    triangles_in_patch.reserve(iso_faces.size());
+
+    size_t patch_id = 0;
+    for (const auto& patch : patches) {
+        triangles_in_patch.clear();
+        for (const auto polygon_id : patch) {
+            const size_t begin_index = polygon_start_indices[polygon_id];
+            const size_t end_index = polygon_start_indices[polygon_id + 1];
+            for (size_t j = begin_index; j < end_index; j++) {
+                triangles_in_patch.push_back(j);
+                patch_ids.push_back(patch_id);
+            }
+        }
+
+        msh.add_faces(
+            triangles_in_patch.size(), [&](size_t i) { return triangles[triangles_in_patch[i]]; });
+        patch_id++;
+    }
+
+    msh.add_face_attribute<1>("patch_id", [&](size_t i) { return patch_ids[i]; });
     msh.save(filename);
     return true;
 }
@@ -192,22 +238,22 @@ bool save_result_mini(const std::string& filename,
     std::ofstream fout(filename.c_str());
     //
     json jPts;
-    for (const auto & iso_pt : iso_pts) {
+    for (const auto& iso_pt : iso_pts) {
         jPts.push_back(json(iso_pt));
     }
     //
     json jFaces;
-    for (const auto & iso_face : iso_faces) {
+    for (const auto& iso_face : iso_faces) {
         jFaces.push_back(json(iso_face.vert_indices));
     }
     //
     json jPatches;
-    for (const auto & patch : patches) {
+    for (const auto& patch : patches) {
         jPatches.push_back(json(patch));
     }
     //
     json jArrCells;
-    for (const auto & arrangement_cell : arrangement_cells) {
+    for (const auto& arrangement_cell : arrangement_cells) {
         jArrCells.push_back(json(arrangement_cell));
     }
     //
@@ -234,12 +280,12 @@ bool save_iso_mesh_list(const std::string& filename,
         const auto& iso_pts = iso_pts_list[i];
         const auto& iso_faces = iso_faces_list[i];
         json jPts;
-        for (const auto & iso_pt : iso_pts) {
+        for (const auto& iso_pt : iso_pts) {
             jPts.push_back(json(iso_pt));
         }
         //
         json jFaces;
-        for (const auto & iso_face : iso_faces) {
+        for (const auto& iso_face : iso_faces) {
             jFaces.push_back(json(iso_face.vert_indices));
         }
         //
@@ -261,12 +307,12 @@ bool save_tri_mesh(const std::string& filename,
     std::ofstream fout(filename.c_str());
     //
     json jVerts;
-    for (const auto & vert : verts) {
+    for (const auto& vert : verts) {
         jVerts.push_back(json(vert));
     }
     //
     json jTris;
-    for (const auto & tri : tris) {
+    for (const auto& tri : tris) {
         jTris.push_back(json(tri));
     }
     //
@@ -365,12 +411,12 @@ bool save_tri_mesh_list(const std::string& filename,
         const auto& verts = verts_list[i];
         const auto& tris = tris_list[i];
         json jVerts;
-        for (const auto & vert : verts) {
+        for (const auto& vert : verts) {
             jVerts.push_back(json(vert));
         }
         //
         json jTris;
-        for (const auto & tri : tris) {
+        for (const auto& tri : tris) {
             jTris.push_back(json(tri));
         }
         //
@@ -963,8 +1009,8 @@ void extract_iso_mesh_pure_2(size_t num_1_func,
             auto start_index = start_index_of_tet[i];
             auto num_func = start_index_of_tet[i + 1] - start_index;
             // find vertices and faces on isosurface
-//            std::vector<bool> is_iso_vert(vertices.size(), false);
-//            std::vector<bool> is_iso_face(faces.size(), false);
+            //            std::vector<bool> is_iso_vert(vertices.size(), false);
+            //            std::vector<bool> is_iso_face(faces.size(), false);
             is_iso_vert.clear();
             for (int j = 0; j < vertices.size(); ++j) {
                 is_iso_vert.push_back(false);
@@ -976,7 +1022,7 @@ void extract_iso_mesh_pure_2(size_t num_1_func,
                 auto uid = arrangement.unique_plane_indices[pid];
                 for (const auto& plane_id : arrangement.unique_planes[uid]) {
                     if (plane_id > 3) { // plane 0,1,2,3 are tet boundaries
-//                        is_iso_face[j] = true;
+                        //                        is_iso_face[j] = true;
                         is_iso_face.back() = true;
                         for (const auto& vid : faces[j].vertices) {
                             is_iso_vert[vid] = true;
@@ -986,14 +1032,15 @@ void extract_iso_mesh_pure_2(size_t num_1_func,
                 }
             }
             // map: local vert index --> iso-vert index
-//            std::vector<size_t> iso_vId_of_vert(vertices.size(), Arrangement<3>::None);
+            //            std::vector<size_t> iso_vId_of_vert(vertices.size(),
+            //            Arrangement<3>::None);
             iso_vId_of_vert.clear();
             // create iso-vertices
             for (size_t j = 0; j < vertices.size(); j++) {
                 iso_vId_of_vert.push_back(Arrangement<3>::None);
                 if (is_iso_vert[j]) {
-//                    std::array<size_t, 3> implicit_pIds;
-//                    std::array<size_t, 3> bndry_pIds;
+                    //                    std::array<size_t, 3> implicit_pIds;
+                    //                    std::array<size_t, 3> bndry_pIds;
                     size_t num_bndry_planes = 0;
                     size_t num_impl_planes = 0;
                     const auto& vertex = vertices[j];
@@ -1013,16 +1060,16 @@ void extract_iso_mesh_pure_2(size_t num_1_func,
                     switch (num_bndry_planes) {
                     case 2: // on tet edge
                     {
-//                        std::vector<bool> used_pId(4, false);
-//                        std::array<bool, 4> used_pId {false, false, false, false};
-//                        used_pId = {false, false, false, false};
+                        //                        std::vector<bool> used_pId(4, false);
+                        //                        std::array<bool, 4> used_pId {false, false, false,
+                        //                        false}; used_pId = {false, false, false, false};
                         used_pId[0] = false;
                         used_pId[1] = false;
                         used_pId[2] = false;
                         used_pId[3] = false;
                         used_pId[bndry_pIds[0]] = true;
                         used_pId[bndry_pIds[1]] = true;
-//                        std::array<size_t, 2> vIds;
+                        //                        std::array<size_t, 2> vIds;
                         size_t num_vIds = 0;
                         for (size_t k = 0; k < 4; k++) {
                             if (!used_pId[k]) {
@@ -1037,8 +1084,9 @@ void extract_iso_mesh_pure_2(size_t num_1_func,
                             vId1 = vId2;
                             vId2 = tmp;
                         }
-//                        std::array<size_t, 3> key = {vId1, vId2, implicit_pIds[0]};
-//                        key3 = {vId1, vId2, implicit_pIds[0]};
+                        //                        std::array<size_t, 3> key = {vId1, vId2,
+                        //                        implicit_pIds[0]}; key3 = {vId1, vId2,
+                        //                        implicit_pIds[0]};
                         key3[0] = vId1;
                         key3[1] = vId2;
                         key3[2] = implicit_pIds[0];
@@ -1053,13 +1101,13 @@ void extract_iso_mesh_pure_2(size_t num_1_func,
                             iso_vert.simplex_vert_indices[1] = vId2;
                             iso_vert.func_indices[0] = implicit_pIds[0];
                         }
-//                        iso_vId_of_vert[j] = iter_inserted.first->second;
+                        //                        iso_vId_of_vert[j] = iter_inserted.first->second;
                         iso_vId_of_vert.back() = iter_inserted.first->second;
                         break;
                     }
                     case 1: // on tet face
                     {
-//                        std::array<size_t, 3> vIds;
+                        //                        std::array<size_t, 3> vIds;
                         size_t pId = bndry_pIds[0];
                         size_t num_vIds = 0;
                         for (size_t k = 0; k < 4; k++) {
@@ -1069,10 +1117,12 @@ void extract_iso_mesh_pure_2(size_t num_1_func,
                             }
                         }
                         std::sort(vIds3.begin(), vIds3.end());
-//                        std::array<size_t, 5> key = {
-//                            vIds[0], vIds[1], vIds[2], implicit_pIds[0], implicit_pIds[1]};
-//                        key5 = {
-//                            vIds[0], vIds[1], vIds[2], implicit_pIds[0], implicit_pIds[1]};
+                        //                        std::array<size_t, 5> key = {
+                        //                            vIds[0], vIds[1], vIds[2], implicit_pIds[0],
+                        //                            implicit_pIds[1]};
+                        //                        key5 = {
+                        //                            vIds[0], vIds[1], vIds[2], implicit_pIds[0],
+                        //                            implicit_pIds[1]};
                         key5[0] = vIds3[0];
                         key5[1] = vIds3[1];
                         key5[2] = vIds3[2];
@@ -1091,13 +1141,13 @@ void extract_iso_mesh_pure_2(size_t num_1_func,
                             iso_vert.func_indices[0] = implicit_pIds[0];
                             iso_vert.func_indices[1] = implicit_pIds[1];
                         }
-//                        iso_vId_of_vert[j] = iter_inserted.first->second;
+                        //                        iso_vId_of_vert[j] = iter_inserted.first->second;
                         iso_vId_of_vert.back() = iter_inserted.first->second;
                         break;
                     }
                     case 0: // in tet cell
                     {
-//                        iso_vId_of_vert[j] = iso_verts.size();
+                        //                        iso_vId_of_vert[j] = iso_verts.size();
                         iso_vId_of_vert.back() = iso_verts.size();
                         iso_verts.emplace_back();
                         auto& iso_vert = iso_verts.back();
@@ -1110,8 +1160,8 @@ void extract_iso_mesh_pure_2(size_t num_1_func,
                     }
                     case 3: // on tet vertex
                     {
-//                        std::vector<bool> used_pId(4, false);
-//                        used_pId = {false, false, false, false};
+                        //                        std::vector<bool> used_pId(4, false);
+                        //                        used_pId = {false, false, false, false};
                         used_pId[0] = false;
                         used_pId[1] = false;
                         used_pId[2] = false;
@@ -1136,7 +1186,7 @@ void extract_iso_mesh_pure_2(size_t num_1_func,
                             iso_vert.simplex_size = 1;
                             iso_vert.simplex_vert_indices[0] = tets[i][vId];
                         }
-//                        iso_vId_of_vert[j] = iter_inserted.first->second;
+                        //                        iso_vId_of_vert[j] = iter_inserted.first->second;
                         iso_vId_of_vert.back() = iter_inserted.first->second;
                         break;
                     }
@@ -1147,10 +1197,11 @@ void extract_iso_mesh_pure_2(size_t num_1_func,
             // create iso-faces
             for (size_t j = 0; j < faces.size(); j++) {
                 if (is_iso_face[j]) {
-//                    std::vector<size_t> face_verts(faces[j].vertices.size());
+                    //                    std::vector<size_t> face_verts(faces[j].vertices.size());
                     face_verts.clear();
                     for (size_t k = 0; k < faces[j].vertices.size(); k++) {
-//                        face_verts[k] = iso_vId_of_vert[faces[j].vertices[k]];
+                        //                        face_verts[k] =
+                        //                        iso_vId_of_vert[faces[j].vertices[k]];
                         face_verts.push_back(iso_vId_of_vert[faces[j].vertices[k]]);
                     }
                     //
@@ -1171,7 +1222,7 @@ void extract_iso_mesh_pure_2(size_t num_1_func,
                         std::sort(sorted_face_verts.begin(), sorted_face_verts.end());
                         std::array<size_t, 3> key = {
                             sorted_face_verts[0], sorted_face_verts[1], sorted_face_verts[2]};*/
-//                        std::array<size_t, 3> key;
+                        //                        std::array<size_t, 3> key;
                         compute_iso_face_key(face_verts, key3);
                         auto iter_inserted = face_on_tetFace.try_emplace(key3, iso_faces.size());
                         if (iter_inserted.second) {
@@ -1396,7 +1447,7 @@ void compute_iso_vert_xyz(const std::vector<IsoVert>& iso_verts,
             auto fId = iso_vert.func_indices[0];
             auto f1 = funcVals(fId, vId1);
             auto f2 = funcVals(fId, vId2);
-//            std::array<double, 2> b;
+            //            std::array<double, 2> b;
             compute_barycentric_coords(f1, f2, b2);
             iso_pts[i][0] = b2[0] * pts[vId1][0] + b2[1] * pts[vId2][0];
             iso_pts[i][1] = b2[0] * pts[vId1][1] + b2[1] * pts[vId2][1];
@@ -1410,17 +1461,17 @@ void compute_iso_vert_xyz(const std::vector<IsoVert>& iso_verts,
             auto vId3 = iso_vert.simplex_vert_indices[2];
             auto fId1 = iso_vert.func_indices[0];
             auto fId2 = iso_vert.func_indices[1];
-//            std::array<double, 3> f1s = {
-//                funcVals(fId1, vId1), funcVals(fId1, vId2), funcVals(fId1, vId3)};
+            //            std::array<double, 3> f1s = {
+            //                funcVals(fId1, vId1), funcVals(fId1, vId2), funcVals(fId1, vId3)};
             f1s3[0] = funcVals(fId1, vId1);
             f1s3[1] = funcVals(fId1, vId2);
             f1s3[2] = funcVals(fId1, vId3);
-//            std::array<double, 3> f2s = {
-//                funcVals(fId2, vId1), funcVals(fId2, vId2), funcVals(fId2, vId3)};
+            //            std::array<double, 3> f2s = {
+            //                funcVals(fId2, vId1), funcVals(fId2, vId2), funcVals(fId2, vId3)};
             f2s3[0] = funcVals(fId2, vId1);
             f2s3[1] = funcVals(fId2, vId2);
             f2s3[2] = funcVals(fId2, vId3);
-//            std::array<double, 3> b;
+            //            std::array<double, 3> b;
             compute_barycentric_coords(f1s3, f2s3, b3);
             iso_pts[i][0] = b3[0] * pts[vId1][0] + b3[1] * pts[vId2][0] + b3[2] * pts[vId3][0];
             iso_pts[i][1] = b3[0] * pts[vId1][1] + b3[1] * pts[vId2][1] + b3[2] * pts[vId3][1];
@@ -1436,34 +1487,34 @@ void compute_iso_vert_xyz(const std::vector<IsoVert>& iso_verts,
             auto fId1 = iso_vert.func_indices[0];
             auto fId2 = iso_vert.func_indices[1];
             auto fId3 = iso_vert.func_indices[2];
-//            std::array<double, 4> f1s = {
-//                funcVals(fId1, vId1),
-//                funcVals(fId1, vId2),
-//                funcVals(fId1, vId3),
-//                funcVals(fId1, vId4)};
+            //            std::array<double, 4> f1s = {
+            //                funcVals(fId1, vId1),
+            //                funcVals(fId1, vId2),
+            //                funcVals(fId1, vId3),
+            //                funcVals(fId1, vId4)};
             f1s4[0] = funcVals(fId1, vId1);
             f1s4[1] = funcVals(fId1, vId2);
             f1s4[2] = funcVals(fId1, vId3);
             f1s4[3] = funcVals(fId1, vId4);
-//            std::array<double, 4> f2s = {
-//                funcVals(fId2, vId1),
-//                funcVals(fId2, vId2),
-//                funcVals(fId2, vId3),
-//                funcVals(fId2, vId4)};
+            //            std::array<double, 4> f2s = {
+            //                funcVals(fId2, vId1),
+            //                funcVals(fId2, vId2),
+            //                funcVals(fId2, vId3),
+            //                funcVals(fId2, vId4)};
             f2s4[0] = funcVals(fId2, vId1);
             f2s4[1] = funcVals(fId2, vId2);
             f2s4[2] = funcVals(fId2, vId3);
             f2s4[3] = funcVals(fId2, vId4);
-//            std::array<double, 4> f3s = {
-//                funcVals(fId3, vId1),
-//                funcVals(fId3, vId2),
-//                funcVals(fId3, vId3),
-//                funcVals(fId3, vId4)};
+            //            std::array<double, 4> f3s = {
+            //                funcVals(fId3, vId1),
+            //                funcVals(fId3, vId2),
+            //                funcVals(fId3, vId3),
+            //                funcVals(fId3, vId4)};
             f3s4[0] = funcVals(fId3, vId1);
             f3s4[1] = funcVals(fId3, vId2);
             f3s4[2] = funcVals(fId3, vId3);
             f3s4[3] = funcVals(fId3, vId4);
-//            std::array<double, 4> b;
+            //            std::array<double, 4> b;
             compute_barycentric_coords(f1s4, f2s4, f3s4, b4);
             iso_pts[i][0] = b4[0] * pts[vId1][0] + b4[1] * pts[vId2][0] + b4[2] * pts[vId3][0] +
                             b4[3] * pts[vId4][0];
@@ -1558,7 +1609,7 @@ void compute_iso_edges(const std::vector<IsoFace>& iso_faces,
     std::vector<IsoEdge>& iso_edges)
 {
     size_t max_num_edge = 0;
-    for (const auto & iso_face : iso_faces) {
+    for (const auto& iso_face : iso_faces) {
         max_num_edge += iso_face.vert_indices.size();
     }
     iso_edges.reserve(max_num_edge / 2);
