@@ -290,7 +290,7 @@ bool save_result_msh(const std::string& filename,
 
     msh.add_face_attribute<1>("patch_id", [&](size_t i) { return patch_ids[i]; });
     msh.add_face_attribute<1>("polygon_id", [&](size_t i) { return polygon_ids[i]; });
-    msh2.save(filename + "_patches.msh");
+    msh.save(filename + "_patches.msh");
 
     auto extract_cell = [&](size_t i) {
         const auto& cell = arrangement_cells[i];
