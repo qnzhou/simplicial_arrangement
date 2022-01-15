@@ -46,16 +46,20 @@ public:
 
         if (need_full_compute) {
             auto mi_complex = initialize_simplicial_mi_complex<DIM>();
-            for (auto itr = unique_materials.rbegin(); itr != unique_materials.rend(); itr++) {
-                assert(!itr->empty());
-                const size_t material_index = itr->front();
-                if (material_index <= DIM + 1) {
-                    // No need to insert boundary material. Material DIM+1 has
-                    // already been added by construction.
-                    continue;
-                }
+            std::vector<bool> processed(unique_materials.size(), false);
+            // material DIM+1 is already added by default.
+            processed[unique_material_indices[DIM + 1]] = true;
+            const size_t num_materials = materials.size();
+
+            for (size_t i=1; i<num_materials; i++) {
+                const size_t material_index = i + DIM + 1;
+
+                if (processed[unique_material_indices[material_index]]) continue;
+                processed[unique_material_indices[material_index]] = true;
+
                 internal::add_material(*this, mi_complex, material_index);
             }
+
             m_material_interface = extract_material_interface(std::move(mi_complex));
         }
 
