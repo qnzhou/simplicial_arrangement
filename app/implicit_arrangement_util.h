@@ -1,5 +1,7 @@
 #pragma once
 #include <simplicial_arrangement/simplicial_arrangement.h>
+#include <simplicial_arrangement/material_interface.h>
+
 #include <string>
 
 #include <Eigen/Core>
@@ -8,16 +10,14 @@ using namespace simplicial_arrangement;
 
 
 
-// a polygon from the iso-surface of implicit function
-struct IsoFace
+// a polygon in a polygonal mesh
+struct PolygonFace
 {
-    // a list of polygon's vertex indices (index into some global list of iso-vertices)
+    // a list of polygon's vertex indices (index into some global list of vertices)
     std::vector<size_t> vert_indices;
     // the local index of this polygon in all the tets that contains it
     // each pair is (tet_Id, tet_face_Id)
     std::vector<std::pair<size_t, size_t>> tet_face_indices;
-    // list of indices of bounding iso-edges (index into a global list of iso-edges)
-//    std::vector<size_t> edge_indices;
 };
 
 // vertex of isosurface
@@ -36,13 +36,31 @@ struct IsoVert
     std::array<size_t, 3> func_indices;
 };
 
-struct IsoEdge
+
+// vertex of material interface
+struct MI_Vert
+{
+    // the tet containing the MI_Vert
+    size_t tet_index;
+    // the index of MI_Vert in tet.vertices
+    size_t tet_vert_index;
+    // minimal simplex that contains the MI_Vert
+    size_t simplex_size; // 1: point, 2: edge, 3: triangle, 4: tetrahedron
+    // index into a list of tet vertices
+    std::array<size_t, 4> simplex_vert_indices;
+    // list of materials whose values are equal at MI_Vert (indexed into a global list of
+    // material functions)
+    std::array<size_t, 4> material_indices;
+};
+
+
+struct Edge
 {
     size_t v1;
     size_t v2;
-    // each pair is (iso_face_Id, edge_face_Id)
-    // iso_face_Id: face index in the global list of iso-faces
-    // edge_face_Id: edge index in the iso-face
+    // each pair is (face_Id, edge_face_Id)
+    // face_Id: face index in the global list of faces
+    // edge_face_Id: edge index in the face
     std::vector<std::pair<size_t, size_t>> face_edge_indices;
 };
 
@@ -73,6 +91,13 @@ bool parse_config_file(const std::string &filename,
     std::array<double,3> &bbox_min,
     std::array<double,3> &bbox_max);
 
+bool parse_config_file_MI(const std::string &filename,
+    std::string& tet_mesh_file,
+    std::string& material_file,
+    std::string& output_dir,
+    bool& use_lookup,
+    bool& use_3func_lookup);
+
 bool load_tet_mesh(const std::string &filename,
     std::vector<std::array<double, 3>> &pts,
     std::vector<std::array<size_t, 4>> &tets);
@@ -80,11 +105,38 @@ bool load_tet_mesh(const std::string &filename,
 bool load_spheres(const std::string &filename,
     std::vector<Sphere> &spheres);
 
+bool load_seeds(const std::string& filename,
+    std::vector<std::array<double,3>> &seeds);
+
+inline double compute_Euclidean_distance(const std::array<double,3> &p, const std::array<double,3>& q)
+{
+    return sqrt((p[0]-q[0])*(p[0]-q[0]) + (p[1]-q[1])*(p[1]-q[1]) + (p[2]-q[2])*(p[2]-q[2]));
+}
+
+inline double compute_signed_sphere_distance(const std::array<double, 3>& center, double r, const std::array<double, 3>& p)
+{
+    return r - compute_Euclidean_distance(center, p);
+}
+
+inline double compute_unsigned_sphere_distance(const std::array<double, 3>& center, double r, const std::array<double, 3>& p)
+{
+    return -abs(r - compute_Euclidean_distance(center, p));
+}
+
+inline double compute_sphere_distance(const std::array<double, 3>& center, double r, const std::array<double, 3>& p)
+{
+    if (r >= 0) {
+        return compute_signed_sphere_distance(center, r, p);
+    } else {
+        return compute_unsigned_sphere_distance(center, -r, p);
+    }
+}
+
 bool save_result(const std::string& filename,
     const std::vector<std::array<double, 3>>& iso_pts,
-    const std::vector<IsoFace>& iso_faces,
+    const std::vector<PolygonFace>& iso_faces,
     const std::vector<std::vector<size_t>>& patches,
-    const std::vector<IsoEdge>& iso_edges,
+    const std::vector<Edge>& edges,
     const std::vector<std::vector<size_t>>& chains,
     const std::vector<std::vector<size_t>>& non_manifold_edges_of_vert,
     const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
@@ -92,11 +144,24 @@ bool save_result(const std::string& filename,
     const std::vector<std::vector<size_t>>& components,
     const std::vector<std::vector<size_t>>& arrangement_cells);
 
+bool save_result_MI(const std::string& filename,
+    const std::vector<std::array<double, 3>>& MI_pts,
+    const std::vector<PolygonFace>& MI_faces,
+    const std::vector<std::vector<size_t>>& patches,
+    const std::vector<Edge>& edges,
+    const std::vector<std::vector<size_t>>& chains,
+    const std::vector<std::vector<size_t>>& non_manifold_edges_of_vert,
+    const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
+    const std::vector<std::vector<size_t>>& shells,
+    const std::vector<std::vector<size_t>>& components,
+    const std::vector<std::vector<size_t>>& material_cells);
+
+
 bool save_result_msh(const std::string& filename,
     const std::vector<std::array<double, 3>>& iso_pts,
-    const std::vector<IsoFace>& iso_faces,
+    const std::vector<PolygonFace>& iso_faces,
     const std::vector<std::vector<size_t>>& patches,
-    const std::vector<IsoEdge>& iso_edges,
+    const std::vector<Edge>& iso_edges,
     const std::vector<std::vector<size_t>>& chains,
     const std::vector<std::vector<size_t>>& non_manifold_edges_of_vert,
     const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
@@ -111,14 +176,14 @@ bool save_nesting_data(const std::string& filename,
 
 bool save_result_mini(const std::string& filename,
     const std::vector<std::array<double, 3>>& iso_pts,
-    const std::vector<IsoFace>& iso_faces,
+    const std::vector<PolygonFace>& iso_faces,
     const std::vector<std::vector<size_t>>& patches,
     const std::vector<std::vector<size_t>>& arrangement_cells);
 
 // save a list of iso-meshes
 bool save_iso_mesh_list(const std::string& filename,
     const std::vector<std::vector<std::array<double, 3>>>& iso_pts_list,
-    const std::vector<std::vector<IsoFace>>& iso_faces_list);
+    const std::vector<std::vector<PolygonFace>>& iso_faces_list);
 
 
 // save a triangle mesh
@@ -154,6 +219,20 @@ bool save_timings(const std::string& filename,
     const std::vector<std::string> &timing_labels,
     const std::vector<double> &timings);
 
+// point (x,y,z): dictionary order
+inline bool point_xyz_less(const std::array<double, 3>& p, const std::array<double, 3>& q)
+{
+    if (p[0] == q[0]) {
+        if (p[1] == q[1]) {
+            return p[2] < q[2];
+        } else {
+            return p[1] < q[1];
+        }
+    } else {
+        return p[0] < q[0];
+    }
+}
+
 // extract the boundary triangle mesh of a tet mesh
 // assume: the tet mesh represents a simply-connected 3D volume
 // assume: the triangles of the boundary mesh don't need to be consistently oriented
@@ -168,10 +247,11 @@ void extract_tet_boundary_mesh(
     const std::vector<std::array<size_t, 4>> &tets,
     std::vector<std::array<double, 3>> &boundary_verts, std::vector<std::array<size_t,3>> &boundary_faces);
 
-// given the list of vertex indices of a face, return the unique key of the face: (smallest vert Id,
-// second smallest vert Id, largest vert Id) assume: face_verts is a list of non-duplicate natural
+// given the list of vertex indices of a face, return the unique key of the face: (the smallest vert Id,
+// second-smallest vert Id, the largest vert Id) assume: face_verts is a list of non-duplicate natural
 // numbers, with at least three elements.
-void compute_iso_face_key(const std::vector<size_t>& face_verts, std::array<size_t, 3>& key);
+template <typename IndexType>
+void compute_iso_face_key(const std::vector<IndexType>& face_verts, std::array<IndexType, 3>& key);
 
 // extract iso-mesh (topology only) and create map: local index --> global index
 void extract_iso_mesh(const std::vector<bool>& has_isosurface,
@@ -180,20 +260,12 @@ void extract_iso_mesh(const std::vector<bool>& has_isosurface,
     const Eigen::VectorXi &num_func_in_tet,
     const std::vector<std::array<size_t, 4>>& tets,
     std::vector<IsoVert>& iso_verts,
-    std::vector<IsoFace>& iso_faces,
+    std::vector<PolygonFace>& iso_faces,
     std::vector<std::vector<size_t>>& global_vId_of_tet_vert,
     std::vector<std::vector<size_t>>& iso_fId_of_tet_face);
 
 // extract iso-mesh (topology only)
 void extract_iso_mesh_pure(
-    const std::vector<Arrangement<3>>& cut_results,
-    const std::vector<size_t>& cut_result_index,
-    const std::vector<size_t>& func_in_tet,
-    const std::vector<size_t>& start_index_of_tet,
-    const std::vector<std::array<size_t, 4>>& tets,
-    std::vector<IsoVert>& iso_verts,
-    std::vector<IsoFace>& iso_faces);
-void extract_iso_mesh_pure_2(
     size_t num_1_func, size_t num_2_func, size_t num_more_func,
     const std::vector<Arrangement<3>>& cut_results,
     const std::vector<size_t>& cut_result_index,
@@ -201,14 +273,25 @@ void extract_iso_mesh_pure_2(
     const std::vector<size_t>& start_index_of_tet,
     const std::vector<std::array<size_t, 4>>& tets,
     std::vector<IsoVert>& iso_verts,
-    std::vector<IsoFace>& iso_faces);
+    std::vector<PolygonFace>& iso_faces);
+
+// extract material interface mesh (topology only)
+void extract_MI_mesh_pure(
+    size_t num_2_func, size_t num_3_func, size_t num_more_func,
+    const std::vector<MaterialInterface<3>>& cut_results,
+    const std::vector<size_t>& cut_result_index,
+    const std::vector<size_t>& material_in_tet,
+    const std::vector<size_t>& start_index_of_tet,
+    const std::vector<std::array<size_t, 4>>& tets,
+    std::vector<MI_Vert>& MI_verts,
+    std::vector<PolygonFace>& MI_faces);
 
 // extract iso-mesh from marching tet (topology only)
 void extract_iso_mesh_marching_tet(const std::vector<bool>& has_isosurface,
     const std::vector<Arrangement<3>>& cut_results,
     const std::vector<std::array<size_t, 4>>& tets,
     std::vector<IsoVert>& iso_verts,
-    std::vector<IsoFace>& iso_faces);
+    std::vector<PolygonFace>& iso_faces);
 
 // compute xyz coordinates of iso-vertices
 void compute_iso_vert_xyz(
@@ -217,6 +300,13 @@ void compute_iso_vert_xyz(
     const std::vector<std::array<double, 3>> &pts,
     std::vector<std::array<double, 3>>& iso_pts);
 
+// compute xyz coordinates of material interface vertices
+void compute_MI_vert_xyz(
+    const std::vector<MI_Vert> &MI_verts,
+    const Eigen::MatrixXd &funcVals,
+    const std::vector<std::array<double,3>> &pts,
+    std::vector<std::array<double,3>>& MI_pts);
+
 // compute xyz coordinates of iso-vertices from marching tet
 void compute_iso_vert_xyz_marching_tet(const std::vector<IsoVert>& iso_verts,
     const std::vector<double>& funcVals,
@@ -224,26 +314,22 @@ void compute_iso_vert_xyz_marching_tet(const std::vector<IsoVert>& iso_verts,
     std::vector<std::array<double, 3>>& iso_pts);
 
 // compute iso-edges and edge-face connectivity
-//void compute_iso_edges(std::vector<IsoFace>& iso_faces, std::vector<IsoEdge>& iso_edges);
-//void compute_iso_edges_r(std::vector<IsoFace>& iso_faces, std::vector<IsoEdge>& iso_edges);
+//void compute_mesh_edges(std::vector<PolygonFace>& iso_faces, std::vector<Edge>& iso_edges);
+//void compute_iso_edges_r(std::vector<PolygonFace>& iso_faces, std::vector<Edge>& iso_edges);
 
-void compute_iso_edges(const std::vector<IsoFace>& iso_faces,
-    std::vector<std::vector<size_t>> &edges_of_iso_face,
-    std::vector<IsoEdge>& iso_edges);
+void compute_mesh_edges(const std::vector<PolygonFace>& mesh_faces,
+    std::vector<std::vector<size_t>> & edges_of_face,
+    std::vector<Edge>& mesh_edges);
 
 
 // group iso-faces into patches
-//void compute_patches(const std::vector<IsoFace>& iso_faces,
-//    const std::vector<IsoEdge>& iso_edges,
-//    std::vector<std::vector<size_t>>& patches);
-
-void compute_patches(const std::vector<std::vector<size_t>> &edges_of_iso_face,
-    const std::vector<IsoEdge>& iso_edges,
+void compute_patches(const std::vector<std::vector<size_t>> & edges_of_face,
+    const std::vector<Edge>& mesh_edges,
     std::vector<std::vector<size_t>>& patches);
 
 
 // group non-manifold iso-edges into chains
-void compute_chains(const std::vector<IsoEdge>& iso_edges,
+void compute_chains(const std::vector<Edge>& mesh_edges,
     const std::vector<std::vector<size_t>>& non_manifold_edges_of_vert,
     std::vector<std::vector<size_t>>& chains);
 
@@ -251,13 +337,31 @@ void compute_chains(const std::vector<IsoEdge>& iso_edges,
 // compute neighboring pair of half-faces around an iso-edge in a tetrahedron
 // pair<size_t, int> : pair (iso-face index, iso-face orientation)
 void compute_face_order_in_one_tet(const Arrangement<3>& tet_cut_result,
-    const std::vector<IsoFace>& iso_faces,
-    const IsoEdge& iso_edge,
+    const std::vector<PolygonFace>& iso_faces,
+    const Edge& iso_edge,
     std::vector<std::pair<size_t, int>>& ordered_faces);
+
+// compute neighboring pair of half-faces around an edge in a tetrahedron
+// pair<size_t, int> : pair (MI-face index, MI-face orientation)
+void compute_face_order_in_one_tet_MI(const MaterialInterface<3>& tet_cut_result,
+    const std::vector<PolygonFace>& MI_faces,
+    const Edge& edge,
+    std::vector<std::pair<size_t, int>>& ordered_faces);
+
+// Given tet mesh,
+// build the map: v-->v_next, where v_next has lower order than v
+void build_next_vert(const std::vector<std::array<double,3>> &pts,
+    const std::vector<std::array<size_t,4>> &tets,
+    std::vector<size_t> &next_vert);
 
 // compute the order of iso-vertices on a tet edge v->u, v,u in {0,1,2,3}
 // return a list of sorted vertex indices {v_id, i1, i2, ..., u_id}
 void compute_edge_intersection_order(const Arrangement<3>& tet_cut_result, size_t v, size_t u,
+    std::vector<size_t> &vert_indices);
+
+// compute the order of MI-vertices on a tet edge v->u, v,u in {0,1,2,3}
+// return a list of sorted vertex indices {v_id, i1, i2, ..., u_id}
+void compute_edge_intersection_order_MI(const MaterialInterface<3>& tet_cut_result, size_t v, size_t u,
     std::vector<size_t> &vert_indices);
 
 // find the face passing v, v->u is part of a tet edge, and u is a tet vertex
@@ -265,8 +369,19 @@ void compute_passing_face(const Arrangement<3>& tet_cut_result,
     size_t v, size_t u,
     std::pair<size_t,int> &face_orient);
 
+// find the face passing v, v->u is part of a tet edge, and u is a tet vertex
+void compute_passing_face_MI(const MaterialInterface<3>& tet_cut_result,
+    size_t v, size_t u,
+    std::pair<size_t,int> &face_orient);
+
 // find the two faces passing v1 and v2, v1->v2 is part of a tet edge
 void compute_passing_face_pair(const Arrangement<3>& tet_cut_result,
+    size_t v1, size_t v2,
+    std::pair<size_t,int> &face_orient1,
+    std::pair<size_t,int> &face_orient2);
+
+// find the two faces passing v1 and v2, v1->v2 is part of a tet edge
+void compute_passing_face_pair_MI(const MaterialInterface<3>& tet_cut_result,
     size_t v1, size_t v2,
     std::pair<size_t,int> &face_orient1,
     std::pair<size_t,int> &face_orient2);
