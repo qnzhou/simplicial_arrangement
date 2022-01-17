@@ -17,20 +17,6 @@ typedef std::chrono::duration<double> Time_duration;
 
 using namespace simplicial_arrangement;
 
-// point (x,y,z)
-bool point_xyz_less(const std::array<double, 3>& a, const std::array<double, 3>& b)
-{
-    if (a[0] == b[0]) {
-        if (a[1] == b[1]) {
-            return a[2] < b[2];
-        } else {
-            return a[1] < b[1];
-        }
-    } else {
-        return a[0] < b[0];
-    }
-}
-
 int main(int argc, const char* argv[])
 {
     struct
@@ -43,20 +29,6 @@ int main(int argc, const char* argv[])
     app.add_option("-T,--timing-only", args.timing_only, "Record timing without output result");
     CLI11_PARSE(app, argc, argv);
 
-    // load lookup table
-    std::cout << "load table ..." << std::endl;
-    bool loaded = load_lookup_table();
-    if (loaded) {
-        std::cout << "loading finished." << std::endl;
-    } else {
-        std::cout << "loading failed." << std::endl;
-        return -1;
-    }
-
-    // record timings
-    std::vector<std::string> timing_labels;
-    std::vector<double> timings;
-
     // parse configure file
     std::string tet_mesh_file;
     std::string sphere_file;
@@ -68,14 +40,27 @@ int main(int argc, const char* argv[])
     parse_config_file(args.config_file, tet_mesh_file, sphere_file, output_dir,
         use_lookup, use_2func_lookup,
         use_bbox, bbox_min, bbox_max);
-//    std::string config_path = args.config_file.substr(0, args.config_file.find_last_of('/'));
-//    std::cout << "config path: " << config_path << std::endl;
-//    tet_mesh_file = config_path + "/" + tet_mesh_file;
-//    sphere_file = config_path + "/" + sphere_file;
-    if (!use_lookup) {
-        disable_lookup_table();
+    //    std::string config_path = args.config_file.substr(0, args.config_file.find_last_of('/'));
+    //    std::cout << "config path: " << config_path << std::endl;
+    //    tet_mesh_file = config_path + "/" + tet_mesh_file;
+    //    sphere_file = config_path + "/" + sphere_file;
+    if (use_lookup) {
+        // load lookup table
+        std::cout << "load table ..." << std::endl;
+        bool loaded = load_lookup_table();
+        if (loaded) {
+            std::cout << "loading finished." << std::endl;
+        } else {
+            std::cout << "loading failed." << std::endl;
+            return -1;
+        }
+    } else {
         use_2func_lookup = false;
     }
+
+    // record timings
+    std::vector<std::string> timing_labels;
+    std::vector<double> timings;
 
     // load tet mesh
     std::vector<std::array<double, 3>> pts;
@@ -250,18 +235,11 @@ int main(int argc, const char* argv[])
 
     // extract arrangement mesh
     std::vector<IsoVert> iso_verts;
-    std::vector<IsoFace> iso_faces;
+    std::vector<PolygonFace> iso_faces;
     {
         timing_labels.emplace_back("extract mesh");
         ScopedTimer<> timer("extract mesh");
-        //        extract_iso_mesh_pure(cut_results,
-        //            cut_result_index,
-        //            func_in_tet,
-        //            start_index_of_tet,
-        //            tets,
-        //            iso_verts,
-        //            iso_faces);
-        extract_iso_mesh_pure_2(num_1_func,
+        extract_iso_mesh_pure(num_1_func,
             num_2_func,
             num_more_func,
             cut_results,
@@ -286,12 +264,12 @@ int main(int argc, const char* argv[])
     }
 
     //  compute iso-edges and edge-face connectivity
-    std::vector<IsoEdge> iso_edges;
+    std::vector<Edge> iso_edges;
     std::vector<std::vector<size_t>> edges_of_iso_face;
     {
         timing_labels.emplace_back("isoEdge-face connectivity");
         ScopedTimer<> timer("isoEdge-face connectivity");
-        compute_iso_edges(iso_faces, edges_of_iso_face, iso_edges);
+        compute_mesh_edges(iso_faces, edges_of_iso_face, iso_edges);
         timings.push_back(timer.toc());
     }
     // std::cout << "num iso-edges = " << iso_edges.size() << std::endl;
@@ -478,23 +456,7 @@ int main(int argc, const char* argv[])
             {
                 timing_labels.emplace_back("arrCells(build next_vert)");
                 ScopedTimer<> timer("arrangement cells: find next vert for each tet vertex");
-                next_vert.resize(n_pts, Arrangement<3>::None);
-                for (const auto& tet : tets) {
-                    // find the smallest vertex of tet
-                    size_t min_id = 0;
-                    for (size_t i = 1; i < 4; ++i) {
-                        if (point_xyz_less(pts[tet[i]], pts[tet[min_id]])) {
-                            min_id = i;
-                        }
-                    }
-                    size_t min_vId = tet[min_id];
-                    //
-                    for (size_t i = 0; i < 4; ++i) {
-                        if (i != min_id) {
-                            next_vert[tet[i]] = min_vId;
-                        }
-                    }
-                }
+                build_next_vert(pts, tets, next_vert);
                 timings.push_back(timer.toc());
             }
 
