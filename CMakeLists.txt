@@ -126,6 +126,16 @@ if (SIMPLICIAL_ARRANGEMENT_TEST_COVERAGE)
     endif()
 endif()
 
+add_executable(material_interface "app/material_interface.cpp")
+target_compile_features(material_interface PRIVATE cxx_std_17)
+target_link_libraries(material_interface simplicial_arrangement::simplicial_arrangement impl_arrangement_util igl::core CLI11::CLI11)
+if (SIMPLICIAL_ARRANGEMENT_TEST_COVERAGE)
+    if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
+        target_compile_options(material_interface PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+        target_link_options(material_interface PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+    endif()
+endif()
+
 add_executable(generate_material_interface_lookup_table
     "app/generate_material_interface_lookup_table.cpp")
 target_link_libraries(generate_material_interface_lookup_table PRIVATE
