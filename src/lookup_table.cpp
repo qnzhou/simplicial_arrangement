@@ -16,8 +16,9 @@ namespace {
 template <typename T>
 void load_vector(std::vector<T>& vec, const nlohmann::json& data)
 {
-    vec.resize(data.size());
-    for (size_t i = 0; i < vec.size(); i++) {
+    const size_t s = data.size();
+    vec.resize(s);
+    for (size_t i = 0; i < s; i++) {
         vec[i] = data[i].get<T>();
     }
 }
@@ -183,14 +184,16 @@ void load_arrangement(Arrangement<3>& arrangement, const nlohmann::json& data)
 {
     //
     auto& vertices = arrangement.vertices;
-    vertices.resize(data[0].size());
-    for (size_t j = 0; j < vertices.size(); j++) {
+    const size_t num_vertices = data[0].size();
+    vertices.resize(num_vertices);
+    for (size_t j = 0; j < num_vertices; j++) {
         vertices[j] = data[0][j];
     }
     //
     auto& faces = arrangement.faces;
-    faces.resize(data[1].size());
-    for (size_t j = 0; j < faces.size(); j++) {
+    const size_t num_faces = data[1].size();
+    faces.resize(num_faces);
+    for (size_t j = 0; j < num_faces; j++) {
         auto& face = faces[j];
         load_vector(face.vertices, data[1][j]);
         face.supporting_plane = data[2][j];
@@ -199,29 +202,14 @@ void load_arrangement(Arrangement<3>& arrangement, const nlohmann::json& data)
     }
     //
     auto& cells = arrangement.cells;
-    cells.resize(data[5].size());
-    for (size_t j = 0; j < cells.size(); j++) {
+    const size_t num_cells = data[5].size();
+    cells.resize(num_cells);
+    for (size_t j = 0; j < num_cells; j++) {
         auto& cell = cells[j];
         load_vector(cell.faces, data[5][j]);
-        load_vector(cell.face_orientations, data[6][j]);
-        // the first 4 planes are tet boundary, and the tet lies on the positive side of its
-        // boundary
-        cell.plane_orientations = std::vector<bool>(4, true);
-        std::vector<bool> cell_input_plane_orientations;
-        load_vector(cell_input_plane_orientations, data[7][j]);
-        for (bool orient : cell_input_plane_orientations) {
-            cell.plane_orientations.push_back(orient);
-        }
-        // load_vector(cell.plane_orientations, data[7][j]);
     }
-    //
-    load_vector(arrangement.unique_plane_indices, data[8]);
-    auto& unique_planes = arrangement.unique_planes;
-    unique_planes.resize(data[9].size());
-    for (size_t j = 0; j < unique_planes.size(); j++) {
-        load_vector(unique_planes[j], data[9][j]);
-    }
-    load_vector(arrangement.unique_plane_orientations, data[10]);
+    // No need to populate unique_planes etc. beccause all planes are uniques in
+    // the cases stored in the lookup table.
     // done
 }
 

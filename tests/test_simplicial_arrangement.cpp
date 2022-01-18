@@ -83,15 +83,9 @@ void validate_arrangement(simplicial_arrangement::Arrangement<DIM>& r,
     for (size_t i = 0; i < num_cells; i++) {
         const auto& cell = r.cells[i];
         REQUIRE(cell.faces.size() >= DIM + 1);
-        REQUIRE(cell.faces.size() == cell.face_orientations.size());
         size_t num_faces = cell.faces.size();
         for (size_t j = 0; j < num_faces; j++) {
             const auto& face = r.faces[cell.faces[j]];
-            if (cell.face_orientations[j]) {
-                REQUIRE(face.positive_cell == i);
-            } else {
-                REQUIRE(face.negative_cell == i);
-            }
 
             if (face.positive_cell == Arrangement<DIM>::None ||
                 face.negative_cell == Arrangement<DIM>::None) {
@@ -110,51 +104,9 @@ void validate_arrangement(simplicial_arrangement::Arrangement<DIM>& r,
                 if (plane_id != face.supporting_plane) {
                     if (r.unique_plane_orientations[face.supporting_plane] ==
                         r.unique_plane_orientations[plane_id]) {
-                        REQUIRE(cell.face_orientations[j]);
+                        REQUIRE(face.positive_cell == i);
                     } else {
-                        REQUIRE(!cell.face_orientations[j]);
-                    }
-                }
-            }
-        }
-    }
-
-    {
-        // Check cell.plane_orientations correctness.  Use brute force!
-        const auto num_planes = planes.size();
-        const auto num_vertices = r.vertices.size();
-        std::vector<implicit_predicates::Orientation> orientations(num_vertices);
-
-        for (size_t i = 0; i < num_planes; i++) {
-            const auto& cut_plane = get_plane(i);
-            for (size_t j = 0; j < num_vertices; j++) {
-                const auto& v = r.vertices[j];
-                if constexpr (DIM == 2) {
-                    const auto p0 = get_plane(v[0]);
-                    const auto p1 = get_plane(v[1]);
-                    orientations[j] =
-                        implicit_predicates::orient2d(p0.data(), p1.data(), cut_plane.data());
-                } else {
-                    const auto p0 = get_plane(v[0]);
-                    const auto p1 = get_plane(v[1]);
-                    const auto p2 = get_plane(v[2]);
-                    orientations[j] = implicit_predicates::orient3d(
-                        p0.data(), p1.data(), p2.data(), cut_plane.data());
-                }
-            }
-
-            for (size_t j = 0; j < num_cells; j++) {
-                const auto& cell = r.cells[j];
-                for (auto fid : cell.faces) {
-                    const auto& f = r.faces[fid];
-                    for (auto vid : f.vertices) {
-                        if (orientations[vid] != implicit_predicates::ZERO) {
-                            if (cell.plane_orientations[i]) {
-                                REQUIRE(orientations[vid] == implicit_predicates::POSITIVE);
-                            } else {
-                                REQUIRE(orientations[vid] == implicit_predicates::NEGATIVE);
-                            }
-                        }
+                        REQUIRE(face.negative_cell == i);
                     }
                 }
             }
