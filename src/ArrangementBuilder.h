@@ -28,15 +28,22 @@ public:
         const size_t num_planes = m_planes.get_num_planes();
         m_coplanar_planes.init(num_planes + DIM + 1);
         auto ar_complex = initialize_simplicial_ar_complex<DIM>(num_planes + DIM + 1);
+        size_t unique_plane_count = 0;
         for (size_t i = 0; i < num_planes; i++) {
             size_t plane_id = i + DIM + 1;
             size_t coplanar_plane_id = internal::add_plane(m_planes, ar_complex, plane_id);
             if (coplanar_plane_id != INVALID) {
                 m_coplanar_planes.merge(plane_id, coplanar_plane_id);
+            } else {
+                unique_plane_count++;
             }
         }
         m_arrangement = extract_arrangement(std::move(ar_complex));
-        extract_unique_planes();
+        if (unique_plane_count != num_planes) {
+            // Only popularize unqiue plane structure if duplicate planes are
+            // detected.
+            extract_unique_planes();
+        }
     }
 
     const Arrangement<DIM>& get_arrangement() const { return m_arrangement; }

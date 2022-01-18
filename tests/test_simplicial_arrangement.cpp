@@ -1,7 +1,7 @@
 #include <simplicial_arrangement/lookup_table.h>
 #include <simplicial_arrangement/simplicial_arrangement.h>
-#include <catch2/catch.hpp>
 #include <spdlog/spdlog.h>
+#include <catch2/catch.hpp>
 
 #include <implicit_predicates/implicit_predicates.h>
 
@@ -61,16 +61,18 @@ void validate_arrangement(simplicial_arrangement::Arrangement<DIM>& r,
             REQUIRE(face.vertices.size() >= 3);
         }
         REQUIRE(face.supporting_plane != Arrangement<DIM>::None);
-        REQUIRE(face.supporting_plane < r.unique_plane_indices.size());
 
-        const size_t unique_plane_index = r.unique_plane_indices[face.supporting_plane];
-        REQUIRE(unique_plane_index < r.unique_planes.size());
-        const auto& supporting_planes = r.unique_planes[unique_plane_index];
-        REQUIRE(supporting_planes.size() >= 1);
+        if (!r.unique_planes.empty()) {
+            REQUIRE(face.supporting_plane < r.unique_plane_indices.size());
+            const size_t unique_plane_index = r.unique_plane_indices[face.supporting_plane];
+            REQUIRE(unique_plane_index < r.unique_planes.size());
+            const auto& supporting_planes = r.unique_planes[unique_plane_index];
+            REQUIRE(supporting_planes.size() >= 1);
 
-        auto itr =
-            std::find(supporting_planes.begin(), supporting_planes.end(), face.supporting_plane);
-        REQUIRE(itr != supporting_planes.end());
+            auto itr = std::find(
+                supporting_planes.begin(), supporting_planes.end(), face.supporting_plane);
+            REQUIRE(itr != supporting_planes.end());
+        }
 
         for (size_t vid : face.vertices) {
             REQUIRE(vid < r.vertices.size());
@@ -93,17 +95,25 @@ void validate_arrangement(simplicial_arrangement::Arrangement<DIM>& r,
 
             if (face.positive_cell == Arrangement<DIM>::None ||
                 face.negative_cell == Arrangement<DIM>::None) {
-                const auto& supporting_planes =
-                    r.unique_planes[r.unique_plane_indices[face.supporting_plane]];
-                auto itr = std::min_element(supporting_planes.begin(), supporting_planes.end());
-                REQUIRE(*itr <= DIM);
+                size_t plane_id = DIM + 1;
+                if (!r.unique_planes.empty()) {
+                    const auto& supporting_planes =
+                        r.unique_planes[r.unique_plane_indices[face.supporting_plane]];
+                    auto itr = std::min_element(supporting_planes.begin(), supporting_planes.end());
+                    plane_id = *itr;
+                } else {
+                    plane_id = face.supporting_plane;
+                }
+                REQUIRE(plane_id <= DIM);
 
                 // Cell must be on the positive side of the tet boundary planes.
-                if (r.unique_plane_orientations[face.supporting_plane] ==
-                    r.unique_plane_orientations[*itr]) {
-                    REQUIRE(cell.face_orientations[j]);
-                } else {
-                    REQUIRE(!cell.face_orientations[j]);
+                if (plane_id != face.supporting_plane) {
+                    if (r.unique_plane_orientations[face.supporting_plane] ==
+                        r.unique_plane_orientations[plane_id]) {
+                        REQUIRE(cell.face_orientations[j]);
+                    } else {
+                        REQUIRE(!cell.face_orientations[j]);
+                    }
                 }
             }
         }
@@ -161,31 +171,38 @@ void assert_equivalent(const simplicial_arrangement::Arrangement<DIM>& r1,
     REQUIRE(r1.vertices.size() == r2.vertices.size());
     REQUIRE(r1.faces.size() == r2.faces.size());
     REQUIRE(r1.cells.size() == r2.cells.size());
-    REQUIRE(r1.unique_planes.size() == r2.unique_planes.size());
 
-    const size_t num_unique_planes = r1.unique_planes.size();
-    std::vector<size_t> r1_support_face_count(num_unique_planes, 0);
-    std::vector<size_t> r2_support_face_count(num_unique_planes, 0);
+    bool r1_all_distinct = r1.unique_planes.size() == r1.unique_plane_indices.size();
+    bool r2_all_distinct = r2.unique_planes.size() == r2.unique_plane_indices.size();
+    REQUIRE(r1_all_distinct == r2_all_distinct);
 
-    for (const auto& f : r1.faces) {
-        size_t uid = r1.unique_plane_indices[f.supporting_plane];
-        r1_support_face_count[uid]++;
-    }
-    for (const auto& f : r2.faces) {
-        size_t uid = r2.unique_plane_indices[f.supporting_plane];
-        r2_support_face_count[uid]++;
-    }
+    if (!r1_all_distinct) {
+        REQUIRE(r1.unique_planes.size() == r2.unique_planes.size());
 
-    const size_t num_planes = r1.unique_plane_indices.size();
-    for (size_t i = 0; i < num_planes; i++) {
-        size_t r1_uid = r1.unique_plane_indices[i];
-        size_t r2_uid = r2.unique_plane_indices[i];
-        CAPTURE(r1.unique_plane_indices,
-            r2.unique_plane_indices,
-            r1_support_face_count,
-            r2_support_face_count);
-        CHECK(r1.unique_planes[r1_uid].size() == r1.unique_planes[r2_uid].size());
-        CHECK(r1_support_face_count[r1_uid] == r2_support_face_count[r2_uid]);
+        const size_t num_unique_planes = r1.unique_planes.size();
+        std::vector<size_t> r1_support_face_count(num_unique_planes, 0);
+        std::vector<size_t> r2_support_face_count(num_unique_planes, 0);
+
+        for (const auto& f : r1.faces) {
+            size_t uid = r1.unique_plane_indices[f.supporting_plane];
+            r1_support_face_count[uid]++;
+        }
+        for (const auto& f : r2.faces) {
+            size_t uid = r2.unique_plane_indices[f.supporting_plane];
+            r2_support_face_count[uid]++;
+        }
+
+        const size_t num_planes = r1.unique_plane_indices.size();
+        for (size_t i = 0; i < num_planes; i++) {
+            size_t r1_uid = r1.unique_plane_indices[i];
+            size_t r2_uid = r2.unique_plane_indices[i];
+            CAPTURE(r1.unique_plane_indices,
+                r2.unique_plane_indices,
+                r1_support_face_count,
+                r2_support_face_count);
+            CHECK(r1.unique_planes[r1_uid].size() == r1.unique_planes[r2_uid].size());
+            CHECK(r1_support_face_count[r1_uid] == r2_support_face_count[r2_uid]);
+        }
     }
 }
 
@@ -210,7 +227,6 @@ void test_2D()
         REQUIRE(arrangement.cells.size() == 1);
         REQUIRE(count_num_halfedges(arrangement) == 3);
         REQUIRE(arrangement.vertices.size() == 3);
-        REQUIRE(arrangement.unique_planes.size() == 3);
         validate_arrangement(arrangement, planes);
     }
 
@@ -220,29 +236,24 @@ void test_2D()
         {
             planes.push_back({1, -1, -1});
             auto arrangement = compute_arrangement(planes);
-            REQUIRE(arrangement.unique_plane_indices.size() == 4);
             REQUIRE(arrangement.cells.size() == 2);
             REQUIRE(count_num_halfedges(arrangement) == 7);
             REQUIRE(arrangement.vertices.size() == 5);
-            REQUIRE(arrangement.unique_planes.size() == 4);
             validate_arrangement(arrangement, planes);
         }
         SECTION("passing through one corner")
         {
             planes.push_back({1, -1, 0});
             auto arrangement = compute_arrangement(planes);
-            REQUIRE(arrangement.unique_plane_indices.size() == 4);
             REQUIRE(arrangement.cells.size() == 2);
             REQUIRE(count_num_halfedges(arrangement) == 6);
             REQUIRE(arrangement.vertices.size() == 4);
-            REQUIRE(arrangement.unique_planes.size() == 4);
             validate_arrangement(arrangement, planes);
         }
         SECTION("passing through two corners")
         {
             planes.push_back({1, 0, 0});
             auto arrangement = compute_arrangement(planes);
-            REQUIRE(arrangement.unique_plane_indices.size() == 4);
             REQUIRE(arrangement.cells.size() == 1);
             REQUIRE(count_num_halfedges(arrangement) == 3);
             REQUIRE(arrangement.vertices.size() == 3);
@@ -258,11 +269,9 @@ void test_2D()
             planes.push_back({1, -1, -1});
             planes.push_back({2, -1, -1});
             auto arrangement = compute_arrangement(planes);
-            REQUIRE(arrangement.unique_plane_indices.size() == 5);
             REQUIRE(arrangement.cells.size() == 3);
             REQUIRE(count_num_halfedges(arrangement) == 11);
             REQUIRE(arrangement.vertices.size() == 7);
-            REQUIRE(arrangement.unique_planes.size() == 5);
             validate_arrangement(arrangement, planes);
         }
 
@@ -271,11 +280,9 @@ void test_2D()
             planes.push_back({1, -1, -1});
             planes.push_back({-1, 2, -1});
             auto arrangement = compute_arrangement(planes);
-            REQUIRE(arrangement.unique_plane_indices.size() == 5);
             REQUIRE(arrangement.cells.size() == 4);
             REQUIRE(count_num_halfedges(arrangement) == 15);
             REQUIRE(arrangement.vertices.size() == 8);
-            REQUIRE(arrangement.unique_planes.size() == 5);
             validate_arrangement(arrangement, planes);
         }
 
@@ -284,11 +291,9 @@ void test_2D()
             planes.push_back({1, -1, -1});
             planes.push_back({-1, 1, -1});
             auto arrangement = compute_arrangement(planes);
-            REQUIRE(arrangement.unique_plane_indices.size() == 5);
             REQUIRE(arrangement.cells.size() == 3);
             REQUIRE(count_num_halfedges(arrangement) == 10);
             REQUIRE(arrangement.vertices.size() == 6);
-            REQUIRE(arrangement.unique_planes.size() == 5);
             validate_arrangement(arrangement, planes);
         }
 
@@ -297,7 +302,6 @@ void test_2D()
             planes.push_back({1, -1, -1});
             planes.push_back({1, -1, -1});
             auto arrangement = compute_arrangement(planes);
-            REQUIRE(arrangement.unique_plane_indices.size() == 5);
             REQUIRE(arrangement.cells.size() == 2);
             REQUIRE(count_num_halfedges(arrangement) == 7);
             REQUIRE(arrangement.vertices.size() == 5);
@@ -313,11 +317,9 @@ void test_2D()
             planes.push_back({2, -1, -1});
             planes.push_back({3, -1, -1});
             auto arrangement = compute_arrangement(planes);
-            REQUIRE(arrangement.unique_plane_indices.size() == 6);
             REQUIRE(arrangement.cells.size() == 4);
             REQUIRE(count_num_halfedges(arrangement) == 15);
             REQUIRE(arrangement.vertices.size() == 9);
-            REQUIRE(arrangement.unique_planes.size() == 6);
             validate_arrangement(arrangement, planes);
         }
 
@@ -329,11 +331,9 @@ void test_2D()
                 planes.push_back({-1, 3, -1});
                 planes.push_back({-1, -1, 3});
                 auto arrangement = compute_arrangement(planes);
-                REQUIRE(arrangement.unique_plane_indices.size() == 6);
                 REQUIRE(arrangement.cells.size() == 7);
                 REQUIRE(count_num_halfedges(arrangement) == 27);
                 REQUIRE(arrangement.vertices.size() == 12);
-                REQUIRE(arrangement.unique_planes.size() == 6);
                 validate_arrangement(arrangement, planes);
             }
 
@@ -343,11 +343,9 @@ void test_2D()
                 planes.push_back({-1, 2, -1});
                 planes.push_back({-1, -1, 2});
                 auto arrangement = compute_arrangement(planes);
-                REQUIRE(arrangement.unique_plane_indices.size() == 6);
                 REQUIRE(arrangement.cells.size() == 6);
                 REQUIRE(count_num_halfedges(arrangement) == 21);
                 REQUIRE(arrangement.vertices.size() == 10);
-                REQUIRE(arrangement.unique_planes.size() == 6);
                 validate_arrangement(arrangement, planes);
             }
 
@@ -357,11 +355,9 @@ void test_2D()
                 planes.push_back({-1, 1, -1});
                 planes.push_back({-1, -1, 1});
                 auto arrangement = compute_arrangement(planes);
-                REQUIRE(arrangement.unique_plane_indices.size() == 6);
                 REQUIRE(arrangement.cells.size() == 4);
                 REQUIRE(count_num_halfedges(arrangement) == 12);
                 REQUIRE(arrangement.vertices.size() == 6);
-                REQUIRE(arrangement.unique_planes.size() == 6);
                 validate_arrangement(arrangement, planes);
             }
 
@@ -371,11 +367,9 @@ void test_2D()
                 planes.push_back({-2, 1, -2});
                 planes.push_back({-2, -2, 1});
                 auto arrangement = compute_arrangement(planes);
-                REQUIRE(arrangement.unique_plane_indices.size() == 6);
                 REQUIRE(arrangement.cells.size() == 4);
                 REQUIRE(count_num_halfedges(arrangement) == 15);
                 REQUIRE(arrangement.vertices.size() == 9);
-                REQUIRE(arrangement.unique_planes.size() == 6);
                 validate_arrangement(arrangement, planes);
             }
 
@@ -385,11 +379,9 @@ void test_2D()
                 planes.push_back({-1, 3, -1});
                 planes.push_back({-1, -1, 2});
                 auto arrangement = compute_arrangement(planes);
-                REQUIRE(arrangement.unique_plane_indices.size() == 6);
                 REQUIRE(arrangement.cells.size() == 7);
                 REQUIRE(count_num_halfedges(arrangement) == 27);
                 REQUIRE(arrangement.vertices.size() == 12);
-                REQUIRE(arrangement.unique_planes.size() == 6);
                 validate_arrangement(arrangement, planes);
             }
 
@@ -399,7 +391,6 @@ void test_2D()
                 planes.push_back({-3, 1, 1});
                 planes.push_back({-1, -1, 2});
                 auto arrangement = compute_arrangement(planes);
-                REQUIRE(arrangement.unique_plane_indices.size() == 6);
                 REQUIRE(arrangement.cells.size() == 4);
                 REQUIRE(count_num_halfedges(arrangement) == 15);
                 REQUIRE(arrangement.vertices.size() == 8);
@@ -444,7 +435,6 @@ void test_3D()
         REQUIRE(count_num_half_faces(arrangement) == 4);
         REQUIRE(count_num_half_edges(arrangement) == 12);
         REQUIRE(arrangement.vertices.size() == 4);
-        REQUIRE(arrangement.unique_planes.size() == 4);
         validate_arrangement(arrangement, planes);
     }
 
@@ -458,7 +448,6 @@ void test_3D()
             REQUIRE(count_num_half_faces(arrangement) == 10);
             REQUIRE(count_num_half_edges(arrangement) == 36);
             REQUIRE(arrangement.vertices.size() == 8);
-            REQUIRE(arrangement.unique_planes.size() == 5);
             validate_arrangement(arrangement, planes);
         }
         SECTION("tri cross section")
@@ -469,7 +458,6 @@ void test_3D()
             REQUIRE(count_num_half_faces(arrangement) == 9);
             REQUIRE(count_num_half_edges(arrangement) == 30);
             REQUIRE(arrangement.vertices.size() == 7);
-            REQUIRE(arrangement.unique_planes.size() == 5);
             validate_arrangement(arrangement, planes);
         }
         SECTION("cut through a vertex")
@@ -480,7 +468,6 @@ void test_3D()
             REQUIRE(count_num_half_faces(arrangement) == 9);
             REQUIRE(count_num_half_edges(arrangement) == 28);
             REQUIRE(arrangement.vertices.size() == 6);
-            REQUIRE(arrangement.unique_planes.size() == 5);
             validate_arrangement(arrangement, planes);
         }
         SECTION("cut through an edge")
@@ -491,7 +478,6 @@ void test_3D()
             REQUIRE(count_num_half_faces(arrangement) == 8);
             REQUIRE(count_num_half_edges(arrangement) == 24);
             REQUIRE(arrangement.vertices.size() == 5);
-            REQUIRE(arrangement.unique_planes.size() == 5);
             validate_arrangement(arrangement, planes);
         }
         SECTION("cut through a face")
@@ -518,7 +504,6 @@ void test_3D()
             REQUIRE(count_num_half_faces(arrangement) == 14);
             REQUIRE(count_num_half_edges(arrangement) == 48);
             REQUIRE(arrangement.vertices.size() == 10);
-            REQUIRE(arrangement.unique_planes.size() == 6);
             validate_arrangement(arrangement, planes);
         }
         SECTION("crossing")
@@ -530,7 +515,6 @@ void test_3D()
             REQUIRE(count_num_half_faces(arrangement) == 20);
             REQUIRE(count_num_half_edges(arrangement) == 72);
             REQUIRE(arrangement.vertices.size() == 12);
-            REQUIRE(arrangement.unique_planes.size() == 6);
             validate_arrangement(arrangement, planes);
         }
         SECTION("touching")
@@ -542,7 +526,6 @@ void test_3D()
             REQUIRE(count_num_half_faces(arrangement) == 14);
             REQUIRE(count_num_half_edges(arrangement) == 46);
             REQUIRE(arrangement.vertices.size() == 9);
-            REQUIRE(arrangement.unique_planes.size() == 6);
             validate_arrangement(arrangement, planes);
         }
         SECTION("duplicated cuts")
@@ -566,7 +549,6 @@ void test_3D()
             REQUIRE(count_num_half_faces(arrangement) == 17);
             REQUIRE(count_num_half_edges(arrangement) == 52);
             REQUIRE(arrangement.vertices.size() == 7);
-            REQUIRE(arrangement.unique_planes.size() == 6);
             validate_arrangement(arrangement, planes);
         }
         SECTION("2 cuts through faces")
@@ -620,7 +602,6 @@ void test_3D()
             REQUIRE(count_num_half_faces(arrangement) == 19);
             REQUIRE(count_num_half_edges(arrangement) == 66);
             REQUIRE(arrangement.vertices.size() == 13);
-            REQUIRE(arrangement.unique_planes.size() == 7);
             validate_arrangement(arrangement, planes);
         }
         SECTION("3 cuts intersect at a line")
@@ -633,7 +614,6 @@ void test_3D()
             REQUIRE(count_num_half_faces(arrangement) == 24);
             REQUIRE(count_num_half_edges(arrangement) == 72);
             REQUIRE(arrangement.vertices.size() == 8);
-            REQUIRE(arrangement.unique_planes.size() == 7);
             validate_arrangement(arrangement, planes);
         }
         SECTION("3 cuts non-intersecting")
@@ -646,7 +626,6 @@ void test_3D()
             REQUIRE(count_num_half_faces(arrangement) == 19);
             REQUIRE(count_num_half_edges(arrangement) == 66);
             REQUIRE(arrangement.vertices.size() == 13);
-            REQUIRE(arrangement.unique_planes.size() == 7);
             validate_arrangement(arrangement, planes);
         }
         SECTION("3 cuts intersect at a point")
@@ -659,7 +638,6 @@ void test_3D()
             REQUIRE(count_num_half_faces(arrangement) == 43);
             REQUIRE(count_num_half_edges(arrangement) == 162);
             REQUIRE(arrangement.vertices.size() == 20);
-            REQUIRE(arrangement.unique_planes.size() == 7);
             validate_arrangement(arrangement, planes);
         }
         SECTION("3 cuts intersect at a vertex")
@@ -672,7 +650,6 @@ void test_3D()
             REQUIRE(count_num_half_faces(arrangement) == 16);
             REQUIRE(count_num_half_edges(arrangement) == 48);
             REQUIRE(arrangement.vertices.size() == 7);
-            REQUIRE(arrangement.unique_planes.size() == 7);
             validate_arrangement(arrangement, planes);
         }
         SECTION("3 cuts intersect at an edge")
@@ -685,7 +662,6 @@ void test_3D()
             REQUIRE(count_num_half_faces(arrangement) == 19);
             REQUIRE(count_num_half_edges(arrangement) == 62);
             REQUIRE(arrangement.vertices.size() == 11);
-            REQUIRE(arrangement.unique_planes.size() == 7);
             validate_arrangement(arrangement, planes);
         }
     }
