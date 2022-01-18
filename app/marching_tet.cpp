@@ -107,7 +107,7 @@ int main(int argc, const char* argv[]) {
 
     // extract arrangement mesh
     std::vector<std::vector<IsoVert>> iso_verts_list(n_func);
-    std::vector<std::vector<IsoFace>> iso_faces_list(n_func);
+    std::vector<std::vector<PolygonFace>> iso_faces_list(n_func);
     {
         ScopedTimer<> timer("extract iso mesh (topology only)");
         for (size_t i = 0; i < n_func; i++) {

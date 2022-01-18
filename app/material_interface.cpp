@@ -1,5 +1,10 @@
+//
+// Created by Charles Du on 1/15/22.
+//
+
 #include <simplicial_arrangement/lookup_table.h>
-#include <simplicial_arrangement/simplicial_arrangement.h>
+//#include <simplicial_arrangement/simplicial_arrangement.h>
+#include <simplicial_arrangement/material_interface.h>
 
 #include <chrono>
 #include <iostream>
@@ -17,6 +22,7 @@ typedef std::chrono::duration<double> Time_duration;
 
 using namespace simplicial_arrangement;
 
+
 int main(int argc, const char* argv[])
 {
     struct
@@ -24,30 +30,27 @@ int main(int argc, const char* argv[])
         std::string config_file;
         bool timing_only = false;
     } args;
-    CLI::App app{"Implicit Arrangement Command Line"};
+    CLI::App app{"Material Interface Command Line"};
     app.add_option("config_file", args.config_file, "Configuration file")->required();
     app.add_option("-T,--timing-only", args.timing_only, "Record timing without output result");
     CLI11_PARSE(app, argc, argv);
 
     // parse configure file
     std::string tet_mesh_file;
-    std::string sphere_file;
+    std::string material_file;
     std::string output_dir;
     bool use_lookup = true;
-    bool use_2func_lookup = true;
-    bool use_bbox = true;
-    std::array<double,3> bbox_min, bbox_max;
-    parse_config_file(args.config_file, tet_mesh_file, sphere_file, output_dir,
-        use_lookup, use_2func_lookup,
-        use_bbox, bbox_min, bbox_max);
+    bool use_3func_lookup = true;
+    parse_config_file_MI(args.config_file, tet_mesh_file, material_file, output_dir,
+        use_lookup, use_3func_lookup);
     //    std::string config_path = args.config_file.substr(0, args.config_file.find_last_of('/'));
     //    std::cout << "config path: " << config_path << std::endl;
     //    tet_mesh_file = config_path + "/" + tet_mesh_file;
-    //    sphere_file = config_path + "/" + sphere_file;
+    //    material_file = config_path + "/" + material_file;
     if (use_lookup) {
         // load lookup table
         std::cout << "load table ..." << std::endl;
-        bool loaded = load_lookup_table();
+        bool loaded = load_lookup_table(simplicial_arrangement::MATERIAL_INTERFACE);
         if (loaded) {
             std::cout << "loading finished." << std::endl;
         } else {
@@ -55,7 +58,7 @@ int main(int argc, const char* argv[])
             return -1;
         }
     } else {
-        use_2func_lookup = false;
+        use_3func_lookup = false;
     }
 
     // record timings
@@ -71,109 +74,154 @@ int main(int argc, const char* argv[])
     std::cout << "tet mesh: " << pts.size() << " verts, " << tets.size() << " tets." << std::endl;
 
 
-    // load implicit function values, or evaluate
+    // load material function values, or evaluate
     std::vector<Sphere> spheres;
-    load_spheres(sphere_file, spheres);
+    load_spheres(material_file, spheres);
     size_t n_func = spheres.size();
 
-
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals;
+    Eigen::MatrixXd funcVals;
     {
         timing_labels.emplace_back("func values");
         ScopedTimer<> timer("func values");
         funcVals.resize(n_func, n_pts);
-        for (Eigen::Index i = 0; i < n_func; i++) {
-            for (Eigen::Index j = 0; j < n_pts; j++) {
-                funcVals(i, j) = sphere_function(spheres[i].first, spheres[i].second, pts[j]);
+        for (Eigen::Index j = 0; j < n_pts; j++) {
+            const auto& p = pts[j];
+            for (Eigen::Index i = 0; i < n_func; i++) {
+                funcVals(i, j) = compute_sphere_distance(spheres[i].first, spheres[i].second, p);
             }
         }
         timings.push_back(timer.toc());
     }
 
 
-    // function signs at vertices
-    Eigen::MatrixXi funcSigns;
+    // highest material at vertices
+    std::vector<size_t> highest_material_at_vert;
+    // degenerate vertex: more than one highest material, i.e. material interface passes the vertex
     std::vector<bool> is_degenerate_vertex;
     bool found_degenerate_vertex = false;
+    absl::flat_hash_map<size_t, std::vector<size_t>> highest_materials_at_vert;
     {
-        timing_labels.emplace_back("func signs");
-        ScopedTimer<> timer("func signs");
+        timing_labels.emplace_back("highest func");
+        ScopedTimer<> timer("highest func");
         is_degenerate_vertex.resize(n_pts, false);
-        funcSigns.resize(n_func, n_pts);
-        for (Eigen::Index i = 0; i < n_func; i++) {
-            for (Eigen::Index j = 0; j < n_pts; j++) {
-                funcSigns(i, j) = sign(funcVals(i, j));
-                if (funcSigns(i, j) == 0) {
-                    is_degenerate_vertex[j] = true;
-                    found_degenerate_vertex = true;
+        highest_material_at_vert.reserve(n_pts);
+        for (Eigen::Index j = 0; j < n_pts; j++) {
+            double max = funcVals(0, j);
+            size_t max_id = 0;
+            size_t max_count = 1;
+            for (Eigen::Index i = 1; i < n_func; i++) {
+                if (funcVals(i,j) > max) {
+                    max = funcVals(i,j);
+                    max_id = i;
+                    max_count = 1;
+                } else if (funcVals(i,j) == max) {
+                    ++max_count;
+                }
+            }
+            highest_material_at_vert.push_back(max_id);
+            //
+            if (max_count > 1) {
+                is_degenerate_vertex[j] = true;
+                found_degenerate_vertex = true;
+                auto& materials = highest_materials_at_vert[j];
+                materials.reserve(max_count);
+                for (Eigen::Index i = 0; i < n_func; i++) {
+                    if (funcVals(i,j) == max) {
+                        materials.push_back(i);
+                    }
                 }
             }
         }
         timings.push_back(timer.toc());
     }
 
+    // filter relevant materials in each tet
+    // a tet is non-empty if there are some material interface in it
     size_t num_intersecting_tet = 0;
-    std::vector<size_t> func_in_tet;
+    std::vector<size_t> material_in_tet;
     std::vector<size_t> start_index_of_tet;
     {
         timing_labels.emplace_back("filter");
         ScopedTimer<> timer("filter(CRS vector)");
-        func_in_tet.reserve(n_tets);
+        material_in_tet.reserve(n_tets);
         start_index_of_tet.reserve(n_tets + 1);
         start_index_of_tet.push_back(0);
-        int pos_count;
-        int neg_count;
-        for (Eigen::Index i = 0; i < n_tets; i++) {
-            for (Eigen::Index j = 0; j < n_func; j++) {
-                pos_count = 0;
-                neg_count = 0;
-                for (size_t& vId : tets[i]) {
-                    if (funcSigns(j, vId) == 1) {
-                        pos_count += 1;
-                    } else if (funcSigns(j, vId) == -1) {
-                        neg_count += 1;
+        std::set<size_t> materials;
+        std::array<double, 4> min_h;
+        for (size_t i = 0; i < n_tets; ++i) {
+            const auto& tet = tets[i];
+            // find high materials
+            materials.clear();
+            for (size_t j = 0; j < 4; ++j) {
+                if (is_degenerate_vertex[tet[j]]) {
+                    const auto& ms = highest_materials_at_vert[tet[j]];
+                    materials.insert(ms.begin(), ms.end());
+                } else {
+                    materials.insert(highest_material_at_vert[tet[j]]);
+                }
+            }
+            // if only one high material, there is no material interface
+            if (materials.size() < 2) {  // no material interface
+                start_index_of_tet.push_back(material_in_tet.size());
+                continue;
+            }
+            // find min of high materials
+            min_h.fill(std::numeric_limits<double>::max());
+            for(auto it = materials.begin(); it != materials.end(); it++) {
+                for (size_t j = 0; j < 4; ++j) {
+                    if (funcVals(*it, tet[j]) < min_h[j]) {
+                        min_h[j] = funcVals(*it, tet[j]);
                     }
                 }
-                // tets[i].size() == 4
-                if (pos_count < 4 && neg_count < 4) {
-                    func_in_tet.push_back(j);
+            }
+            // find materials greater than at least two mins of high materials
+            size_t greater_count;
+            for (size_t j = 0; j < n_func; ++j) {
+                greater_count = 0;
+                for (size_t k = 0; k < 4; ++k) {
+                    if (funcVals(j,tet[k]) > min_h[k]) {
+                        ++greater_count;
+                    }
+                }
+                if (greater_count > 1) {
+                    materials.insert(j);
                 }
             }
-            if (func_in_tet.size() > start_index_of_tet.back()) {
-                ++num_intersecting_tet;
-            }
-            start_index_of_tet.push_back(func_in_tet.size());
+            //
+            ++num_intersecting_tet;
+            material_in_tet.insert(material_in_tet.end(), materials.begin(), materials.end());
+            start_index_of_tet.push_back(material_in_tet.size());
         }
         timings.push_back(timer.toc());
     }
     std::cout << "num_intersecting_tet = " << num_intersecting_tet << std::endl;
 
 
-    // compute arrangement in each tet (iterative plane cut)
-    std::vector<Arrangement<3>> cut_results;
+    // compute material interface in each tet
+    std::vector<MaterialInterface<3>> cut_results;
     std::vector<size_t> cut_result_index;
     //
-    Time_duration time_1_func = Time_duration::zero();
     Time_duration time_2_func = Time_duration::zero();
+    Time_duration time_3_func = Time_duration::zero();
     Time_duration time_more_func = Time_duration::zero();
-    size_t num_1_func = 0;
     size_t num_2_func = 0;
+    size_t num_3_func = 0;
     size_t num_more_func = 0;
     //
     {
-        timing_labels.emplace_back("simp_arr(other)");
-        ScopedTimer<> timer("simp_arr");
+        timing_labels.emplace_back("MI(other)");
+        ScopedTimer<> timer("material interface in tets");
         cut_results.reserve(num_intersecting_tet);
         cut_result_index.reserve(n_tets);
         size_t start_index;
         size_t num_func;
-        std::vector<Plane<double, 3>> planes;
-        planes.reserve(3);
+        std::vector<Material<double, 3>> materials;
+        materials.reserve(3);
         for (size_t i = 0; i < tets.size(); i++) {
             start_index = start_index_of_tet[i];
             num_func = start_index_of_tet[i + 1] - start_index;
             if (num_func == 0) {
-                cut_result_index.push_back(Arrangement<3>::None);
+                cut_result_index.push_back(MaterialInterface<3>::None);
                 continue;
             }
             std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
@@ -182,37 +230,37 @@ int main(int argc, const char* argv[])
             size_t v2 = tets[i][1];
             size_t v3 = tets[i][2];
             size_t v4 = tets[i][3];
-            planes.clear();
+            materials.clear();
             for (size_t j = 0; j < num_func; j++) {
-                size_t f_id = func_in_tet[start_index + j];
-                planes.emplace_back();
-                auto& plane = planes.back();
-                plane[0] = funcVals(f_id, v1);
-                plane[1] = funcVals(f_id, v2);
-                plane[2] = funcVals(f_id, v3);
-                plane[3] = funcVals(f_id, v4);
+                size_t f_id = material_in_tet[start_index + j];
+                materials.emplace_back();
+                auto& material = materials.back();
+                material[0] = funcVals(f_id, v1);
+                material[1] = funcVals(f_id, v2);
+                material[2] = funcVals(f_id, v3);
+                material[3] = funcVals(f_id, v4);
             }
             //
-            if (!use_2func_lookup && num_func == 2) {
+            if (!use_3func_lookup && num_func == 3) {
                 cut_result_index.push_back(cut_results.size());
                 disable_lookup_table();
-                cut_results.emplace_back(std::move(compute_arrangement(planes)));
+                cut_results.emplace_back(std::move(compute_material_interface(materials)));
                 enable_lookup_table();
             } else {
                 cut_result_index.push_back(cut_results.size());
-                cut_results.emplace_back(std::move(compute_arrangement(planes)));
+                cut_results.emplace_back(std::move(compute_material_interface(materials)));
             }
 
             //
             std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
             switch (num_func) {
-            case 1:
-                time_1_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
-                ++num_1_func;
-                break;
             case 2:
                 time_2_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
                 ++num_2_func;
+                break;
+            case 3:
+                time_3_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                ++num_3_func;
                 break;
             default:
                 time_more_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
@@ -221,55 +269,56 @@ int main(int argc, const char* argv[])
             }
         }
         timings.push_back(
-            timer.toc() - time_1_func.count() - time_2_func.count() - time_more_func.count());
+            timer.toc() - time_2_func.count() - time_3_func.count() - time_more_func.count());
     }
-    timing_labels.emplace_back("simp_arr(1 func)");
-    timings.push_back(time_1_func.count());
-    timing_labels.emplace_back("simp_arr(2 func)");
+    timing_labels.emplace_back("MI(2 func)");
     timings.push_back(time_2_func.count());
-    timing_labels.emplace_back("simp_arr(>=3 func)");
+    timing_labels.emplace_back("MI(3 func)");
+    timings.push_back(time_3_func.count());
+    timing_labels.emplace_back("MI(>=4 func)");
     timings.push_back(time_more_func.count());
-    std::cout << " -- [simp_arr(1 func)]: " << time_1_func.count() << " s" << std::endl;
-    std::cout << " -- [simp_arr(2 func)]: " << time_2_func.count() << " s" << std::endl;
-    std::cout << " -- [simp_arr(>=3 func)]: " << time_more_func.count() << " s" << std::endl;
+    std::cout << " -- [MI(2 func)]: " << time_2_func.count() << " s" << std::endl;
+    std::cout << " -- [MI(3 func)]: " << time_3_func.count() << " s" << std::endl;
+    std::cout << " -- [MI(>=4 func)]: " << time_more_func.count() << " s" << std::endl;
 
-    // extract arrangement mesh
-    std::vector<IsoVert> iso_verts;
-    std::vector<PolygonFace> iso_faces;
+
+    // extract material interface mesh
+    std::vector<MI_Vert> MI_verts;
+    std::vector<PolygonFace> MI_faces;
     {
         timing_labels.emplace_back("extract mesh");
         ScopedTimer<> timer("extract mesh");
-        extract_iso_mesh_pure(num_1_func,
-            num_2_func,
+        extract_MI_mesh_pure(num_2_func,
+            num_3_func,
             num_more_func,
             cut_results,
             cut_result_index,
-            func_in_tet,
+            material_in_tet,
             start_index_of_tet,
             tets,
-            iso_verts,
-            iso_faces);
+            MI_verts,
+            MI_faces);
         timings.push_back(timer.toc());
     }
-    std::cout << "num iso-vertices = " << iso_verts.size() << std::endl;
-    std::cout << "num iso-faces = " << iso_faces.size() << std::endl;
+    std::cout << "num MI-vertices = " << MI_verts.size() << std::endl;
+    std::cout << "num MI-faces = " << MI_faces.size() << std::endl;
 
-    // compute xyz of iso-vertices
-    std::vector<std::array<double, 3>> iso_pts;
+    // compute xyz of MI-vertices
+    std::vector<std::array<double, 3>> MI_pts;
     {
         timing_labels.emplace_back("compute xyz");
         ScopedTimer<> timer("compute xyz");
-        compute_iso_vert_xyz(iso_verts, funcVals, pts, iso_pts);
+        compute_MI_vert_xyz(MI_verts, funcVals, pts, MI_pts);
         timings.push_back(timer.toc());
     }
 
     //  compute iso-edges and edge-face connectivity
-    std::vector<Edge> iso_edges;
-    std::vector<std::vector<size_t>> edges_of_iso_face;
+    std::vector<Edge> MI_edges;
+    std::vector<std::vector<size_t>> edges_of_MI_face;
     {
-        timing_labels.emplace_back("isoEdge-face connectivity");
-        ScopedTimer<> timer("isoEdge-face connectivity");
-        compute_mesh_edges(iso_faces, edges_of_iso_face, iso_edges);
+        timing_labels.emplace_back("edge-face connectivity");
+        ScopedTimer<> timer("edge-face connectivity");
+        compute_mesh_edges(MI_faces, edges_of_MI_face, MI_edges);
         timings.push_back(timer.toc());
     }
     // std::cout << "num iso-edges = " << iso_edges.size() << std::endl;
@@ -280,17 +329,17 @@ int main(int argc, const char* argv[])
     {
         timing_labels.emplace_back("patches");
         ScopedTimer<> timer("patches");
-        compute_patches(edges_of_iso_face, iso_edges, patches);
+        compute_patches(edges_of_MI_face, MI_edges, patches);
         timings.push_back(timer.toc());
     }
     // std::cout << "num patches = " << patches.size() << std::endl;
 
-    // compute map: iso-face Id --> patch Id
+    // compute map: MI-face Id --> patch Id
     std::vector<size_t> patch_of_face;
     {
         timing_labels.emplace_back("face-patch map");
         ScopedTimer<> timer("face-patch map");
-        patch_of_face.resize(iso_faces.size());
+        patch_of_face.resize(MI_faces.size());
         for (size_t i = 0; i < patches.size(); i++) {
             for (const auto& fId : patches[i]) {
                 patch_of_face[fId] = i;
@@ -299,7 +348,6 @@ int main(int argc, const char* argv[])
         timings.push_back(timer.toc());
     }
 
-    // another approach: order patches around chains
 
     // group non-manifold iso-edges into chains
     std::vector<std::vector<size_t>> non_manifold_edges_of_vert;
@@ -307,60 +355,25 @@ int main(int argc, const char* argv[])
     {
         timing_labels.emplace_back("chains");
         ScopedTimer<> timer("chains");
-        non_manifold_edges_of_vert.resize(iso_pts.size());
-        // get incident non-manifold edges for iso-vertices
-        for (size_t i = 0; i < iso_edges.size(); i++) {
-            if (iso_edges[i].face_edge_indices.size() >
+        non_manifold_edges_of_vert.resize(MI_pts.size());
+        // get incident non-manifold edges for MI-vertices
+        for (size_t i = 0; i < MI_edges.size(); i++) {
+            if (MI_edges[i].face_edge_indices.size() >
                 2) { // non-manifold edge (not a boundary edge)
                 // there is only one patch incident to a boundary edge,
                 // so there is no need to figure out the "order" of patches around a boundary
                 // edge
-                non_manifold_edges_of_vert[iso_edges[i].v1].push_back(i);
-                non_manifold_edges_of_vert[iso_edges[i].v2].push_back(i);
+                non_manifold_edges_of_vert[MI_edges[i].v1].push_back(i);
+                non_manifold_edges_of_vert[MI_edges[i].v2].push_back(i);
             }
         }
         // group non-manifold iso-edges into chains
-        compute_chains(iso_edges, non_manifold_edges_of_vert, chains);
+        compute_chains(MI_edges, non_manifold_edges_of_vert, chains);
         timings.push_back(timer.toc());
     }
-//     std::cout << "num chains = " << chains.size() << std::endl;
+    //     std::cout << "num chains = " << chains.size() << std::endl;
 
-
-    //    {
-    //        timing_labels.emplace_back("vert-tet connectivity");
-    //        ScopedTimer<> timer("vert-tet connectivity(compact vec)");
-    //        // compute number of tets incident to each vertex
-    //        std::vector<int> num_incident_tets(n_pts, 0);
-    //        for (const auto& tet : tets) {
-    //            num_incident_tets[tet[0]] += 1;
-    //            num_incident_tets[tet[1]] += 1;
-    //            num_incident_tets[tet[2]] += 1;
-    //            num_incident_tets[tet[3]] += 1;
-    //        }
-    //        // get index of pts in
-    //        std::vector<int> pts_index(n_pts);
-    //        int curr_index = 0;
-    //        for (int i = 0; i < n_pts; ++i) {
-    //            pts_index[i] = curr_index;
-    //            curr_index += num_incident_tets[i];
-    //        }
-    //        //
-    //        std::vector<int> size_incident_tets(n_pts, 0);
-    //        std::vector<int> incident_tets(4 * n_tets);
-    //        for (int i = 0; i < n_tets; ++i) {
-    //            const auto& tet = tets[i];
-    //            incident_tets[pts_index[tet[0]] + size_incident_tets[tet[0]]] = i;
-    //            incident_tets[pts_index[tet[1]] + size_incident_tets[tet[1]]] = i;
-    //            incident_tets[pts_index[tet[2]] + size_incident_tets[tet[2]]] = i;
-    //            incident_tets[pts_index[tet[3]] + size_incident_tets[tet[3]]] = i;
-    //            size_incident_tets[tet[0]] += 1;
-    //            size_incident_tets[tet[1]] += 1;
-    //            size_incident_tets[tet[2]] += 1;
-    //            size_incident_tets[tet[3]] += 1;
-    //        }
-    //        timings.push_back(timer.toc());
-    //    }
-
+    // vert-tet connectivity
     absl::flat_hash_map<size_t, std::vector<size_t>> incident_tets;
     {
         timing_labels.emplace_back("vert-tet connectivity");
@@ -398,13 +411,13 @@ int main(int argc, const char* argv[])
         // order iso-faces incident to each representative iso-edge
         for (size_t i = 0; i < chain_representatives.size(); i++) {
             // first try: assume each representative edge is in the interior of a tetrahedron
-            const auto& iso_edge = iso_edges[chain_representatives[i]];
-            auto iso_face_id = iso_edge.face_edge_indices[0].first;
-            auto tet_id = iso_faces[iso_face_id].tet_face_indices[0].first;
-            compute_face_order_in_one_tet(
-                cut_results[cut_result_index[tet_id]], iso_faces, iso_edge, half_faces_list[i]);
+            const auto& MI_edge = MI_edges[chain_representatives[i]];
+            auto MI_face_id = MI_edge.face_edge_indices[0].first;
+            auto tet_id = MI_faces[MI_face_id].tet_face_indices[0].first;
+            compute_face_order_in_one_tet_MI(
+                cut_results[cut_result_index[tet_id]], MI_faces, MI_edge, half_faces_list[i]);
         }
-        // replace iso-face indices by patch indices
+        // replace MI-face indices by patch indices
         for (size_t i = 0; i < half_faces_list.size(); i++) {
             half_patch_list[i].resize(half_faces_list[i].size());
             for (size_t j = 0; j < half_faces_list[i].size(); j++) {
@@ -433,71 +446,69 @@ int main(int argc, const char* argv[])
             component_of_patch);
         timings.push_back(timer.toc());
     }
-//    std::cout << "num shells = " << shells.size() << std::endl;
-//    std::cout << "num components = " << components.size() << std::endl;
-
-    // resolve nesting order, compute arrangement cells
-    // an arrangement cell is represented by a list of bounding shells
-    std::vector<std::vector<size_t>> arrangement_cells;
+        std::cout << "num shells = " << shells.size() << std::endl;
+        std::cout << "num components = " << components.size() << std::endl;
+//
+    // resolve nesting order, compute material cells
+    // a material cell is represented by a list of bounding shells
+    std::vector<std::vector<size_t>> material_cells;
     std::vector<size_t> next_vert;
     std::vector<size_t> extremal_edge_of_component;
     {
-//        timing_labels.emplace_back("arrangement cells");
-        ScopedTimer<> timer("arrangement cells");
+        //        timing_labels.emplace_back("arrangement cells");
+        ScopedTimer<> timer("material cells");
         if (components.size() < 2) { // no nesting problem, each shell is an arrangement cell
-            arrangement_cells.reserve(shells.size());
+            material_cells.reserve(shells.size());
             for (size_t i = 0; i < shells.size(); ++i) {
-                arrangement_cells.emplace_back(1);
-                arrangement_cells.back()[0] = i;
+                material_cells.emplace_back(1);
+                material_cells.back()[0] = i;
             }
         } else { // resolve nesting order
             // map: tet vert index --> index of next vert (with smaller (x,y,z))
-//            std::vector<size_t> next_vert;
+            //            std::vector<size_t> next_vert;
             {
-                timing_labels.emplace_back("arrCells(build next_vert)");
-                ScopedTimer<> timer("arrangement cells: find next vert for each tet vertex");
+                timing_labels.emplace_back("matCells(build next_vert)");
+                ScopedTimer<> timer("material cells: find next vert for each tet vertex");
                 build_next_vert(pts, tets, next_vert);
                 timings.push_back(timer.toc());
             }
 
-            //
-
             // find extremal edge for each component
             // extremal edge of component i is stored at position [2*i], [2*i+1]
-//            std::vector<size_t> extremal_edge_of_component;
-            // store an iso-vert index on edge (v, v_next), None means there is no such iso-vert
-            std::vector<size_t> iso_vert_on_v_v_next;
+            //            std::vector<size_t> extremal_edge_of_component;
+            // store an MI-vert index on edge (v, v_next), None means there is no such MI-vert
+            std::vector<size_t> MI_vert_on_v_v_next;
             // map: (tet_id, tet_face_id) --> iso_face_id
-            absl::flat_hash_map<std::pair<size_t,size_t>, size_t> iso_face_id_of_tet_face;
+            absl::flat_hash_map<std::pair<size_t,size_t>, size_t> MI_face_id_of_tet_face;
             // map: (tet_id, tet_vert_id) --> (iso_vert_id, component_id)
-            absl::flat_hash_map<std::pair<size_t,size_t>, std::pair<size_t, size_t>> iso_vId_compId_of_tet_vert;
+            absl::flat_hash_map<std::pair<size_t,size_t>, std::pair<size_t, size_t>> MI_vId_compId_of_tet_vert;
             {
-                timing_labels.emplace_back("arrCells(find extremal edges)");
-                ScopedTimer<> timer("arrangement cells: find extremal edge for components");
-                extremal_edge_of_component.resize(2 * components.size(), Arrangement<3>::None);
-                iso_vert_on_v_v_next.resize(n_pts, Arrangement<3>::None);
-                iso_face_id_of_tet_face.reserve(iso_faces.size());
-                iso_vId_compId_of_tet_vert.reserve(iso_faces.size()/2);
+                timing_labels.emplace_back("matCells(find extremal edges)");
+                ScopedTimer<> timer("material cells: find extremal edge for components");
+                extremal_edge_of_component.resize(2 * components.size(), MaterialInterface<3>::None);
+                MI_vert_on_v_v_next.resize(n_pts, MaterialInterface<3>::None);
+                MI_face_id_of_tet_face.reserve(MI_faces.size());
+                MI_vId_compId_of_tet_vert.reserve(MI_faces.size()/2);
                 //
-                std::vector<bool> is_iso_vert_visited(iso_verts.size(), false);
+                std::vector<bool> is_MI_vert_visited(MI_verts.size(), false);
                 for (size_t i = 0; i < patches.size(); ++i) {
                     size_t component_id = component_of_patch[i];
                     auto& u1 = extremal_edge_of_component[2 * component_id];
                     auto& u2 = extremal_edge_of_component[2 * component_id + 1];
                     for (auto fId : patches[i]) {
-                        for (const auto& tet_face : iso_faces[fId].tet_face_indices) {
-                            iso_face_id_of_tet_face.try_emplace(tet_face, fId);
+                        for (const auto& tet_face : MI_faces[fId].tet_face_indices) {
+                            MI_face_id_of_tet_face.try_emplace(tet_face, fId);
                         }
-                        for (auto vId : iso_faces[fId].vert_indices) {
-                            if (!is_iso_vert_visited[vId]) {
-                                is_iso_vert_visited[vId] = true;
-                                const auto& vert = iso_verts[vId];
-                                if (vert.simplex_size == 2) { // edge iso-vertex
+                        for (auto vId : MI_faces[fId].vert_indices) {
+                            if (!is_MI_vert_visited[vId]) {
+                                is_MI_vert_visited[vId] = true;
+                                const auto& vert = MI_verts[vId];
+                                if (vert.simplex_size == 2) { // edge MI-vertex
                                     auto v1 = vert.simplex_vert_indices[0];
                                     auto v2 = vert.simplex_vert_indices[1];
                                     if (next_vert[v1] == v2) { // on tree edge v1 -> v2
                                         // update extremal edge
-                                        if (u1 == Arrangement<3>::None) {
+                                        if (u1 == MaterialInterface<3>::None) {
                                             u1 = v1;
                                             u2 = v2;
                                         } else {
@@ -513,14 +524,14 @@ int main(int argc, const char* argv[])
                                             }
                                         }
                                         // record an iso-vert on edge v1 -> v2
-                                        iso_vert_on_v_v_next[v1] = vId;
+                                        MI_vert_on_v_v_next[v1] = vId;
                                         // fill map
-                                        iso_vId_compId_of_tet_vert.try_emplace(
+                                        MI_vId_compId_of_tet_vert.try_emplace(
                                             std::make_pair(vert.tet_index,vert.tet_vert_index),
                                             std::make_pair(vId, component_id));
                                     } else if (next_vert[v2] == v1) { // on tree edge v2 -> v1
                                         // update extremal edge
-                                        if (u1 == Arrangement<3>::None) {
+                                        if (u1 == MaterialInterface<3>::None) {
                                             u1 = v2;
                                             u2 = v1;
                                         } else {
@@ -536,9 +547,9 @@ int main(int argc, const char* argv[])
                                             }
                                         }
                                         // record an iso-vert on v2 -> v1
-                                        iso_vert_on_v_v_next[v2] = vId;
+                                        MI_vert_on_v_v_next[v2] = vId;
                                         // fill map
-                                        iso_vId_compId_of_tet_vert.try_emplace(
+                                        MI_vId_compId_of_tet_vert.try_emplace(
                                             std::make_pair(vert.tet_index,vert.tet_vert_index),
                                             std::make_pair(vId, component_id));
                                     }
@@ -553,8 +564,8 @@ int main(int argc, const char* argv[])
             // topological ray shooting
             std::vector<std::pair<size_t,size_t>> shell_links;
             {
-                timing_labels.emplace_back("arrCells(ray shooting)");
-                ScopedTimer<> timer("arrangement cells: topo ray shooting");
+                timing_labels.emplace_back("matCells(ray shooting)");
+                ScopedTimer<> timer("material cells: topo ray shooting");
                 shell_links.reserve(components.size());
                 std::vector<size_t> sorted_vert_indices_on_edge;
                 sorted_vert_indices_on_edge.reserve(3);
@@ -562,8 +573,8 @@ int main(int argc, const char* argv[])
                     // extremal edge: v1 -> v2
                     auto extreme_v1 = extremal_edge_of_component[2 * i];
                     auto extreme_v2 = extremal_edge_of_component[2 * i + 1];
-                    auto iso_vId = iso_vert_on_v_v_next[extreme_v1];
-                    auto tetId = iso_verts[iso_vId].tet_index;
+                    auto MI_vId = MI_vert_on_v_v_next[extreme_v1];
+                    auto tetId = MI_verts[MI_vId].tet_index;
                     const auto& tet_cut_result = cut_results[cut_result_index[tetId]];
                     // get local index of v1 and v2 in the tet
                     size_t local_v1, local_v2;
@@ -574,70 +585,70 @@ int main(int argc, const char* argv[])
                             local_v2 = j;
                         }
                     }
-//                    std::cout << "local_v1 = " << local_v1 << std::endl;
-//                    std::cout << "local_v2 = " << local_v2 << std::endl;
+                    //                    std::cout << "local_v1 = " << local_v1 << std::endl;
+                    //                    std::cout << "local_v2 = " << local_v2 << std::endl;
                     // get an ordered list of vertices on edge v1 -> v2
                     sorted_vert_indices_on_edge.clear();
-                    compute_edge_intersection_order(tet_cut_result, local_v1, local_v2, sorted_vert_indices_on_edge);
+                    compute_edge_intersection_order_MI(tet_cut_result, local_v1, local_v2, sorted_vert_indices_on_edge);
                     //
-//                    std::cout << "sorted_vert_indices_on_edge" << std::endl;
-//                    for (auto vId : sorted_vert_indices_on_edge) {
-//                        std::cout << vId << ", ";
-//                    }
-//                    std::cout << std::endl;
+                    //                    std::cout << "sorted_vert_indices_on_edge" << std::endl;
+                    //                    for (auto vId : sorted_vert_indices_on_edge) {
+                    //                        std::cout << vId << ", ";
+                    //                    }
+                    //                    std::cout << std::endl;
                     //
-//                    std::cout << "sorted iso-verts on edge: list of (iso-vId, compId)" << std::endl;
-//                    for (int j = 1; j+1 < sorted_vert_indices_on_edge.size(); ++j) {
-//                        const auto& iso_vId_compId =
-//                            iso_vId_compId_of_tet_vert[std::make_pair(tetId, sorted_vert_indices_on_edge[j])];
-//                        std::cout << "(" << iso_vId_compId.first << "," << iso_vId_compId.second << ") ";
-//                    }
-//                    std::cout << std::endl;
+                    //                    std::cout << "sorted iso-verts on edge: list of (iso-vId, compId)" << std::endl;
+                    //                    for (int j = 1; j+1 < sorted_vert_indices_on_edge.size(); ++j) {
+                    //                        const auto& iso_vId_compId =
+                    //                            iso_vId_compId_of_tet_vert[std::make_pair(tetId, sorted_vert_indices_on_edge[j])];
+                    //                        std::cout << "(" << iso_vId_compId.first << "," << iso_vId_compId.second << ") ";
+                    //                    }
+                    //                    std::cout << std::endl;
                     //
                     // find the vertex v_start on v1->v2
                     // 1. on current component
                     // 2. nearest to v2
                     size_t j_start;
                     for (size_t j = 0; j+1 < sorted_vert_indices_on_edge.size(); ++j) {
-                        const auto& iso_vId_compId =
-                            iso_vId_compId_of_tet_vert[std::make_pair(tetId, sorted_vert_indices_on_edge[j])];
-                        if (iso_vId_compId.second == i) {
+                        const auto& MI_vId_compId =
+                            MI_vId_compId_of_tet_vert[std::make_pair(tetId, sorted_vert_indices_on_edge[j])];
+                        if (MI_vId_compId.second == i) {
                             j_start = j;
                         }
                     }
                     if (j_start + 2 < sorted_vert_indices_on_edge.size()) {
                         // there is a vert from another component between v_start -> v2
                         std::pair<size_t, int> face_orient1, face_orient2;
-                        compute_passing_face_pair(tet_cut_result,
+                        compute_passing_face_pair_MI(tet_cut_result,
                             sorted_vert_indices_on_edge[j_start], sorted_vert_indices_on_edge[j_start+1],
                             face_orient1, face_orient2);
-                        size_t iso_fId1 = iso_face_id_of_tet_face[std::make_pair(tetId, face_orient1.first)];
-                        size_t iso_fId2 = iso_face_id_of_tet_face[std::make_pair(tetId, face_orient2.first)];
-                        size_t shell1 = (face_orient1.second == 1) ? shell_of_half_patch[2 * patch_of_face[iso_fId1]] :
-                                        shell_of_half_patch[2 * patch_of_face[iso_fId1] + 1];
-                        size_t shell2 = (face_orient2.second == 1) ? shell_of_half_patch[2 * patch_of_face[iso_fId2]] :
-                                        shell_of_half_patch[2 * patch_of_face[iso_fId2] + 1];
+                        size_t MI_fId1 = MI_face_id_of_tet_face[std::make_pair(tetId, face_orient1.first)];
+                        size_t MI_fId2 = MI_face_id_of_tet_face[std::make_pair(tetId, face_orient2.first)];
+                        size_t shell1 = (face_orient1.second == 1) ? shell_of_half_patch[2 * patch_of_face[MI_fId1]] :
+                                                                   shell_of_half_patch[2 * patch_of_face[MI_fId1] + 1];
+                        size_t shell2 = (face_orient2.second == 1) ? shell_of_half_patch[2 * patch_of_face[MI_fId2]] :
+                                                                   shell_of_half_patch[2 * patch_of_face[MI_fId2] + 1];
                         // link shell1 with shell2
                         shell_links.emplace_back(shell1, shell2);
                     } else {
                         // there is no vert between v_start -> v2
                         std::pair<size_t, int> face_orient;
-                        compute_passing_face(tet_cut_result,
+                        compute_passing_face_MI(tet_cut_result,
                             sorted_vert_indices_on_edge[j_start], sorted_vert_indices_on_edge.back(),
                             face_orient);
-                        size_t iso_fId = iso_face_id_of_tet_face[std::make_pair(tetId, face_orient.first)];
-                        size_t shell_start = (face_orient.second == 1) ? shell_of_half_patch[2 * patch_of_face[iso_fId]] :
-                                            shell_of_half_patch[2 * patch_of_face[iso_fId] + 1];
+                        size_t MI_fId = MI_face_id_of_tet_face[std::make_pair(tetId, face_orient.first)];
+                        size_t shell_start = (face_orient.second == 1) ? shell_of_half_patch[2 * patch_of_face[MI_fId]] :
+                                                                       shell_of_half_patch[2 * patch_of_face[MI_fId] + 1];
                         // follow the ray till another iso-vertex or the sink
                         auto v_curr = extreme_v2;
-                        while (next_vert[v_curr] != Arrangement<3>::None &&
-                            iso_vert_on_v_v_next[v_curr] == Arrangement<3>::None) {
+                        while (next_vert[v_curr] != MaterialInterface<3>::None &&
+                               MI_vert_on_v_v_next[v_curr] == MaterialInterface<3>::None) {
                             v_curr = next_vert[v_curr];
                         }
-                        if (iso_vert_on_v_v_next[v_curr] != Arrangement<3>::None) {
+                        if (MI_vert_on_v_v_next[v_curr] != MaterialInterface<3>::None) {
                             // reached iso-vert at end of the ray
-                            auto iso_vId_end = iso_vert_on_v_v_next[v_curr];
-                            auto end_tetId = iso_verts[iso_vId_end].tet_index;
+                            auto MI_vId_end = MI_vert_on_v_v_next[v_curr];
+                            auto end_tetId = MI_verts[MI_vId_end].tet_index;
                             const auto& end_tet_cut_result = cut_results[cut_result_index[end_tetId]];
                             auto v_next = next_vert[v_curr];
                             // find local vertex indices in the end tetrahedron
@@ -650,89 +661,89 @@ int main(int argc, const char* argv[])
                             }
                             // get an ordered list of vertices on edge v_curr -> v_next
                             sorted_vert_indices_on_edge.clear();
-                            compute_edge_intersection_order(end_tet_cut_result, local_v1, local_v2, sorted_vert_indices_on_edge);
+                            compute_edge_intersection_order_MI(end_tet_cut_result, local_v1, local_v2, sorted_vert_indices_on_edge);
                             // find the end shell
-                            compute_passing_face(end_tet_cut_result,
+                            compute_passing_face_MI(end_tet_cut_result,
                                 sorted_vert_indices_on_edge[1], sorted_vert_indices_on_edge.front(),
                                 face_orient);
-                            iso_fId = iso_face_id_of_tet_face[std::make_pair(end_tetId, face_orient.first)];
-                            size_t shell_end = (face_orient.second == 1) ? shell_of_half_patch[2 * patch_of_face[iso_fId]] :
-                                                                           shell_of_half_patch[2 * patch_of_face[iso_fId] + 1];
+                            MI_fId = MI_face_id_of_tet_face[std::make_pair(end_tetId, face_orient.first)];
+                            size_t shell_end = (face_orient.second == 1) ? shell_of_half_patch[2 * patch_of_face[MI_fId]] :
+                                                                         shell_of_half_patch[2 * patch_of_face[MI_fId] + 1];
                             // link start shell with end shell
                             shell_links.emplace_back(shell_start, shell_end);
                         } else {
                             // next_vert[v_curr] is None, v_curr is the sink vertex
                             // link shell_start with the sink
-                            shell_links.emplace_back(shell_start, Arrangement<3>::None);
+                            shell_links.emplace_back(shell_start, MaterialInterface<3>::None);
                         }
                     }
                 }
                 timings.push_back(timer.toc());
             }
-//            std::cout << "shell_links = " << std::endl;
-//            for(const auto& link : shell_links) {
-//                std::cout << "(" << link.first << "," << link.second << ") ";
-//            }
-//            std::cout << std::endl;
+            //            std::cout << "shell_links = " << std::endl;
+            //            for(const auto& link : shell_links) {
+            //                std::cout << "(" << link.first << "," << link.second << ") ";
+            //            }
+            //            std::cout << std::endl;
 
             //group shells into arrangement cells
             {
-                timing_labels.emplace_back("arrCells(group shells into arrCells)");
-                ScopedTimer<> timer("arrangement cells: group shells into arrangement cells");
-                compute_arrangement_cells(shells.size(), shell_links, arrangement_cells);
+                timing_labels.emplace_back("matCells(group shells into matCells)");
+                ScopedTimer<> timer("material cells: group shells into material cells");
+                compute_arrangement_cells(shells.size(), shell_links, material_cells);
                 timings.push_back(timer.toc());
             }
-//            std::cout << "arrangement cells = " << std::endl;
-//            for (const auto& arr_cell : arrangement_cells) {
-//                std::cout << "(";
-//                for (auto s : arr_cell) {
-//                    std::cout << s << ", ";
-//                }
-//                std::cout << ")" << std::endl;
-//            }
+            //            std::cout << "arrangement cells = " << std::endl;
+            //            for (const auto& arr_cell : material_cells) {
+            //                std::cout << "(";
+            //                for (auto s : arr_cell) {
+            //                    std::cout << s << ", ";
+            //                }
+            //                std::cout << ")" << std::endl;
+            //            }
         }
         timings.push_back(timer.toc());
-        timing_labels.emplace_back("arrangement cells");
+        timing_labels.emplace_back("material cells");
     }
-    std::cout << "num_cells = " << arrangement_cells.size() << std::endl;
+    std::cout << "num_cells = " << material_cells.size() << std::endl;
     if (components.size() > 1) {
-        timing_labels.emplace_back("arrCells(other)");
+        timing_labels.emplace_back("matCells(other)");
         size_t num_timings = timings.size();
         timings.push_back(timings[num_timings-1] - timings[num_timings-2]
-            - timings[num_timings-3] - timings[num_timings-4] - timings[num_timings-5] - timings[num_timings-6]);
+                          - timings[num_timings-3] - timings[num_timings-4] - timings[num_timings-5] - timings[num_timings-6]);
     }
 
 
-    // test: export iso-mesh, patches, chains
+    // test: export mesh, patches, chains
     if (!args.timing_only) {
-        save_result(output_dir + "/iso_mesh.json",
-            iso_pts,
-            iso_faces,
+        save_result_MI(output_dir + "/MI_mesh.json",
+            MI_pts,
+            MI_faces,
             patches,
-            iso_edges,
+            MI_edges,
             chains,
             non_manifold_edges_of_vert,
             half_patch_list,
             shells,
             components,
-            arrangement_cells);
-        save_result_msh(output_dir + "/iso_mesh",
-            iso_pts,
-            iso_faces,
+            material_cells);
+        save_result_msh(output_dir + "/MI_mesh",
+            MI_pts,
+            MI_faces,
             patches,
-            iso_edges,
+            MI_edges,
             chains,
             non_manifold_edges_of_vert,
             half_patch_list,
             shells,
             components,
-            arrangement_cells);
+            material_cells);
         //
-        if (components.size() > 1) {
-            save_nesting_data(output_dir + "/nesting_data.json",
-                next_vert,
-                extremal_edge_of_component);
-        }
+//        if (components.size() > 1) {
+//            save_nesting_data(output_dir + "/nesting_data.json",
+//                next_vert,
+//                extremal_edge_of_component);
+//        }
     }
     // test: export timings
     save_timings(output_dir + "/timings.json", timing_labels, timings);
