@@ -92,6 +92,7 @@ struct MaterialInterface
     std::vector<Face> faces;
     std::vector<Cell> cells;
 
+    // Note: The following fields will be empty if all materials are unique.
     std::vector<size_t> unique_material_indices;
     std::vector<std::vector<size_t>> unique_materials;
 };

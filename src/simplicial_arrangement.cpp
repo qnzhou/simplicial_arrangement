@@ -14,8 +14,7 @@ Arrangement<DIM> compute_arrangement_impl(const std::vector<Plane<Scalar, DIM>>&
     //SimplicialArrangementBuilder<Scalar, DIM> builder(planes);
     //return builder.extract_arrangement();
 
-    ArrangementBuilder<Scalar, DIM> builder(planes);
-    return builder.export_arrangement();
+    return ArrangementBuilder<Scalar, DIM>(planes).export_arrangement();
 }
 
 template <typename Scalar>

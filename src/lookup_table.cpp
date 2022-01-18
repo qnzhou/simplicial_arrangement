@@ -285,26 +285,18 @@ size_t mi_compute_outer_index_impl(
     if (m0[2] == m1[2]) return INVALID;
     if (m0[3] == m1[3]) return INVALID;
 
-    size_t index = 0;
+    size_t index = 3510; // = 2 | 4 | 16 | 32 | 128 | 256 | 1024 | 2048
 
     // To reuse the 3 material lookup table, we assume we have an imaginary
     // material, m2, which is smaller than both m0 and m1.
 
     if (m0[0] > m1[0]) index |= 1;
-    index |= 2;
-    index |= 4;
 
     if (m0[1] > m1[1]) index |= 8;
-    index |= 16;
-    index |= 32;
 
     if (m0[2] > m1[2]) index |= 64;
-    index |= 128;
-    index |= 256;
 
     if (m0[3] > m1[3]) index |= 512;
-    index |= 1024;
-    index |= 2048;
 
     return index;
 }

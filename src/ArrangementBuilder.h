@@ -41,7 +41,7 @@ public:
 
     const Arrangement<DIM>& get_arrangement() const { return m_arrangement; }
     Arrangement<DIM>& get_arrangement() { return m_arrangement; }
-    Arrangement<DIM> export_arrangement() { return std::move(m_arrangement); }
+    Arrangement<DIM>&& export_arrangement() && { return std::move(m_arrangement); }
 
 private:
     void extract_unique_planes()
