@@ -6,8 +6,7 @@ namespace simplicial_arrangement {
 template <typename Scalar, int DIM>
 MaterialInterface<DIM> compute_material_interface_impl(const std::vector<Material<Scalar, DIM>>& materials)
 {
-    MaterialInterfaceBuilder<Scalar, DIM> builder(materials);
-    return builder.get_material_interface();
+    return MaterialInterfaceBuilder<Scalar, DIM>(materials).export_material_interface();
 }
 
 MaterialInterface<2> compute_material_interface(const std::vector<Material<double, 2>>& materials)
