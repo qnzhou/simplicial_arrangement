@@ -104,6 +104,8 @@ struct Arrangement
     std::vector<Face> faces;
     std::vector<Cell> cells;
 
+    // Note: the following structure is only non-empty if input planes contain
+    // duplicates.
     std::vector<size_t> unique_plane_indices;
     std::vector<std::vector<size_t>> unique_planes;
     std::vector<bool> unique_plane_orientations;

@@ -681,6 +681,7 @@ void extract_iso_mesh(const std::vector<bool>& has_isosurface,
             const auto& arrangement = cut_results[i];
             const auto& vertices = arrangement.vertices;
             const auto& faces = arrangement.faces;
+            const bool all_unique = arrangement.unique_planes.empty();
             const auto& func_ids = func_in_tet.row(i);
             auto num_func = num_func_in_tet(i);
             // find vertices and faces on isosurface
@@ -688,14 +689,23 @@ void extract_iso_mesh(const std::vector<bool>& has_isosurface,
             std::vector<bool> is_iso_face(faces.size(), false);
             for (size_t j = 0; j < faces.size(); j++) {
                 auto pid = faces[j].supporting_plane;
-                auto uid = arrangement.unique_plane_indices[pid];
-                for (const auto& plane_id : arrangement.unique_planes[uid]) {
-                    if (plane_id > 3) { // plane 0,1,2,3 are tet boundaries
+                if (all_unique) {
+                    if (pid > 3) {
                         is_iso_face[j] = true;
                         for (const auto& vid : faces[j].vertices) {
                             is_iso_vert[vid] = true;
                         }
-                        break;
+                    }
+                } else {
+                    auto uid = arrangement.unique_plane_indices[pid];
+                    for (const auto& plane_id : arrangement.unique_planes[uid]) {
+                        if (plane_id > 3) { // plane 0,1,2,3 are tet boundaries
+                            is_iso_face[j] = true;
+                            for (const auto& vid : faces[j].vertices) {
+                                is_iso_vert[vid] = true;
+                            }
+                            break;
+                        }
                     }
                 }
             }
@@ -928,6 +938,7 @@ void extract_iso_mesh_pure(size_t num_1_func,
             const auto& arrangement = cut_results[cut_result_index[i]];
             const auto& vertices = arrangement.vertices;
             const auto& faces = arrangement.faces;
+            const bool all_unique = arrangement.unique_planes.empty();
             //            const auto& func_ids = func_in_tet.row(i);
             //            auto num_func = num_func_in_tet(i);
             auto start_index = start_index_of_tet[i];
@@ -943,15 +954,24 @@ void extract_iso_mesh_pure(size_t num_1_func,
             for (size_t j = 0; j < faces.size(); j++) {
                 is_iso_face.push_back(false);
                 auto pid = faces[j].supporting_plane;
-                auto uid = arrangement.unique_plane_indices[pid];
-                for (const auto& plane_id : arrangement.unique_planes[uid]) {
-                    if (plane_id > 3) { // plane 0,1,2,3 are tet boundaries
-                        //                        is_iso_face[j] = true;
+                if (all_unique) {
+                    if (pid > 3) {
                         is_iso_face.back() = true;
                         for (const auto& vid : faces[j].vertices) {
                             is_iso_vert[vid] = true;
                         }
-                        break;
+                    }
+                } else {
+                    auto uid = arrangement.unique_plane_indices[pid];
+                    for (const auto& plane_id : arrangement.unique_planes[uid]) {
+                        if (plane_id > 3) { // plane 0,1,2,3 are tet boundaries
+                            //                        is_iso_face[j] = true;
+                            is_iso_face.back() = true;
+                            for (const auto& vid : faces[j].vertices) {
+                                is_iso_vert[vid] = true;
+                            }
+                            break;
+                        }
                     }
                 }
             }
@@ -1205,6 +1225,7 @@ void extract_iso_mesh_marching_tet(const std::vector<bool>& has_isosurface,
             const auto& arrangement = cut_results[i];
             const auto& vertices = arrangement.vertices;
             const auto& faces = arrangement.faces;
+            const bool all_unique = arrangement.unique_planes.empty();
             // const auto& func_ids = func_in_tet[i];
             //auto num_func = func_ids.size();  // num_func = 1
             // find vertices and faces on isosurface
@@ -1212,14 +1233,23 @@ void extract_iso_mesh_marching_tet(const std::vector<bool>& has_isosurface,
             std::vector<bool> is_iso_face(faces.size(), false);
             for (size_t j = 0; j < faces.size(); j++) {
                 auto pid = faces[j].supporting_plane;
-                auto uid = arrangement.unique_plane_indices[pid];
-                for (const auto& plane_id : arrangement.unique_planes[uid]) {
-                    if (plane_id > 3) { // plane 0,1,2,3 are tet boundaries
+                if (all_unique) {
+                    if (pid > 3) {
                         is_iso_face[j] = true;
                         for (const auto& vid : faces[j].vertices) {
                             is_iso_vert[vid] = true;
                         }
-                        break;
+                    }
+                } else {
+                    auto uid = arrangement.unique_plane_indices[pid];
+                    for (const auto& plane_id : arrangement.unique_planes[uid]) {
+                        if (plane_id > 3) { // plane 0,1,2,3 are tet boundaries
+                            is_iso_face[j] = true;
+                            for (const auto& vid : faces[j].vertices) {
+                                is_iso_vert[vid] = true;
+                            }
+                            break;
+                        }
                     }
                 }
             }
