@@ -81,23 +81,6 @@ struct Arrangement
          * A set of boundary face indices in no particular order.
          */
         std::vector<size_t> faces;
-
-        /**
-         * The orientation of each boundary face with respect to this cell.
-         * `face_orientations[i] == true` means this cell is on the positive
-         * side of faces[i].
-         */
-        std::vector<bool> face_orientations;
-
-        /**
-         * The orientation with respect to all planes.
-         * `plane_orientations[i] == true` means this cell is on the positive
-         * side of plane i.
-         *
-         * TODO: This field contains an super set of the data stored in
-         * `face_orientations`.  We probably should just keep one of them.
-         */
-        std::vector<bool> plane_orientations;
     };
 
     std::vector<Point<DIM>> vertices;
