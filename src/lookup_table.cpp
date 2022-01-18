@@ -203,16 +203,6 @@ void load_arrangement(Arrangement<3>& arrangement, const nlohmann::json& data)
     for (size_t j = 0; j < cells.size(); j++) {
         auto& cell = cells[j];
         load_vector(cell.faces, data[5][j]);
-        load_vector(cell.face_orientations, data[6][j]);
-        // the first 4 planes are tet boundary, and the tet lies on the positive side of its
-        // boundary
-        cell.plane_orientations = std::vector<bool>(4, true);
-        std::vector<bool> cell_input_plane_orientations;
-        load_vector(cell_input_plane_orientations, data[7][j]);
-        for (bool orient : cell_input_plane_orientations) {
-            cell.plane_orientations.push_back(orient);
-        }
-        // load_vector(cell.plane_orientations, data[7][j]);
     }
     //
     load_vector(arrangement.unique_plane_indices, data[8]);
