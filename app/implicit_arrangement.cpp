@@ -7,6 +7,7 @@
 #include "ScopedTimer.h"
 
 #include <absl/container/flat_hash_map.h>
+#include <absl/container/flat_hash_set.h>
 #include <CLI/CLI.hpp>
 #include <Eigen/Core>
 
@@ -35,11 +36,19 @@ int main(int argc, const char* argv[])
     std::string output_dir;
     bool use_lookup = true;
     bool use_2func_lookup = true;
+    bool use_topo_ray_shooting = true;
     bool use_bbox = true;
-    std::array<double,3> bbox_min, bbox_max;
-    parse_config_file(args.config_file, tet_mesh_file, sphere_file, output_dir,
-        use_lookup, use_2func_lookup,
-        use_bbox, bbox_min, bbox_max);
+    std::array<double, 3> bbox_min, bbox_max;
+    parse_config_file(args.config_file,
+        tet_mesh_file,
+        sphere_file,
+        output_dir,
+        use_lookup,
+        use_2func_lookup,
+        use_topo_ray_shooting,
+        use_bbox,
+        bbox_min,
+        bbox_max);
     //    std::string config_path = args.config_file.substr(0, args.config_file.find_last_of('/'));
     //    std::cout << "config path: " << config_path << std::endl;
     //    tet_mesh_file = config_path + "/" + tet_mesh_file;
@@ -236,19 +245,43 @@ int main(int argc, const char* argv[])
     // extract arrangement mesh
     std::vector<IsoVert> iso_verts;
     std::vector<PolygonFace> iso_faces;
+    // the following data are only needed when we use
+    // the baseline nesting algorithm
+    // (group simplicial cells into arrangement cells)
+    std::vector<long long> global_vId_of_tet_vert;
+    std::vector<size_t> global_vId_start_index_of_tet;
+    std::vector<size_t> iso_fId_of_tet_face;
+    std::vector<size_t> iso_fId_start_index_of_tet;
     {
         timing_labels.emplace_back("extract mesh");
         ScopedTimer<> timer("extract mesh");
-        extract_iso_mesh_pure(num_1_func,
-            num_2_func,
-            num_more_func,
-            cut_results,
-            cut_result_index,
-            func_in_tet,
-            start_index_of_tet,
-            tets,
-            iso_verts,
-            iso_faces);
+        if (use_topo_ray_shooting) {
+            extract_iso_mesh_pure(num_1_func,
+                num_2_func,
+                num_more_func,
+                cut_results,
+                cut_result_index,
+                func_in_tet,
+                start_index_of_tet,
+                tets,
+                iso_verts,
+                iso_faces);
+        } else { // nesting algorithm: group simplicial cells into arrangement cells
+            extract_iso_mesh(num_1_func,
+                num_2_func,
+                num_more_func,
+                cut_results,
+                cut_result_index,
+                func_in_tet,
+                start_index_of_tet,
+                tets,
+                iso_verts,
+                iso_faces,
+                global_vId_of_tet_vert,
+                global_vId_start_index_of_tet,
+                iso_fId_of_tet_face,
+                iso_fId_start_index_of_tet);
+        }
         timings.push_back(timer.toc());
     }
     std::cout << "num iso-vertices = " << iso_verts.size() << std::endl;
@@ -299,8 +332,6 @@ int main(int argc, const char* argv[])
         timings.push_back(timer.toc());
     }
 
-    // another approach: order patches around chains
-
     // group non-manifold iso-edges into chains
     std::vector<std::vector<size_t>> non_manifold_edges_of_vert;
     std::vector<std::vector<size_t>> chains;
@@ -323,43 +354,8 @@ int main(int argc, const char* argv[])
         compute_chains(iso_edges, non_manifold_edges_of_vert, chains);
         timings.push_back(timer.toc());
     }
-//     std::cout << "num chains = " << chains.size() << std::endl;
+    //     std::cout << "num chains = " << chains.size() << std::endl;
 
-
-    //    {
-    //        timing_labels.emplace_back("vert-tet connectivity");
-    //        ScopedTimer<> timer("vert-tet connectivity(compact vec)");
-    //        // compute number of tets incident to each vertex
-    //        std::vector<int> num_incident_tets(n_pts, 0);
-    //        for (const auto& tet : tets) {
-    //            num_incident_tets[tet[0]] += 1;
-    //            num_incident_tets[tet[1]] += 1;
-    //            num_incident_tets[tet[2]] += 1;
-    //            num_incident_tets[tet[3]] += 1;
-    //        }
-    //        // get index of pts in
-    //        std::vector<int> pts_index(n_pts);
-    //        int curr_index = 0;
-    //        for (int i = 0; i < n_pts; ++i) {
-    //            pts_index[i] = curr_index;
-    //            curr_index += num_incident_tets[i];
-    //        }
-    //        //
-    //        std::vector<int> size_incident_tets(n_pts, 0);
-    //        std::vector<int> incident_tets(4 * n_tets);
-    //        for (int i = 0; i < n_tets; ++i) {
-    //            const auto& tet = tets[i];
-    //            incident_tets[pts_index[tet[0]] + size_incident_tets[tet[0]]] = i;
-    //            incident_tets[pts_index[tet[1]] + size_incident_tets[tet[1]]] = i;
-    //            incident_tets[pts_index[tet[2]] + size_incident_tets[tet[2]]] = i;
-    //            incident_tets[pts_index[tet[3]] + size_incident_tets[tet[3]]] = i;
-    //            size_incident_tets[tet[0]] += 1;
-    //            size_incident_tets[tet[1]] += 1;
-    //            size_incident_tets[tet[2]] += 1;
-    //            size_incident_tets[tet[3]] += 1;
-    //        }
-    //        timings.push_back(timer.toc());
-    //    }
 
     absl::flat_hash_map<size_t, std::vector<size_t>> incident_tets;
     {
@@ -433,8 +429,8 @@ int main(int argc, const char* argv[])
             component_of_patch);
         timings.push_back(timer.toc());
     }
-//    std::cout << "num shells = " << shells.size() << std::endl;
-//    std::cout << "num components = " << components.size() << std::endl;
+    //    std::cout << "num shells = " << shells.size() << std::endl;
+    //    std::cout << "num components = " << components.size() << std::endl;
 
     // resolve nesting order, compute arrangement cells
     // an arrangement cell is represented by a list of bounding shells
@@ -442,7 +438,6 @@ int main(int argc, const char* argv[])
     std::vector<size_t> next_vert;
     std::vector<size_t> extremal_edge_of_component;
     {
-//        timing_labels.emplace_back("arrangement cells");
         ScopedTimer<> timer("arrangement cells");
         if (components.size() < 2) { // no nesting problem, each shell is an arrangement cell
             arrangement_cells.reserve(shells.size());
@@ -451,257 +446,484 @@ int main(int argc, const char* argv[])
                 arrangement_cells.back()[0] = i;
             }
         } else { // resolve nesting order
-            // map: tet vert index --> index of next vert (with smaller (x,y,z))
-//            std::vector<size_t> next_vert;
-            {
-                timing_labels.emplace_back("arrCells(build next_vert)");
-                ScopedTimer<> timer("arrangement cells: find next vert for each tet vertex");
-                build_next_vert(pts, tets, next_vert);
-                timings.push_back(timer.toc());
-            }
+            if (use_topo_ray_shooting) {
+                // map: tet vert index --> index of next vert (with smaller (x,y,z))
+                //            std::vector<size_t> next_vert;
+                {
+                    timing_labels.emplace_back("arrCells(build next_vert)");
+                    ScopedTimer<> timer("arrangement cells: find next vert for each tet vertex");
+                    build_next_vert(pts, tets, next_vert);
+                    timings.push_back(timer.toc());
+                }
 
-            //
-
-            // find extremal edge for each component
-            // extremal edge of component i is stored at position [2*i], [2*i+1]
-//            std::vector<size_t> extremal_edge_of_component;
-            // store an iso-vert index on edge (v, v_next), None means there is no such iso-vert
-            std::vector<size_t> iso_vert_on_v_v_next;
-            // map: (tet_id, tet_face_id) --> iso_face_id
-            absl::flat_hash_map<std::pair<size_t,size_t>, size_t> iso_face_id_of_tet_face;
-            // map: (tet_id, tet_vert_id) --> (iso_vert_id, component_id)
-            absl::flat_hash_map<std::pair<size_t,size_t>, std::pair<size_t, size_t>> iso_vId_compId_of_tet_vert;
-            {
-                timing_labels.emplace_back("arrCells(find extremal edges)");
-                ScopedTimer<> timer("arrangement cells: find extremal edge for components");
-                extremal_edge_of_component.resize(2 * components.size(), Arrangement<3>::None);
-                iso_vert_on_v_v_next.resize(n_pts, Arrangement<3>::None);
-                iso_face_id_of_tet_face.reserve(iso_faces.size());
-                iso_vId_compId_of_tet_vert.reserve(iso_faces.size()/2);
                 //
-                std::vector<bool> is_iso_vert_visited(iso_verts.size(), false);
-                for (size_t i = 0; i < patches.size(); ++i) {
-                    size_t component_id = component_of_patch[i];
-                    auto& u1 = extremal_edge_of_component[2 * component_id];
-                    auto& u2 = extremal_edge_of_component[2 * component_id + 1];
-                    for (auto fId : patches[i]) {
-                        for (const auto& tet_face : iso_faces[fId].tet_face_indices) {
-                            iso_face_id_of_tet_face.try_emplace(tet_face, fId);
-                        }
-                        for (auto vId : iso_faces[fId].vert_indices) {
-                            if (!is_iso_vert_visited[vId]) {
-                                is_iso_vert_visited[vId] = true;
-                                const auto& vert = iso_verts[vId];
-                                if (vert.simplex_size == 2) { // edge iso-vertex
-                                    auto v1 = vert.simplex_vert_indices[0];
-                                    auto v2 = vert.simplex_vert_indices[1];
-                                    if (next_vert[v1] == v2) { // on tree edge v1 -> v2
-                                        // update extremal edge
-                                        if (u1 == Arrangement<3>::None) {
-                                            u1 = v1;
-                                            u2 = v2;
-                                        } else {
-                                            if (v2 == u2) {
-                                                if (point_xyz_less(pts[v1], pts[u1]))
-                                                {
-                                                    u1 = v1;
-                                                }
-                                            } else if (point_xyz_less(pts[v2], pts[u2]))
-                                            {
+                // find extremal edge for each component
+                // extremal edge of component i is stored at position [2*i], [2*i+1]
+                //            std::vector<size_t> extremal_edge_of_component;
+                // store an iso-vert index on edge (v, v_next), None means there is no such iso-vert
+                std::vector<size_t> iso_vert_on_v_v_next;
+                // map: (tet_id, tet_face_id) --> iso_face_id
+                absl::flat_hash_map<std::pair<size_t, size_t>, size_t> iso_face_id_of_tet_face;
+                // map: (tet_id, tet_vert_id) --> (iso_vert_id, component_id)
+                absl::flat_hash_map<std::pair<size_t, size_t>, std::pair<size_t, size_t>>
+                    iso_vId_compId_of_tet_vert;
+                {
+                    timing_labels.emplace_back("arrCells(find extremal edges)");
+                    ScopedTimer<> timer("arrangement cells: find extremal edge for components");
+                    extremal_edge_of_component.resize(2 * components.size(), Arrangement<3>::None);
+                    iso_vert_on_v_v_next.resize(n_pts, Arrangement<3>::None);
+                    iso_face_id_of_tet_face.reserve(iso_faces.size());
+                    iso_vId_compId_of_tet_vert.reserve(iso_faces.size() / 2);
+                    //
+                    std::vector<bool> is_iso_vert_visited(iso_verts.size(), false);
+                    for (size_t i = 0; i < patches.size(); ++i) {
+                        size_t component_id = component_of_patch[i];
+                        auto& u1 = extremal_edge_of_component[2 * component_id];
+                        auto& u2 = extremal_edge_of_component[2 * component_id + 1];
+                        for (auto fId : patches[i]) {
+                            for (const auto& tet_face : iso_faces[fId].tet_face_indices) {
+                                iso_face_id_of_tet_face.try_emplace(tet_face, fId);
+                            }
+                            for (auto vId : iso_faces[fId].vert_indices) {
+                                if (!is_iso_vert_visited[vId]) {
+                                    is_iso_vert_visited[vId] = true;
+                                    const auto& vert = iso_verts[vId];
+                                    if (vert.simplex_size == 2) { // edge iso-vertex
+                                        auto v1 = vert.simplex_vert_indices[0];
+                                        auto v2 = vert.simplex_vert_indices[1];
+                                        if (next_vert[v1] == v2) { // on tree edge v1 -> v2
+                                            // update extremal edge
+                                            if (u1 == Arrangement<3>::None) {
                                                 u1 = v1;
                                                 u2 = v2;
-                                            }
-                                        }
-                                        // record an iso-vert on edge v1 -> v2
-                                        iso_vert_on_v_v_next[v1] = vId;
-                                        // fill map
-                                        iso_vId_compId_of_tet_vert.try_emplace(
-                                            std::make_pair(vert.tet_index,vert.tet_vert_index),
-                                            std::make_pair(vId, component_id));
-                                    } else if (next_vert[v2] == v1) { // on tree edge v2 -> v1
-                                        // update extremal edge
-                                        if (u1 == Arrangement<3>::None) {
-                                            u1 = v2;
-                                            u2 = v1;
-                                        } else {
-                                            if (v1 == u2) {
-                                                if (point_xyz_less(pts[v2], pts[u1]))
-                                                {
-                                                    u1 = v2;
+                                            } else {
+                                                if (v2 == u2) {
+                                                    if (point_xyz_less(pts[v1], pts[u1])) {
+                                                        u1 = v1;
+                                                    }
+                                                } else if (point_xyz_less(pts[v2], pts[u2])) {
+                                                    u1 = v1;
+                                                    u2 = v2;
                                                 }
-                                            } else if (point_xyz_less(pts[v1], pts[u2]))
-                                            {
+                                            }
+                                            // record an iso-vert on edge v1 -> v2
+                                            iso_vert_on_v_v_next[v1] = vId;
+                                            // fill map
+                                            iso_vId_compId_of_tet_vert.try_emplace(
+                                                std::make_pair(vert.tet_index, vert.tet_vert_index),
+                                                std::make_pair(vId, component_id));
+                                        } else if (next_vert[v2] == v1) { // on tree edge v2 -> v1
+                                            // update extremal edge
+                                            if (u1 == Arrangement<3>::None) {
                                                 u1 = v2;
                                                 u2 = v1;
+                                            } else {
+                                                if (v1 == u2) {
+                                                    if (point_xyz_less(pts[v2], pts[u1])) {
+                                                        u1 = v2;
+                                                    }
+                                                } else if (point_xyz_less(pts[v1], pts[u2])) {
+                                                    u1 = v2;
+                                                    u2 = v1;
+                                                }
                                             }
+                                            // record an iso-vert on v2 -> v1
+                                            iso_vert_on_v_v_next[v2] = vId;
+                                            // fill map
+                                            iso_vId_compId_of_tet_vert.try_emplace(
+                                                std::make_pair(vert.tet_index, vert.tet_vert_index),
+                                                std::make_pair(vId, component_id));
                                         }
-                                        // record an iso-vert on v2 -> v1
-                                        iso_vert_on_v_v_next[v2] = vId;
-                                        // fill map
-                                        iso_vId_compId_of_tet_vert.try_emplace(
-                                            std::make_pair(vert.tet_index,vert.tet_vert_index),
-                                            std::make_pair(vId, component_id));
                                     }
                                 }
                             }
                         }
                     }
+                    timings.push_back(timer.toc());
                 }
-                timings.push_back(timer.toc());
-            }
 
-            // topological ray shooting
-            std::vector<std::pair<size_t,size_t>> shell_links;
-            {
-                timing_labels.emplace_back("arrCells(ray shooting)");
-                ScopedTimer<> timer("arrangement cells: topo ray shooting");
-                shell_links.reserve(components.size());
-                std::vector<size_t> sorted_vert_indices_on_edge;
-                sorted_vert_indices_on_edge.reserve(3);
-                for (size_t i = 0; i < components.size(); ++i) {
-                    // extremal edge: v1 -> v2
-                    auto extreme_v1 = extremal_edge_of_component[2 * i];
-                    auto extreme_v2 = extremal_edge_of_component[2 * i + 1];
-                    auto iso_vId = iso_vert_on_v_v_next[extreme_v1];
-                    auto tetId = iso_verts[iso_vId].tet_index;
-                    const auto& tet_cut_result = cut_results[cut_result_index[tetId]];
-                    // get local index of v1 and v2 in the tet
-                    size_t local_v1, local_v2;
-                    for (size_t j = 0; j < 4; ++j) {
-                        if (tets[tetId][j] == extreme_v1) {
-                            local_v1 = j;
-                        } else if (tets[tetId][j] == extreme_v2) {
-                            local_v2 = j;
+                // topological ray shooting
+                std::vector<std::pair<size_t, size_t>> shell_links;
+                {
+                    timing_labels.emplace_back("arrCells(ray shooting)");
+                    ScopedTimer<> timer("arrangement cells: topo ray shooting");
+                    shell_links.reserve(components.size());
+                    std::vector<size_t> sorted_vert_indices_on_edge;
+                    sorted_vert_indices_on_edge.reserve(3);
+                    for (size_t i = 0; i < components.size(); ++i) {
+                        // extremal edge: v1 -> v2
+                        auto extreme_v1 = extremal_edge_of_component[2 * i];
+                        auto extreme_v2 = extremal_edge_of_component[2 * i + 1];
+                        auto iso_vId = iso_vert_on_v_v_next[extreme_v1];
+                        auto tetId = iso_verts[iso_vId].tet_index;
+                        const auto& tet_cut_result = cut_results[cut_result_index[tetId]];
+                        // get local index of v1 and v2 in the tet
+                        size_t local_v1, local_v2;
+                        for (size_t j = 0; j < 4; ++j) {
+                            if (tets[tetId][j] == extreme_v1) {
+                                local_v1 = j;
+                            } else if (tets[tetId][j] == extreme_v2) {
+                                local_v2 = j;
+                            }
+                        }
+                        //                    std::cout << "local_v1 = " << local_v1 << std::endl;
+                        //                    std::cout << "local_v2 = " << local_v2 << std::endl;
+                        // get an ordered list of vertices on edge v1 -> v2
+                        sorted_vert_indices_on_edge.clear();
+                        compute_edge_intersection_order(
+                            tet_cut_result, local_v1, local_v2, sorted_vert_indices_on_edge);
+                        //
+                        //                    std::cout << "sorted_vert_indices_on_edge" <<
+                        //                    std::endl; for (auto vId :
+                        //                    sorted_vert_indices_on_edge) {
+                        //                        std::cout << vId << ", ";
+                        //                    }
+                        //                    std::cout << std::endl;
+                        //
+                        //                    std::cout << "sorted iso-verts on edge: list of
+                        //                    (iso-vId, compId)" << std::endl; for (int j = 1; j+1 <
+                        //                    sorted_vert_indices_on_edge.size(); ++j) {
+                        //                        const auto& iso_vId_compId =
+                        //                            iso_vId_compId_of_tet_vert[std::make_pair(tetId,
+                        //                            sorted_vert_indices_on_edge[j])];
+                        //                        std::cout << "(" << iso_vId_compId.first << "," <<
+                        //                        iso_vId_compId.second << ") ";
+                        //                    }
+                        //                    std::cout << std::endl;
+                        //
+                        // find the vertex v_start on v1->v2
+                        // 1. on current component
+                        // 2. nearest to v2
+                        size_t j_start;
+                        for (size_t j = 0; j + 1 < sorted_vert_indices_on_edge.size(); ++j) {
+                            const auto& iso_vId_compId = iso_vId_compId_of_tet_vert[std::make_pair(
+                                tetId, sorted_vert_indices_on_edge[j])];
+                            if (iso_vId_compId.second == i) {
+                                j_start = j;
+                            }
+                        }
+                        if (j_start + 2 < sorted_vert_indices_on_edge.size()) {
+                            // there is a vert from another component between v_start -> v2
+                            std::pair<size_t, int> face_orient1, face_orient2;
+                            compute_passing_face_pair(tet_cut_result,
+                                sorted_vert_indices_on_edge[j_start],
+                                sorted_vert_indices_on_edge[j_start + 1],
+                                face_orient1,
+                                face_orient2);
+                            size_t iso_fId1 =
+                                iso_face_id_of_tet_face[std::make_pair(tetId, face_orient1.first)];
+                            size_t iso_fId2 =
+                                iso_face_id_of_tet_face[std::make_pair(tetId, face_orient2.first)];
+                            size_t shell1 =
+                                (face_orient1.second == 1)
+                                    ? shell_of_half_patch[2 * patch_of_face[iso_fId1]]
+                                    : shell_of_half_patch[2 * patch_of_face[iso_fId1] + 1];
+                            size_t shell2 =
+                                (face_orient2.second == 1)
+                                    ? shell_of_half_patch[2 * patch_of_face[iso_fId2]]
+                                    : shell_of_half_patch[2 * patch_of_face[iso_fId2] + 1];
+                            // link shell1 with shell2
+                            shell_links.emplace_back(shell1, shell2);
+                        } else {
+                            // there is no vert between v_start -> v2
+                            std::pair<size_t, int> face_orient;
+                            compute_passing_face(tet_cut_result,
+                                sorted_vert_indices_on_edge[j_start],
+                                sorted_vert_indices_on_edge.back(),
+                                face_orient);
+                            size_t iso_fId =
+                                iso_face_id_of_tet_face[std::make_pair(tetId, face_orient.first)];
+                            size_t shell_start =
+                                (face_orient.second == 1)
+                                    ? shell_of_half_patch[2 * patch_of_face[iso_fId]]
+                                    : shell_of_half_patch[2 * patch_of_face[iso_fId] + 1];
+                            // follow the ray till another iso-vertex or the sink
+                            auto v_curr = extreme_v2;
+                            while (next_vert[v_curr] != Arrangement<3>::None &&
+                                   iso_vert_on_v_v_next[v_curr] == Arrangement<3>::None) {
+                                v_curr = next_vert[v_curr];
+                            }
+                            if (iso_vert_on_v_v_next[v_curr] != Arrangement<3>::None) {
+                                // reached iso-vert at end of the ray
+                                auto iso_vId_end = iso_vert_on_v_v_next[v_curr];
+                                auto end_tetId = iso_verts[iso_vId_end].tet_index;
+                                const auto& end_tet_cut_result =
+                                    cut_results[cut_result_index[end_tetId]];
+                                auto v_next = next_vert[v_curr];
+                                // find local vertex indices in the end tetrahedron
+                                for (size_t j = 0; j < 4; ++j) {
+                                    if (tets[end_tetId][j] == v_curr) {
+                                        local_v1 = j;
+                                    } else if (tets[end_tetId][j] == v_next) {
+                                        local_v2 = j;
+                                    }
+                                }
+                                // get an ordered list of vertices on edge v_curr -> v_next
+                                sorted_vert_indices_on_edge.clear();
+                                compute_edge_intersection_order(end_tet_cut_result,
+                                    local_v1,
+                                    local_v2,
+                                    sorted_vert_indices_on_edge);
+                                // find the end shell
+                                compute_passing_face(end_tet_cut_result,
+                                    sorted_vert_indices_on_edge[1],
+                                    sorted_vert_indices_on_edge.front(),
+                                    face_orient);
+                                iso_fId = iso_face_id_of_tet_face[std::make_pair(
+                                    end_tetId, face_orient.first)];
+                                size_t shell_end =
+                                    (face_orient.second == 1)
+                                        ? shell_of_half_patch[2 * patch_of_face[iso_fId]]
+                                        : shell_of_half_patch[2 * patch_of_face[iso_fId] + 1];
+                                // link start shell with end shell
+                                shell_links.emplace_back(shell_start, shell_end);
+                            } else {
+                                // next_vert[v_curr] is None, v_curr is the sink vertex
+                                // link shell_start with the sink
+                                shell_links.emplace_back(shell_start, Arrangement<3>::None);
+                            }
                         }
                     }
-//                    std::cout << "local_v1 = " << local_v1 << std::endl;
-//                    std::cout << "local_v2 = " << local_v2 << std::endl;
-                    // get an ordered list of vertices on edge v1 -> v2
-                    sorted_vert_indices_on_edge.clear();
-                    compute_edge_intersection_order(tet_cut_result, local_v1, local_v2, sorted_vert_indices_on_edge);
-                    //
-//                    std::cout << "sorted_vert_indices_on_edge" << std::endl;
-//                    for (auto vId : sorted_vert_indices_on_edge) {
-//                        std::cout << vId << ", ";
-//                    }
-//                    std::cout << std::endl;
-                    //
-//                    std::cout << "sorted iso-verts on edge: list of (iso-vId, compId)" << std::endl;
-//                    for (int j = 1; j+1 < sorted_vert_indices_on_edge.size(); ++j) {
-//                        const auto& iso_vId_compId =
-//                            iso_vId_compId_of_tet_vert[std::make_pair(tetId, sorted_vert_indices_on_edge[j])];
-//                        std::cout << "(" << iso_vId_compId.first << "," << iso_vId_compId.second << ") ";
-//                    }
-//                    std::cout << std::endl;
-                    //
-                    // find the vertex v_start on v1->v2
-                    // 1. on current component
-                    // 2. nearest to v2
-                    size_t j_start;
-                    for (size_t j = 0; j+1 < sorted_vert_indices_on_edge.size(); ++j) {
-                        const auto& iso_vId_compId =
-                            iso_vId_compId_of_tet_vert[std::make_pair(tetId, sorted_vert_indices_on_edge[j])];
-                        if (iso_vId_compId.second == i) {
-                            j_start = j;
+                    timings.push_back(timer.toc());
+                }
+                //            std::cout << "shell_links = " << std::endl;
+                //            for(const auto& link : shell_links) {
+                //                std::cout << "(" << link.first << "," << link.second << ") ";
+                //            }
+                //            std::cout << std::endl;
+
+                // group shells into arrangement cells
+                {
+                    timing_labels.emplace_back("arrCells(group shells into arrCells)");
+                    ScopedTimer<> timer("arrangement cells: group shells into arrangement cells");
+                    compute_arrangement_cells(shells.size(), shell_links, arrangement_cells);
+                    timings.push_back(timer.toc());
+                }
+                //            std::cout << "arrangement cells = " << std::endl;
+                //            for (const auto& arr_cell : arrangement_cells) {
+                //                std::cout << "(";
+                //                for (auto s : arr_cell) {
+                //                    std::cout << s << ", ";
+                //                }
+                //                std::cout << ")" << std::endl;
+                //            }
+            } else { // group simplicial cells into arrangement cells
+                // ------------------- build adjacency graph of simplicial cells ---------------
+                // pair (tetId, tet_cell_Id)
+                std::vector<std::pair<size_t, size_t>> tet_cell_of_simp_cell;
+                // simplicial half-face info
+                // if the face is on isosurface, let s be its shell index, record (-s-1)
+                // if the face is not on isosurface, record the simp_cell index on the opposite side
+                std::vector<long long> simp_half_face_info;
+                std::vector<size_t> simp_hFace_start_index;
+                {
+                    timing_labels.emplace_back("arrCells(build simpCell graph)");
+                    ScopedTimer<> timer("arrangement cells: build simplicial cells graph");
+                    size_t num_simplicial_cells = 0;
+                    size_t num_simp_half_faces = 0;
+                    for (size_t i = 0; i < tets.size(); i++) {
+                        if (cut_result_index[i] != Arrangement<3>::None) {
+                            const auto& cells = cut_results[cut_result_index[i]].cells;
+                            num_simplicial_cells += cells.size();
+                            for (const auto& cell : cells) {
+                                num_simp_half_faces += cell.faces.size();
+                            }
+                        } else { // empty tet
+                            ++num_simplicial_cells;
+                            num_simp_half_faces += 4;
                         }
                     }
-                    if (j_start + 2 < sorted_vert_indices_on_edge.size()) {
-                        // there is a vert from another component between v_start -> v2
-                        std::pair<size_t, int> face_orient1, face_orient2;
-                        compute_passing_face_pair(tet_cut_result,
-                            sorted_vert_indices_on_edge[j_start], sorted_vert_indices_on_edge[j_start+1],
-                            face_orient1, face_orient2);
-                        size_t iso_fId1 = iso_face_id_of_tet_face[std::make_pair(tetId, face_orient1.first)];
-                        size_t iso_fId2 = iso_face_id_of_tet_face[std::make_pair(tetId, face_orient2.first)];
-                        size_t shell1 = (face_orient1.second == 1) ? shell_of_half_patch[2 * patch_of_face[iso_fId1]] :
-                                        shell_of_half_patch[2 * patch_of_face[iso_fId1] + 1];
-                        size_t shell2 = (face_orient2.second == 1) ? shell_of_half_patch[2 * patch_of_face[iso_fId2]] :
-                                        shell_of_half_patch[2 * patch_of_face[iso_fId2] + 1];
-                        // link shell1 with shell2
-                        shell_links.emplace_back(shell1, shell2);
-                    } else {
-                        // there is no vert between v_start -> v2
-                        std::pair<size_t, int> face_orient;
-                        compute_passing_face(tet_cut_result,
-                            sorted_vert_indices_on_edge[j_start], sorted_vert_indices_on_edge.back(),
-                            face_orient);
-                        size_t iso_fId = iso_face_id_of_tet_face[std::make_pair(tetId, face_orient.first)];
-                        size_t shell_start = (face_orient.second == 1) ? shell_of_half_patch[2 * patch_of_face[iso_fId]] :
-                                            shell_of_half_patch[2 * patch_of_face[iso_fId] + 1];
-                        // follow the ray till another iso-vertex or the sink
-                        auto v_curr = extreme_v2;
-                        while (next_vert[v_curr] != Arrangement<3>::None &&
-                            iso_vert_on_v_v_next[v_curr] == Arrangement<3>::None) {
-                            v_curr = next_vert[v_curr];
-                        }
-                        if (iso_vert_on_v_v_next[v_curr] != Arrangement<3>::None) {
-                            // reached iso-vert at end of the ray
-                            auto iso_vId_end = iso_vert_on_v_v_next[v_curr];
-                            auto end_tetId = iso_verts[iso_vId_end].tet_index;
-                            const auto& end_tet_cut_result = cut_results[cut_result_index[end_tetId]];
-                            auto v_next = next_vert[v_curr];
-                            // find local vertex indices in the end tetrahedron
-                            for (size_t j = 0; j < 4; ++j) {
-                                if (tets[end_tetId][j] == v_curr) {
-                                    local_v1 = j;
-                                } else if (tets[end_tetId][j] == v_next) {
-                                    local_v2 = j;
+                    tet_cell_of_simp_cell.reserve(num_simplicial_cells);
+                    simp_half_face_info.reserve(num_simp_half_faces);
+                    simp_hFace_start_index.reserve(num_simplicial_cells + 1);
+                    simp_hFace_start_index.push_back(0);
+                    // hash table: face key --> (simplicial cell index, face index in simplicial
+                    // cell)
+                    absl::flat_hash_map<std::array<long long, 3>, std::pair<size_t, size_t>>
+                        incident_cell_of_face;
+                    //                    incident_cell_of_face.reserve();
+                    std::vector<long long> face_verts;
+                    face_verts.reserve(4);
+                    std::array<long long, 3> key;
+                    std::vector<std::array<long long, 3>> four_face_verts(4);
+                    for (size_t i = 0; i < tets.size(); i++) {
+                        if (cut_result_index[i] != Arrangement<3>::None) {
+                            size_t iso_fId_start_index = iso_fId_start_index_of_tet[i];
+                            size_t global_vId_start_index = global_vId_start_index_of_tet[i];
+                            const auto& arrangement = cut_results[cut_result_index[i]];
+                            const auto& faces = arrangement.faces;
+                            const auto& cells = arrangement.cells;
+                            for (size_t j = 0; j < cells.size(); j++) {
+                                // create a new simplicial cell
+                                const auto& cell = cells[j];
+                                size_t cur_simp_cell_id = tet_cell_of_simp_cell.size();
+                                tet_cell_of_simp_cell.emplace_back(i, j);
+                                for (size_t k = 0; k < cell.faces.size(); k++) {
+                                    size_t fId = cell.faces[k];
+                                    size_t iso_fId = iso_fId_of_tet_face[iso_fId_start_index + fId];
+                                    if (iso_fId !=
+                                        Arrangement<3>::None) { // face k is on iso-surface
+                                        size_t patch_id = patch_of_face[iso_fId];
+                                        size_t half_patch_id = (faces[fId].positive_cell == j)
+                                                                   ? (2 * patch_id)
+                                                                   : (2 * patch_id + 1);
+                                        size_t shell_id = shell_of_half_patch[half_patch_id];
+                                        simp_half_face_info.push_back(-shell_id - 1);
+                                    } else { // face k is not on iso-surface
+                                        face_verts.clear();
+                                        const auto& faceVertices = faces[fId].vertices;
+                                        // convert from local vert index to global vert index
+                                        for (unsigned long vId : faceVertices) {
+                                            face_verts.push_back(
+                                                global_vId_of_tet_vert[global_vId_start_index + vId]);
+                                        }
+                                        //
+                                        compute_iso_face_key(face_verts, key);
+                                        auto iter_inserted = incident_cell_of_face.try_emplace(
+                                            key, std::make_pair(cur_simp_cell_id, k));
+                                        if (!iter_inserted
+                                                 .second) { // same face has been inserted before
+                                            size_t opposite_simp_cell_id =
+                                                iter_inserted.first->second.first;
+                                            size_t opposite_cell_face_id =
+                                                iter_inserted.first->second.second;
+                                            // make neighbor
+                                            simp_half_face_info.push_back(opposite_simp_cell_id);
+                                            simp_half_face_info
+                                                [simp_hFace_start_index[opposite_simp_cell_id] +
+                                                    opposite_cell_face_id] = cur_simp_cell_id;
+                                            // delete face in hash table since a face can only be
+                                            // shared by two cells
+                                            incident_cell_of_face.erase(iter_inserted.first);
+                                        } else { // the face is inserted for the first time
+                                            simp_half_face_info.push_back(
+                                                std::numeric_limits<long long>::max());
+                                        }
+                                    }
+                                }
+                                simp_hFace_start_index.push_back(simp_half_face_info.size());
+                            }
+                        } else { // tet i has no isosurface
+                            // create a new simplicial cell
+                            size_t cur_simp_cell_id = tet_cell_of_simp_cell.size();
+                            tet_cell_of_simp_cell.emplace_back(i, 0);
+                            // global index of four tet vertices
+                            long long global_vId0 = -tets[i][0] - 1;
+                            long long global_vId1 = -tets[i][1] - 1;
+                            long long global_vId2 = -tets[i][2] - 1;
+                            long long global_vId3 = -tets[i][3] - 1;
+                            // face 0
+                            four_face_verts[0] = {global_vId1, global_vId2, global_vId3};
+                            std::sort(four_face_verts[0].begin(), four_face_verts[0].end());
+                            // face 1
+                            four_face_verts[1] = {global_vId2, global_vId3, global_vId0};
+                            std::sort(four_face_verts[1].begin(), four_face_verts[1].end());
+                            // face 2
+                            four_face_verts[2] = {global_vId3, global_vId0, global_vId1};
+                            std::sort(four_face_verts[2].begin(), four_face_verts[2].end());
+                            // face 3
+                            four_face_verts[3] = {global_vId0, global_vId1, global_vId2};
+                            std::sort(four_face_verts[3].begin(), four_face_verts[3].end());
+                            //
+                            for (size_t j = 0; j < 4; j++) {
+                                auto iter_inserted = incident_cell_of_face.try_emplace(
+                                    four_face_verts[j], std::make_pair(cur_simp_cell_id, j));
+                                if (!iter_inserted.second) { // same face has been inserted before
+                                    size_t opposite_simp_cell_id =
+                                        iter_inserted.first->second.first;
+                                    size_t opposite_cell_face_id =
+                                        iter_inserted.first->second.second;
+                                    // make neighbor
+                                    simp_half_face_info.push_back(opposite_simp_cell_id);
+                                    simp_half_face_info
+                                        [simp_hFace_start_index[opposite_simp_cell_id] +
+                                            opposite_cell_face_id] = cur_simp_cell_id;
+                                    // delete face in hash table since a face can only be shared by
+                                    // two cells
+                                    incident_cell_of_face.erase(iter_inserted.first);
+                                } else { // face inserted for the first time
+                                    simp_half_face_info.push_back(
+                                        std::numeric_limits<long long>::max());
                                 }
                             }
-                            // get an ordered list of vertices on edge v_curr -> v_next
-                            sorted_vert_indices_on_edge.clear();
-                            compute_edge_intersection_order(end_tet_cut_result, local_v1, local_v2, sorted_vert_indices_on_edge);
-                            // find the end shell
-                            compute_passing_face(end_tet_cut_result,
-                                sorted_vert_indices_on_edge[1], sorted_vert_indices_on_edge.front(),
-                                face_orient);
-                            iso_fId = iso_face_id_of_tet_face[std::make_pair(end_tetId, face_orient.first)];
-                            size_t shell_end = (face_orient.second == 1) ? shell_of_half_patch[2 * patch_of_face[iso_fId]] :
-                                                                           shell_of_half_patch[2 * patch_of_face[iso_fId] + 1];
-                            // link start shell with end shell
-                            shell_links.emplace_back(shell_start, shell_end);
-                        } else {
-                            // next_vert[v_curr] is None, v_curr is the sink vertex
-                            // link shell_start with the sink
-                            shell_links.emplace_back(shell_start, Arrangement<3>::None);
+                            simp_hFace_start_index.push_back(simp_half_face_info.size());
                         }
                     }
+                    timings.push_back(timer.toc());
                 }
-                timings.push_back(timer.toc());
+                {
+                    // ------------------- group simplicial cells into arrangement cells
+                    // ---------------
+                    timing_labels.emplace_back("arrCells(group simpCells into arrCells)");
+                    ScopedTimer<> timer("arrangement cells: group simplicial cells");
+                    size_t num_simp_cells = tet_cell_of_simp_cell.size();
+                    std::vector<bool> visited_simp_cell(num_simp_cells, false);
+                    std::vector<absl::flat_hash_set<size_t>> arrangement_cell_incident_shells;
+                    for (size_t i = 0; i < num_simp_cells; i++) {
+                        if (!visited_simp_cell[i]) {
+                            // new arrangement cell
+                            arrangement_cell_incident_shells.emplace_back();
+                            auto& incident_shells = arrangement_cell_incident_shells.back();
+                            //
+                            std::queue<size_t> Q;
+                            Q.push(i);
+                            visited_simp_cell[i] = true;
+                            while (!Q.empty()) {
+                                size_t simp_cell_id = Q.front();
+                                Q.pop();
+                                size_t start_index = simp_hFace_start_index[simp_cell_id];
+                                size_t face_info_size =
+                                    simp_hFace_start_index[simp_cell_id + 1] - start_index;
+                                for (size_t j = 0; j < face_info_size; j++) {
+                                    if (simp_half_face_info[start_index + j] < 0) {
+                                        // the half-face is on isosurface
+                                        size_t shell_id = -simp_half_face_info[start_index + j] - 1;
+                                        incident_shells.insert(shell_id);
+                                    } else {
+                                        // the half-face is not on isosurface
+                                        long long opposite_simp_cell_id =
+                                            simp_half_face_info[start_index + j];
+                                        if ((opposite_simp_cell_id !=
+                                                std::numeric_limits<long long>::max()) &&
+                                            !visited_simp_cell[opposite_simp_cell_id]) {
+                                            // the opposite simplicial cell exists and is not
+                                            // visited
+                                            Q.push(opposite_simp_cell_id);
+                                            visited_simp_cell[opposite_simp_cell_id] = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // convert vector-of-set to vector-of-vector
+                    arrangement_cells.reserve(arrangement_cell_incident_shells.size());
+                    for (auto & arrangement_cell_incident_shell : arrangement_cell_incident_shells) {
+                        arrangement_cells.emplace_back(arrangement_cell_incident_shell.begin(),
+                            arrangement_cell_incident_shell.end());
+                    }
+                    timings.push_back(timer.toc());
+                }
             }
-//            std::cout << "shell_links = " << std::endl;
-//            for(const auto& link : shell_links) {
-//                std::cout << "(" << link.first << "," << link.second << ") ";
-//            }
-//            std::cout << std::endl;
-
-            //group shells into arrangement cells
-            {
-                timing_labels.emplace_back("arrCells(group shells into arrCells)");
-                ScopedTimer<> timer("arrangement cells: group shells into arrangement cells");
-                compute_arrangement_cells(shells.size(), shell_links, arrangement_cells);
-                timings.push_back(timer.toc());
-            }
-//            std::cout << "arrangement cells = " << std::endl;
-//            for (const auto& arr_cell : arrangement_cells) {
-//                std::cout << "(";
-//                for (auto s : arr_cell) {
-//                    std::cout << s << ", ";
-//                }
-//                std::cout << ")" << std::endl;
-//            }
         }
         timings.push_back(timer.toc());
         timing_labels.emplace_back("arrangement cells");
     }
     std::cout << "num_cells = " << arrangement_cells.size() << std::endl;
+
     if (components.size() > 1) {
         timing_labels.emplace_back("arrCells(other)");
         size_t num_timings = timings.size();
-        timings.push_back(timings[num_timings-1] - timings[num_timings-2]
-            - timings[num_timings-3] - timings[num_timings-4] - timings[num_timings-5] - timings[num_timings-6]);
+        if (use_topo_ray_shooting) {
+            timings.push_back(timings[num_timings - 1] - timings[num_timings - 2] -
+                              timings[num_timings - 3] - timings[num_timings - 4] -
+                              timings[num_timings - 5] - timings[num_timings - 6]);
+        } else {
+            // baseline: group simplicial cells into arrangement cells
+            timings.push_back(
+                timings[num_timings - 1] - timings[num_timings - 2] - timings[num_timings - 3]);
+        }
     }
-
 
     // test: export iso-mesh, patches, chains
     if (!args.timing_only) {
@@ -729,9 +951,8 @@ int main(int argc, const char* argv[])
             arrangement_cells);
         //
         if (components.size() > 1) {
-            save_nesting_data(output_dir + "/nesting_data.json",
-                next_vert,
-                extremal_edge_of_component);
+            save_nesting_data(
+                output_dir + "/nesting_data.json", next_vert, extremal_edge_of_component);
         }
     }
     // test: export timings
