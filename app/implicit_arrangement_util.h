@@ -64,19 +64,6 @@ struct Edge
     std::vector<std::pair<size_t, size_t>> face_edge_indices;
 };
 
-struct Simplicial_Cell
-{
-    // the tetrahedron containing the cell
-    size_t tet_Id;
-    // the index of cell in the tetrahedron
-    size_t tet_cell_Id;
-    // is_iso_face[i] == true if face i of the cell is on isosurface
-    std::vector<bool> is_iso_face;
-    // if is_iso_face[i], face_info[i] is the index of the patch which the iso-face belongs to
-    // else, face_info[i] is the index of the simplicial cell on the other side of the face (if
-    // there is no simplicial cell on the other side, face_info[i] == None)
-    std::vector<size_t> face_info;
-};
 
 // Sphere: (center, radius)
 typedef std::pair<std::array<double,3>, double> Sphere;
