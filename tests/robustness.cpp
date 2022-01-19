@@ -17,7 +17,7 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
     disable_lookup_table();
 
     using Scalar = double;
-    constexpr size_t N = 1e2;
+    constexpr size_t N = 1e4;
     constexpr size_t M = 4;
     std::vector<Plane<Scalar, 3>> planes;
     planes.reserve(M);
