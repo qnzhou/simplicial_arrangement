@@ -87,6 +87,7 @@ bool parse_config_file(const std::string &filename,
     std::string& output_dir,
     bool& use_lookup,
     bool& use_2func_lookup,
+    bool& use_topo_ray_shooting,
     bool& use_bbox,
     std::array<double,3> &bbox_min,
     std::array<double,3> &bbox_max);
@@ -251,18 +252,54 @@ void extract_tet_boundary_mesh(
 // second-smallest vert Id, the largest vert Id) assume: face_verts is a list of non-duplicate natural
 // numbers, with at least three elements.
 template <typename IndexType>
-void compute_iso_face_key(const std::vector<IndexType>& face_verts, std::array<IndexType, 3>& key);
+void compute_iso_face_key(const std::vector<IndexType>& face_verts, std::array<IndexType, 3>& key)
+{
+    IndexType min_vert = face_verts[0];
+    size_t min_pos = 0;
+    IndexType max_vert = face_verts[0];
+    for (size_t i = 1; i < face_verts.size(); i++) {
+        if (face_verts[i] < min_vert) {
+            min_vert = face_verts[i];
+            min_pos = i;
+        } else if (face_verts[i] > max_vert) {
+            max_vert = face_verts[i];
+        }
+    }
+    IndexType second_min_vert = max_vert + 1;
+    for (size_t i = 0; i < face_verts.size(); i++) {
+        if (i != min_pos && face_verts[i] < second_min_vert) {
+            second_min_vert = face_verts[i];
+        }
+    }
+    //
+    key[0] = min_vert;
+    key[1] = second_min_vert;
+    key[2] = max_vert;
+}
 
 // extract iso-mesh (topology only) and create map: local index --> global index
-void extract_iso_mesh(const std::vector<bool>& has_isosurface,
+//void extract_iso_mesh(const std::vector<bool>& has_isosurface,
+//    const std::vector<Arrangement<3>>& cut_results,
+//    const Eigen::Matrix<size_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &func_in_tet,
+//    const Eigen::VectorXi &num_func_in_tet,
+//    const std::vector<std::array<size_t, 4>>& tets,
+//    std::vector<IsoVert>& iso_verts,
+//    std::vector<PolygonFace>& iso_faces,
+//    std::vector<std::vector<size_t>>& global_vId_of_tet_vert,
+//    std::vector<std::vector<size_t>>& iso_fId_of_tet_face);
+void extract_iso_mesh(
+    size_t num_1_func, size_t num_2_func, size_t num_more_func,
     const std::vector<Arrangement<3>>& cut_results,
-    const Eigen::Matrix<size_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &func_in_tet,
-    const Eigen::VectorXi &num_func_in_tet,
+    const std::vector<size_t>& cut_result_index,
+    const std::vector<size_t>& func_in_tet,
+    const std::vector<size_t>& start_index_of_tet,
     const std::vector<std::array<size_t, 4>>& tets,
     std::vector<IsoVert>& iso_verts,
     std::vector<PolygonFace>& iso_faces,
-    std::vector<std::vector<size_t>>& global_vId_of_tet_vert,
-    std::vector<std::vector<size_t>>& iso_fId_of_tet_face);
+    std::vector<long long>& global_vId_of_tet_vert,
+    std::vector<size_t>& global_vId_start_index_of_tet,
+    std::vector<size_t>& iso_fId_of_tet_face,
+    std::vector<size_t>& iso_fId_start_index_of_tet);
 
 // extract iso-mesh (topology only)
 void extract_iso_mesh_pure(

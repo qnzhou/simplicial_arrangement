@@ -19,6 +19,7 @@ bool parse_config_file(const std::string& filename,
     std::string& output_dir,
     bool& use_lookup,
     bool& use_2func_lookup,
+    bool& use_topo_ray_shooting,
     bool& use_bbox,
     std::array<double,3> &bbox_min,
     std::array<double,3> &bbox_max)
@@ -38,6 +39,7 @@ bool parse_config_file(const std::string& filename,
     output_dir = data["outputDir"];
     use_lookup = data["useLookup"];
     use_2func_lookup = data["use2funcLookup"];
+    use_topo_ray_shooting = data["useTopoRayShooting"];
     if (data.contains("useBBox")) {
         use_bbox = data["useBBox"];
     }
@@ -597,292 +599,6 @@ bool save_tri_mesh_list(const std::string& filename,
     return true;
 }
 
-// given the list of vertex indices of a face, return the unique key of the face: (the smallest vert Id,
-// second-smallest vert Id, the largest vert Id) assume: face_verts is a list of non-duplicate natural
-// numbers, with at least three elements.
-template <typename IndexType>
-void compute_iso_face_key(const std::vector<IndexType>& face_verts, std::array<IndexType, 3>& key)
-{
-    IndexType min_vert = face_verts[0];
-    size_t min_pos = 0;
-    IndexType max_vert = face_verts[0];
-    for (size_t i = 1; i < face_verts.size(); i++) {
-        if (face_verts[i] < min_vert) {
-            min_vert = face_verts[i];
-            min_pos = i;
-        } else if (face_verts[i] > max_vert) {
-            max_vert = face_verts[i];
-        }
-    }
-    IndexType second_min_vert = max_vert + 1;
-    for (size_t i = 0; i < face_verts.size(); i++) {
-        if (i != min_pos && face_verts[i] < second_min_vert) {
-            second_min_vert = face_verts[i];
-        }
-    }
-    //
-    key[0] = min_vert;
-    key[1] = second_min_vert;
-    key[2] = max_vert;
-}
-
-void extract_iso_mesh(const std::vector<bool>& has_isosurface,
-    const std::vector<Arrangement<3>>& cut_results,
-    const Eigen::Matrix<size_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& func_in_tet,
-    const Eigen::VectorXi& num_func_in_tet,
-    const std::vector<std::array<size_t, 4>>& tets,
-    std::vector<IsoVert>& iso_verts,
-    std::vector<PolygonFace>& iso_faces,
-    std::vector<std::vector<size_t>>& global_vId_of_tet_vert,
-    std::vector<std::vector<size_t>>& iso_fId_of_tet_face)
-{
-    ScopedTimer<> timer("extract mesh");
-    // hash table for vertices on the boundary of tetrahedron
-    absl::flat_hash_map<size_t, size_t> vert_on_tetVert;
-    absl::flat_hash_map<std::array<size_t, 3>, size_t> vert_on_tetEdge;
-    absl::flat_hash_map<std::array<size_t, 5>, size_t> vert_on_tetFace;
-    // hash table for faces on the boundary of tetrahedron
-    absl::flat_hash_map<std::array<size_t, 3>, size_t> face_on_tetFace;
-    //
-    size_t num_tet = has_isosurface.size();
-    size_t max_num_vert = 0;
-    size_t max_num_face = 0;
-    for (size_t i = 0; i < num_tet; i++) {
-        if (has_isosurface[i]) {
-            max_num_vert += cut_results[i].vertices.size();
-            max_num_face += cut_results[i].faces.size();
-        }
-    }
-    iso_verts.resize(max_num_vert);
-    iso_faces.resize(max_num_face);
-    // std::cout << "max_num_vert = " << max_num_vert << std::endl;
-    // std::cout << "max_num_face = " << max_num_face << std::endl;
-    size_t num_iso_vert = 0;
-    size_t num_iso_face = 0;
-    // initialize map: local vert index --> iso-vert index
-    global_vId_of_tet_vert.resize(num_tet);
-    for (size_t i = 0; i < num_tet; i++) {
-        if (has_isosurface[i]) {
-            global_vId_of_tet_vert[i].resize(cut_results[i].vertices.size(), Arrangement<3>::None);
-        } else {
-            global_vId_of_tet_vert[i].resize(4, Arrangement<3>::None);
-        }
-    }
-    // initialize map: local face index --> iso-face index
-    iso_fId_of_tet_face.resize(num_tet);
-    for (size_t i = 0; i < num_tet; i++) {
-        if (has_isosurface[i]) {
-            iso_fId_of_tet_face[i].resize(cut_results[i].faces.size(), Arrangement<3>::None);
-        }
-    }
-    //
-    for (size_t i = 0; i < num_tet; i++) {
-        if (has_isosurface[i]) {
-            const auto& arrangement = cut_results[i];
-            const auto& vertices = arrangement.vertices;
-            const auto& faces = arrangement.faces;
-            const auto& func_ids = func_in_tet.row(i);
-            auto num_func = num_func_in_tet(i);
-            // find vertices and faces on isosurface
-            std::vector<bool> is_iso_vert(vertices.size(), false);
-            std::vector<bool> is_iso_face(faces.size(), false);
-            if (arrangement.unique_planes.empty()) { // all planes are unique
-                for (size_t j = 0; j < faces.size(); ++j) {
-                    if (faces[j].supporting_plane > 3) { // plane 0,1,2,3 are tet boundaries
-                        is_iso_face[j] = true;
-                        for (const auto& vid : faces[j].vertices) {
-                            is_iso_vert[vid] = true;
-                        }
-                    }
-                }
-            } else {
-                for (size_t j = 0; j < faces.size(); j++) {
-                    auto pid = faces[j].supporting_plane;
-                    auto uid = arrangement.unique_plane_indices[pid];
-                    for (const auto& plane_id : arrangement.unique_planes[uid]) {
-                        if (plane_id > 3) { // plane 0,1,2,3 are tet boundaries
-                            is_iso_face[j] = true;
-                            for (const auto& vid : faces[j].vertices) {
-                                is_iso_vert[vid] = true;
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-            // map: local vert index --> iso-vert index
-            auto& iso_vId_of_vert = global_vId_of_tet_vert[i];
-            // std::vector<size_t> iso_vId_of_vert(vertices.size(), Arrangement<3>::None);
-            //  create iso-vertices
-            for (size_t j = 0; j < vertices.size(); j++) {
-                if (is_iso_vert[j]) {
-                    std::array<size_t, 3> implicit_pIds;
-                    std::array<size_t, 3> bndry_pIds;
-                    size_t num_bndry_planes = 0;
-                    size_t num_impl_planes = 0;
-                    const auto& vertex = vertices[j];
-                    // vertex.size() == 3
-                    for (size_t k = 0; k < 3; k++) {
-                        if (vertex[k] > 3) { // plane 0,1,2,3 are tet boundaries
-                            implicit_pIds[num_impl_planes] = func_ids(vertex[k] - 4);
-                            ++num_impl_planes;
-                        } else {
-                            bndry_pIds[num_bndry_planes] = vertex[k];
-                            ++num_bndry_planes;
-                        }
-                    }
-                    switch (num_bndry_planes) {
-                    case 2: // on tet edge
-                    {
-                        std::vector<bool> used_pId(4, false);
-                        used_pId[bndry_pIds[0]] = true;
-                        used_pId[bndry_pIds[1]] = true;
-                        std::array<size_t, 2> vIds;
-                        size_t num_vIds = 0;
-                        for (size_t k = 0; k < 4; k++) {
-                            if (!used_pId[k]) {
-                                vIds[num_vIds] = tets[i][k];
-                                ++num_vIds;
-                            }
-                        }
-                        size_t vId1 = vIds[0];
-                        size_t vId2 = vIds[1];
-                        if (vId1 > vId2) {
-                            size_t tmp = vId1;
-                            vId1 = vId2;
-                            vId2 = tmp;
-                        }
-                        std::array<size_t, 3> key = {vId1, vId2, implicit_pIds[0]};
-                        auto iter_inserted = vert_on_tetEdge.try_emplace(key, num_iso_vert);
-                        if (iter_inserted.second) {
-                            auto& iso_vert = iso_verts[num_iso_vert];
-                            iso_vert.tet_index = i;
-                            iso_vert.tet_vert_index = j;
-                            iso_vert.simplex_size = 2;
-                            iso_vert.simplex_vert_indices[0] = vId1;
-                            iso_vert.simplex_vert_indices[1] = vId2;
-                            iso_vert.func_indices[0] = implicit_pIds[0];
-                            ++num_iso_vert;
-                        }
-                        iso_vId_of_vert[j] = iter_inserted.first->second;
-                        break;
-                    }
-                    case 1: // on tet face
-                    {
-                        std::array<size_t, 3> vIds;
-                        size_t pId = bndry_pIds[0];
-                        size_t num_vIds = 0;
-                        for (size_t k = 0; k < 4; k++) {
-                            if (k != pId) {
-                                vIds[num_vIds] = tets[i][k];
-                                ++num_vIds;
-                            }
-                        }
-                        std::sort(vIds.begin(), vIds.end());
-                        std::array<size_t, 5> key = {
-                            vIds[0], vIds[1], vIds[2], implicit_pIds[0], implicit_pIds[1]};
-                        auto iter_inserted = vert_on_tetFace.try_emplace(key, num_iso_vert);
-                        if (iter_inserted.second) {
-                            auto& iso_vert = iso_verts[num_iso_vert];
-                            iso_vert.tet_index = i;
-                            iso_vert.tet_vert_index = j;
-                            iso_vert.simplex_size = 3;
-                            iso_vert.simplex_vert_indices[0] = vIds[0];
-                            iso_vert.simplex_vert_indices[1] = vIds[1];
-                            iso_vert.simplex_vert_indices[2] = vIds[2];
-                            iso_vert.func_indices[0] = implicit_pIds[0];
-                            iso_vert.func_indices[1] = implicit_pIds[1];
-                            ++num_iso_vert;
-                        }
-                        iso_vId_of_vert[j] = iter_inserted.first->second;
-                        break;
-                    }
-                    case 0: // in tet cell
-                    {
-                        auto& iso_vert = iso_verts[num_iso_vert];
-                        iso_vert.tet_index = i;
-                        iso_vert.tet_vert_index = j;
-                        iso_vert.simplex_size = 4;
-                        iso_vert.simplex_vert_indices = tets[i];
-                        iso_vert.func_indices = implicit_pIds;
-                        iso_vId_of_vert[j] = num_iso_vert;
-                        ++num_iso_vert;
-                        break;
-                    }
-                    case 3: // on tet vertex
-                    {
-                        std::vector<bool> used_pId(4, false);
-                        for (const auto& pId : bndry_pIds) {
-                            used_pId[pId] = true;
-                        }
-                        size_t vId;
-                        for (size_t k = 0; k < 4; k++) {
-                            if (!used_pId[k]) {
-                                vId = k;
-                                break;
-                            }
-                        }
-                        auto key = tets[i][vId];
-                        auto iter_inserted = vert_on_tetVert.try_emplace(key, num_iso_vert);
-                        if (iter_inserted.second) {
-                            auto& iso_vert = iso_verts[num_iso_vert];
-                            iso_vert.tet_index = i;
-                            iso_vert.tet_vert_index = j;
-                            iso_vert.simplex_size = 1;
-                            iso_vert.simplex_vert_indices[0] = tets[i][vId];
-                            ++num_iso_vert;
-                        }
-                        iso_vId_of_vert[j] = iter_inserted.first->second;
-                        break;
-                    }
-                    default: break;
-                    }
-                }
-            }
-            // create iso-faces
-            for (size_t j = 0; j < faces.size(); j++) {
-                if (is_iso_face[j]) {
-                    std::vector<size_t> face_verts(faces[j].vertices.size());
-                    for (size_t k = 0; k < face_verts.size(); k++) {
-                        face_verts[k] = iso_vId_of_vert[faces[j].vertices[k]];
-                    }
-                    //
-                    // face is on tet boundary if face.negative_cell is NONE
-                    bool face_on_tet_boundary = (faces[j].negative_cell == Arrangement<3>::None);
-                    //
-                    if (face_on_tet_boundary) {
-                        /*std::vector<size_t> sorted_face_verts = face_verts;
-                        std::sort(sorted_face_verts.begin(), sorted_face_verts.end());
-                        std::array<size_t, 3> key = {
-                            sorted_face_verts[0], sorted_face_verts[1], sorted_face_verts[2]};*/
-                        std::array<size_t, 3> key;
-                        compute_iso_face_key(face_verts, key);
-                        auto iter_inserted = face_on_tetFace.try_emplace(key, num_iso_face);
-                        if (iter_inserted.second) {
-                            iso_faces[num_iso_face].vert_indices = face_verts;
-                            iso_faces[num_iso_face].tet_face_indices.emplace_back(i, j);
-                            iso_fId_of_tet_face[i][j] = num_iso_face;
-                            ++num_iso_face;
-                        } else { // iso_face inserted before
-                            size_t iso_face_id = (iter_inserted.first)->second;
-                            iso_faces[iso_face_id].tet_face_indices.emplace_back(i, j);
-                            iso_fId_of_tet_face[i][j] = iso_face_id;
-                        }
-                    } else { // face not on tet boundary
-                        iso_faces[num_iso_face].vert_indices = face_verts;
-                        iso_faces[num_iso_face].tet_face_indices.emplace_back(i, j);
-                        iso_fId_of_tet_face[i][j] = num_iso_face;
-                        ++num_iso_face;
-                    }
-                }
-            }
-        }
-    }
-    //
-    iso_verts.resize(num_iso_vert);
-    iso_faces.resize(num_iso_face);
-}
-
 void extract_iso_mesh_pure(size_t num_1_func,
     size_t num_2_func,
     size_t num_more_func,
@@ -966,23 +682,17 @@ void extract_iso_mesh_pure(size_t num_1_func,
                 }
             }
             // map: local vert index --> iso-vert index
-            //            std::vector<size_t> iso_vId_of_vert(vertices.size(),
-            //            Arrangement<3>::None);
             iso_vId_of_vert.clear();
             // create iso-vertices
             for (size_t j = 0; j < vertices.size(); j++) {
                 iso_vId_of_vert.push_back(Arrangement<3>::None);
                 if (is_iso_vert[j]) {
-                    //                    std::array<size_t, 3> implicit_pIds;
-                    //                    std::array<size_t, 3> bndry_pIds;
                     size_t num_bndry_planes = 0;
                     size_t num_impl_planes = 0;
                     const auto& vertex = vertices[j];
                     // vertex.size() == 3
                     for (size_t k = 0; k < 3; k++) {
                         if (vertex[k] > 3) { // plane 0,1,2,3 are tet boundaries
-                            //                            implicit_pIds[num_impl_planes] =
-                            //                            func_ids(vertex[k] - 4);
                             implicit_pIds[num_impl_planes] =
                                 func_in_tet[vertex[k] - 4 + start_index];
                             ++num_impl_planes;
@@ -994,9 +704,6 @@ void extract_iso_mesh_pure(size_t num_1_func,
                     switch (num_bndry_planes) {
                     case 2: // on tet edge
                     {
-                        //                        std::vector<bool> used_pId(4, false);
-                        //                        std::array<bool, 4> used_pId {false, false, false,
-                        //                        false}; used_pId = {false, false, false, false};
                         used_pId[0] = false;
                         used_pId[1] = false;
                         used_pId[2] = false;
@@ -1018,9 +725,6 @@ void extract_iso_mesh_pure(size_t num_1_func,
                             vId1 = vId2;
                             vId2 = tmp;
                         }
-                        //                        std::array<size_t, 3> key = {vId1, vId2,
-                        //                        implicit_pIds[0]}; key3 = {vId1, vId2,
-                        //                        implicit_pIds[0]};
                         key3[0] = vId1;
                         key3[1] = vId2;
                         key3[2] = implicit_pIds[0];
@@ -1035,13 +739,11 @@ void extract_iso_mesh_pure(size_t num_1_func,
                             iso_vert.simplex_vert_indices[1] = vId2;
                             iso_vert.func_indices[0] = implicit_pIds[0];
                         }
-                        //                        iso_vId_of_vert[j] = iter_inserted.first->second;
                         iso_vId_of_vert.back() = iter_inserted.first->second;
                         break;
                     }
                     case 1: // on tet face
                     {
-                        //                        std::array<size_t, 3> vIds;
                         size_t pId = bndry_pIds[0];
                         size_t num_vIds = 0;
                         for (size_t k = 0; k < 4; k++) {
@@ -1051,12 +753,6 @@ void extract_iso_mesh_pure(size_t num_1_func,
                             }
                         }
                         std::sort(vIds3.begin(), vIds3.end());
-                        //                        std::array<size_t, 5> key = {
-                        //                            vIds[0], vIds[1], vIds[2], implicit_pIds[0],
-                        //                            implicit_pIds[1]};
-                        //                        key5 = {
-                        //                            vIds[0], vIds[1], vIds[2], implicit_pIds[0],
-                        //                            implicit_pIds[1]};
                         key5[0] = vIds3[0];
                         key5[1] = vIds3[1];
                         key5[2] = vIds3[2];
@@ -1075,13 +771,11 @@ void extract_iso_mesh_pure(size_t num_1_func,
                             iso_vert.func_indices[0] = implicit_pIds[0];
                             iso_vert.func_indices[1] = implicit_pIds[1];
                         }
-                        //                        iso_vId_of_vert[j] = iter_inserted.first->second;
                         iso_vId_of_vert.back() = iter_inserted.first->second;
                         break;
                     }
                     case 0: // in tet cell
                     {
-                        //                        iso_vId_of_vert[j] = iso_verts.size();
                         iso_vId_of_vert.back() = iso_verts.size();
                         iso_verts.emplace_back();
                         auto& iso_vert = iso_verts.back();
@@ -1094,8 +788,6 @@ void extract_iso_mesh_pure(size_t num_1_func,
                     }
                     case 3: // on tet vertex
                     {
-                        //                        std::vector<bool> used_pId(4, false);
-                        //                        used_pId = {false, false, false, false};
                         used_pId[0] = false;
                         used_pId[1] = false;
                         used_pId[2] = false;
@@ -1131,11 +823,8 @@ void extract_iso_mesh_pure(size_t num_1_func,
             // create iso-faces
             for (size_t j = 0; j < faces.size(); j++) {
                 if (is_iso_face[j]) {
-                    //                    std::vector<size_t> face_verts(faces[j].vertices.size());
                     face_verts.clear();
                     for (size_t k = 0; k < faces[j].vertices.size(); k++) {
-                        //                        face_verts[k] =
-                        //                        iso_vId_of_vert[faces[j].vertices[k]];
                         face_verts.push_back(iso_vId_of_vert[faces[j].vertices[k]]);
                     }
                     //
@@ -1143,11 +832,6 @@ void extract_iso_mesh_pure(size_t num_1_func,
                     bool face_on_tet_boundary = (faces[j].negative_cell == Arrangement<3>::None);
                     //
                     if (face_on_tet_boundary) {
-                        /*std::vector<size_t> sorted_face_verts = face_verts;
-                        std::sort(sorted_face_verts.begin(), sorted_face_verts.end());
-                        std::array<size_t, 3> key = {
-                            sorted_face_verts[0], sorted_face_verts[1], sorted_face_verts[2]};*/
-                        //                        std::array<size_t, 3> key;
                         compute_iso_face_key(face_verts, key3);
                         auto iter_inserted = face_on_tetFace.try_emplace(key3, iso_faces.size());
                         if (iter_inserted.second) {
@@ -3172,4 +2856,304 @@ void compute_passing_face_MI(const MaterialInterface<3>& tet_cut_result,
             return;
         }
     }
+}
+
+void extract_iso_mesh(size_t num_1_func,
+    size_t num_2_func,
+    size_t num_more_func,
+    const std::vector<Arrangement<3>>& cut_results,
+    const std::vector<size_t>& cut_result_index,
+    const std::vector<size_t>& func_in_tet,
+    const std::vector<size_t>& start_index_of_tet,
+    const std::vector<std::array<size_t, 4>>& tets,
+    std::vector<IsoVert>& iso_verts,
+    std::vector<PolygonFace>& iso_faces,
+    std::vector<long long>& global_vId_of_tet_vert,
+    std::vector<size_t>& global_vId_start_index_of_tet,
+    std::vector<size_t>& iso_fId_of_tet_face,
+    std::vector<size_t>& iso_fId_start_index_of_tet)
+{
+    size_t n_tets = tets.size();
+    // get total number of verts and faces
+    size_t total_num_vert = 0;
+    size_t total_num_face = 0;
+    for (const auto& arrangement : cut_results) {
+        total_num_vert += arrangement.vertices.size();
+        total_num_face += arrangement.faces.size();
+    }
+    global_vId_of_tet_vert.reserve(total_num_vert);
+    global_vId_start_index_of_tet.reserve(n_tets + 1);
+    global_vId_start_index_of_tet.push_back(0);
+    iso_fId_of_tet_face.reserve(total_num_face);
+    iso_fId_start_index_of_tet.reserve(n_tets + 1);
+    iso_fId_start_index_of_tet.push_back(0);
+    // estimate number of iso-verts and iso-faces
+    size_t max_num_face = num_1_func + 4 * num_2_func + 8 * num_more_func;
+    size_t max_num_vert = max_num_face;
+    iso_verts.reserve(max_num_vert);
+    iso_faces.reserve(max_num_face);
+    // hash table for vertices on the boundary of tetrahedron
+    absl::flat_hash_map<size_t, size_t> vert_on_tetVert;
+    absl::flat_hash_map<std::array<size_t, 3>, size_t> vert_on_tetEdge;
+    vert_on_tetEdge.reserve(num_1_func + 3 * num_2_func + num_more_func);
+    absl::flat_hash_map<std::array<size_t, 5>, size_t> vert_on_tetFace;
+    vert_on_tetFace.reserve(num_2_func + 6 * num_more_func);
+    // hash table for faces on the boundary of tetrahedron
+    absl::flat_hash_map<std::array<size_t, 3>, size_t> face_on_tetFace;
+    //
+    std::vector<bool> is_iso_vert;
+    is_iso_vert.reserve(8);
+    std::vector<bool> is_iso_face;
+    is_iso_face.reserve(9);
+    std::vector<size_t> iso_vId_of_vert;
+    iso_vId_of_vert.reserve(8);
+    std::vector<size_t> face_verts;
+    face_verts.reserve(4);
+    std::array<size_t, 3> key3;
+    std::array<size_t, 5> key5;
+    std::array<bool, 4> used_pId;
+    std::array<size_t, 2> vIds2;
+    std::array<size_t, 3> vIds3;
+    std::array<size_t, 3> implicit_pIds;
+    std::array<size_t, 3> bndry_pIds;
+    //
+    for (size_t i = 0; i < n_tets; i++) {
+        if (cut_result_index[i] == Arrangement<3>::None) {
+            global_vId_start_index_of_tet.push_back(global_vId_of_tet_vert.size());
+            iso_fId_start_index_of_tet.push_back(iso_fId_of_tet_face.size());
+        } else {
+            const auto& arrangement = cut_results[cut_result_index[i]];
+            const auto& vertices = arrangement.vertices;
+            const auto& faces = arrangement.faces;
+            auto start_index = start_index_of_tet[i];
+            auto num_func = start_index_of_tet[i + 1] - start_index;
+            // find vertices and faces on isosurface
+            is_iso_vert.clear();
+            for (int j = 0; j < vertices.size(); ++j) {
+                is_iso_vert.push_back(false);
+            }
+            is_iso_face.clear();
+            if (arrangement.unique_planes.empty()) { // all planes are unique
+                for (size_t j = 0; j < faces.size(); ++j) {
+                    is_iso_face.push_back(false);
+                    if (faces[j].supporting_plane > 3) { // plane 0,1,2,3 are tet boundaries
+                        is_iso_face.back() = true;
+                        for (const auto& vid : faces[j].vertices) {
+                            is_iso_vert[vid] = true;
+                        }
+                    }
+                }
+            } else {
+                for (size_t j = 0; j < faces.size(); j++) {
+                    is_iso_face.push_back(false);
+                    auto uid = arrangement.unique_plane_indices[faces[j].supporting_plane];
+                    for (const auto& plane_id : arrangement.unique_planes[uid]) {
+                        if (plane_id > 3) { // plane 0,1,2,3 are tet boundaries
+                            //                        is_iso_face[j] = true;
+                            is_iso_face.back() = true;
+                            for (const auto& vid : faces[j].vertices) {
+                                is_iso_vert[vid] = true;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            // map: local vert index --> iso-vert index
+            iso_vId_of_vert.clear();
+            // create iso-vertices
+            for (size_t j = 0; j < vertices.size(); j++) {
+                size_t num_bndry_planes = 0;
+                size_t num_impl_planes = 0;
+                const auto& vertex = vertices[j];
+                // vertex.size() == 3
+                for (size_t k = 0; k < 3; k++) {
+                    if (vertex[k] > 3) { // plane 0,1,2,3 are tet boundaries
+                        implicit_pIds[num_impl_planes] =
+                            func_in_tet[vertex[k] - 4 + start_index];
+                        ++num_impl_planes;
+                    } else {
+                        bndry_pIds[num_bndry_planes] = vertex[k];
+                        ++num_bndry_planes;
+                    }
+                }
+                //
+                if (!is_iso_vert[j]) { // vert[j] must be tet vertex
+                    used_pId[0] = false;
+                    used_pId[1] = false;
+                    used_pId[2] = false;
+                    used_pId[3] = false;
+                    for (const auto& pId : bndry_pIds) {
+                        used_pId[pId] = true;
+                    }
+                    size_t vId;
+                    for (size_t k = 0; k < 4; k++) {
+                        if (!used_pId[k]) {
+                            vId = k;
+                            break;
+                        }
+                    }
+                    global_vId_of_tet_vert.push_back(-tets[i][vId] - 1);
+                    iso_vId_of_vert.push_back(Arrangement<3>::None);
+                }
+                else {  // iso-vertex
+                    switch (num_bndry_planes) {
+                    case 2: // on tet edge
+                    {
+                        used_pId[0] = false;
+                        used_pId[1] = false;
+                        used_pId[2] = false;
+                        used_pId[3] = false;
+                        used_pId[bndry_pIds[0]] = true;
+                        used_pId[bndry_pIds[1]] = true;
+                        size_t num_vIds = 0;
+                        for (size_t k = 0; k < 4; k++) {
+                            if (!used_pId[k]) {
+                                vIds2[num_vIds] = tets[i][k];
+                                ++num_vIds;
+                            }
+                        }
+                        size_t vId1 = vIds2[0];
+                        size_t vId2 = vIds2[1];
+                        if (vId1 > vId2) {
+                            size_t tmp = vId1;
+                            vId1 = vId2;
+                            vId2 = tmp;
+                        }
+                        key3[0] = vId1;
+                        key3[1] = vId2;
+                        key3[2] = implicit_pIds[0];
+                        auto iter_inserted = vert_on_tetEdge.try_emplace(key3, iso_verts.size());
+                        if (iter_inserted.second) {
+                            iso_verts.emplace_back();
+                            auto& iso_vert = iso_verts.back();
+                            iso_vert.tet_index = i;
+                            iso_vert.tet_vert_index = j;
+                            iso_vert.simplex_size = 2;
+                            iso_vert.simplex_vert_indices[0] = vId1;
+                            iso_vert.simplex_vert_indices[1] = vId2;
+                            iso_vert.func_indices[0] = implicit_pIds[0];
+                        }
+                        global_vId_of_tet_vert.push_back(iter_inserted.first->second);
+                        iso_vId_of_vert.push_back(iter_inserted.first->second);
+                        break;
+                    }
+                    case 1: // on tet face
+                    {
+                        size_t pId = bndry_pIds[0];
+                        size_t num_vIds = 0;
+                        for (size_t k = 0; k < 4; k++) {
+                            if (k != pId) {
+                                vIds3[num_vIds] = tets[i][k];
+                                ++num_vIds;
+                            }
+                        }
+                        std::sort(vIds3.begin(), vIds3.end());
+                        key5[0] = vIds3[0];
+                        key5[1] = vIds3[1];
+                        key5[2] = vIds3[2];
+                        key5[3] = implicit_pIds[0];
+                        key5[4] = implicit_pIds[1];
+                        auto iter_inserted = vert_on_tetFace.try_emplace(key5, iso_verts.size());
+                        if (iter_inserted.second) {
+                            iso_verts.emplace_back();
+                            auto& iso_vert = iso_verts.back();
+                            iso_vert.tet_index = i;
+                            iso_vert.tet_vert_index = j;
+                            iso_vert.simplex_size = 3;
+                            iso_vert.simplex_vert_indices[0] = vIds3[0];
+                            iso_vert.simplex_vert_indices[1] = vIds3[1];
+                            iso_vert.simplex_vert_indices[2] = vIds3[2];
+                            iso_vert.func_indices[0] = implicit_pIds[0];
+                            iso_vert.func_indices[1] = implicit_pIds[1];
+                        }
+                        global_vId_of_tet_vert.push_back(iter_inserted.first->second);
+                        iso_vId_of_vert.push_back(iter_inserted.first->second);
+                        break;
+                    }
+                    case 0: // in tet cell
+                    {
+                        global_vId_of_tet_vert.push_back(iso_verts.size());
+                        iso_vId_of_vert.push_back(iso_verts.size());
+                        iso_verts.emplace_back();
+                        auto& iso_vert = iso_verts.back();
+                        iso_vert.tet_index = i;
+                        iso_vert.tet_vert_index = j;
+                        iso_vert.simplex_size = 4;
+                        iso_vert.simplex_vert_indices = tets[i];
+                        iso_vert.func_indices = implicit_pIds;
+                        break;
+                    }
+                    case 3: // on tet vertex
+                    {
+                        used_pId[0] = false;
+                        used_pId[1] = false;
+                        used_pId[2] = false;
+                        used_pId[3] = false;
+                        for (const auto& pId : bndry_pIds) {
+                            used_pId[pId] = true;
+                        }
+                        size_t vId;
+                        for (size_t k = 0; k < 4; k++) {
+                            if (!used_pId[k]) {
+                                vId = k;
+                                break;
+                            }
+                        }
+                        auto key = tets[i][vId];
+                        auto iter_inserted = vert_on_tetVert.try_emplace(key, iso_verts.size());
+                        if (iter_inserted.second) {
+                            iso_verts.emplace_back();
+                            auto& iso_vert = iso_verts.back();
+                            iso_vert.tet_index = i;
+                            iso_vert.tet_vert_index = j;
+                            iso_vert.simplex_size = 1;
+                            iso_vert.simplex_vert_indices[0] = tets[i][vId];
+                        }
+                        global_vId_of_tet_vert.push_back(-key - 1);
+                        iso_vId_of_vert.push_back(iter_inserted.first->second);
+                        break;
+                    }
+                    default: break;
+                    }
+                }
+            }
+            global_vId_start_index_of_tet.push_back(global_vId_of_tet_vert.size());
+            // create iso-faces
+            for (size_t j = 0; j < faces.size(); j++) {
+                iso_fId_of_tet_face.push_back(Arrangement<3>::None);
+                if (is_iso_face[j]) {
+                    face_verts.clear();
+                    for (size_t k = 0; k < faces[j].vertices.size(); k++) {
+                        face_verts.push_back(iso_vId_of_vert[faces[j].vertices[k]]);
+                    }
+                    //
+                    // face is on tet boundary if face.negative_cell is NONE
+                    bool face_on_tet_boundary = (faces[j].negative_cell == Arrangement<3>::None);
+                    //
+                    if (face_on_tet_boundary) {
+                        compute_iso_face_key(face_verts, key3);
+                        auto iter_inserted = face_on_tetFace.try_emplace(key3, iso_faces.size());
+                        if (iter_inserted.second) {
+                            iso_fId_of_tet_face.back() = iso_faces.size();
+                            iso_faces.emplace_back();
+                            iso_faces.back().vert_indices = face_verts;
+                            iso_faces.back().tet_face_indices.emplace_back(i, j);
+                        } else { // iso_face inserted before
+                            size_t iso_face_id = (iter_inserted.first)->second;
+                            iso_fId_of_tet_face.back() = iso_face_id;
+                            iso_faces[iso_face_id].tet_face_indices.emplace_back(i, j);
+                        }
+                    } else { // face not on tet boundary
+                        iso_fId_of_tet_face.back() = iso_faces.size();
+                        iso_faces.emplace_back();
+                        iso_faces.back().vert_indices = face_verts;
+                        iso_faces.back().tet_face_indices.emplace_back(i, j);
+                    }
+                }
+            }
+            iso_fId_start_index_of_tet.push_back(iso_fId_of_tet_face.size());
+        }
+    }
+    //
 }
