@@ -2,7 +2,10 @@
 #include <simplicial_arrangement/material_interface.h>
 #include <simplicial_arrangement/simplicial_arrangement.h>
 
+#include <implicit_predicates/implicit_predicates.h>
+
 #include <catch2/catch.hpp>
+#include <iostream>
 #include <random>
 #include <vector>
 
@@ -81,16 +84,16 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
                 planes.push_back({v0, v1, v2, v3});
             }
             try {
-            const auto r1 = compute_arrangement(planes);
+                const auto r1 = compute_arrangement(planes);
 
-            std::reverse(planes.begin(), planes.end());
-            const auto r2 = compute_arrangement(planes);
+                std::reverse(planes.begin(), planes.end());
+                const auto r2 = compute_arrangement(planes);
 
-            // A necessary condition for success.
-            if (r1.cells.size() == r2.cells.size() && r1.faces.size() == r2.faces.size() &&
-                r1.vertices.size() == r2.vertices.size()) {
-                success++;
-            }
+                // A necessary condition for success.
+                if (r1.cells.size() == r2.cells.size() && r1.faces.size() == r2.faces.size() &&
+                    r1.vertices.size() == r2.vertices.size()) {
+                    success++;
+                }
             } catch (const std::runtime_error&) {
                 type2_failure++;
             }
@@ -221,16 +224,16 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
                 materials.push_back({v0, v1, v2, v3});
             }
             try {
-            const auto r1 = compute_material_interface(materials);
+                const auto r1 = compute_material_interface(materials);
 
-            std::reverse(materials.begin(), materials.end());
-            const auto r2 = compute_material_interface(materials);
+                std::reverse(materials.begin(), materials.end());
+                const auto r2 = compute_material_interface(materials);
 
-            // A necessary condition for success.
-            if (r1.cells.size() == r2.cells.size() && r1.faces.size() == r2.faces.size() &&
-                r1.vertices.size() == r2.vertices.size()) {
-                success++;
-            }
+                // A necessary condition for success.
+                if (r1.cells.size() == r2.cells.size() && r1.faces.size() == r2.faces.size() &&
+                    r1.vertices.size() == r2.vertices.size()) {
+                    success++;
+                }
             } catch (const std::runtime_error&) {
                 type2_failure++;
             }
@@ -240,4 +243,9 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
         INFO("Type 2 failure: " << type2_failure);
         REQUIRE(success == N);
     }
+
+    const auto stage_stats = implicit_predicates::get_stage_stats();
+    std::cout << "Semi-static filter: " << stage_stats[0] << std::endl;
+    std::cout << "Interval arithmetic: " << stage_stats[1] << std::endl;
+    std::cout << "Exact computation: " << stage_stats[2] << std::endl;
 }
