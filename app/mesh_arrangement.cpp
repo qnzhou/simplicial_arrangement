@@ -102,6 +102,7 @@ int main(int argc, const char* argv[]) {
     bool b_place_holder;
     parse_config_file(args.config_file, tet_mesh_file, sphere_file, output_dir,
         b_place_holder, b_place_holder,
+        b_place_holder,
         use_bbox, bbox_min, bbox_max);
 
     // load tet mesh
