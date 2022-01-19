@@ -461,7 +461,9 @@ void test_3D()
 TEST_CASE("Material interface 2D", "[material_interface][2D]")
 {
     using namespace simplicial_arrangement;
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
     SECTION("Int") { test_2D<Int>(); }
+#endif
     SECTION("double") { test_2D<double>(); }
 }
 
@@ -470,6 +472,7 @@ TEST_CASE("Material interface 3D", "[material_interface][3D]")
     using namespace simplicial_arrangement;
     REQUIRE(load_lookup_table(MATERIAL_INTERFACE));
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
     SECTION("Int")
     {
         SECTION("Without lookup")
@@ -484,6 +487,7 @@ TEST_CASE("Material interface 3D", "[material_interface][3D]")
         }
         disable_lookup_table();
     }
+#endif
     SECTION("double")
     {
         SECTION("Without lookup")

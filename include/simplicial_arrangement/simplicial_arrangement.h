@@ -30,9 +30,13 @@ template <int DIM>
 struct Arrangement;
 
 Arrangement<2> compute_arrangement(const std::vector<Plane<double, 2>>& planes);
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
 Arrangement<2> compute_arrangement(const std::vector<Plane<Int, 2>>& planes);
+#endif
 Arrangement<3> compute_arrangement(const std::vector<Plane<double, 3>>& planes);
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
 Arrangement<3> compute_arrangement(const std::vector<Plane<Int, 3>>& planes);
+#endif
 
 /**
  * A self-contained data structure for 2D or 3D arrangement representation.

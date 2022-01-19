@@ -30,9 +30,13 @@ template <int DIM>
 struct MaterialInterface;
 
 MaterialInterface<2> compute_material_interface(const std::vector<Material<double, 2>>& materials);
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
 MaterialInterface<2> compute_material_interface(const std::vector<Material<Int, 2>>& materials);
+#endif
 MaterialInterface<3> compute_material_interface(const std::vector<Material<double, 3>>& materials);
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
 MaterialInterface<3> compute_material_interface(const std::vector<Material<Int, 3>>& materials);
+#endif
 
 /**
  * A self-contained data structure for 2D and 3D material interface

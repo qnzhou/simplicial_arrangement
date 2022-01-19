@@ -63,8 +63,13 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
         const size_t prev_edge = (i + num_edges - 1) % num_edges;
         const auto& prev_plane = builder.get_plane(face.edge_planes[prev_edge]);
         const auto& curr_plane = builder.get_plane(face.edge_planes[i]);
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+        orientations.push_back(implicit_predicates::orient3d_nonrobust(
+            prev_plane.data(), supporting_plane.data(), curr_plane.data(), cut_plane.data()));
+#else
         orientations.push_back(implicit_predicates::orient3d(
             prev_plane.data(), supporting_plane.data(), curr_plane.data(), cut_plane.data()));
+#endif
         assert(orientations.back() != implicit_predicates::INVALID);
         non_negative = non_negative && orientations.back() >= 0;
         non_positive = non_positive && orientations.back() <= 0;
@@ -382,8 +387,13 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(SimplicialArrangementBuilder<Scal
         const size_t prev_i = (i + num_edges - 1) % num_edges;
         const auto& prev_plane = builder.get_plane(cell.edges[prev_i]);
         const auto& curr_plane = builder.get_plane(cell.edges[i]);
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+        orientations.push_back(
+            implicit_predicates::orient2d_nonrobust(prev_plane.data(), curr_plane.data(), cut_plane.data()));
+#else
         orientations.push_back(
             implicit_predicates::orient2d(prev_plane.data(), curr_plane.data(), cut_plane.data()));
+#endif
         assert(orientations.back() != implicit_predicates::INVALID);
     }
 
@@ -542,8 +552,13 @@ bool do_intersect(const SimplicialArrangementBuilder<Scalar, 2>& builder,
         const auto& prev_plane = builder.get_plane(prev_plane_id);
         const auto& curr_plane = builder.get_plane(curr_plane_id);
 
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+        auto r =
+            implicit_predicates::orient2d_nonrobust(prev_plane.data(), curr_plane.data(), cut_plane.data());
+#else
         auto r =
             implicit_predicates::orient2d(prev_plane.data(), curr_plane.data(), cut_plane.data());
+#endif
         switch (r) {
         case implicit_predicates::POSITIVE:
             if (!certain) {
@@ -599,8 +614,13 @@ bool do_intersect(const SimplicialArrangementBuilder<Scalar, 3>& builder,
         const auto& prev_plane = builder.get_plane(prev_plane_id);
         const auto& curr_plane = builder.get_plane(curr_plane_id);
 
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+        auto r = implicit_predicates::orient3d_nonrobust(
+            supporting_plane.data(), prev_plane.data(), curr_plane.data(), cut_plane.data());
+#else
         auto r = implicit_predicates::orient3d(
             supporting_plane.data(), prev_plane.data(), curr_plane.data(), cut_plane.data());
+#endif
         switch (r) {
         case implicit_predicates::POSITIVE:
             if (!certain) {
@@ -687,12 +707,14 @@ void cut(SimplicialArrangementBuilder<double, 2>& builder, BSPNode<2>& root, siz
     ::cut(builder, edge_map, root, cut_plane_index);
 }
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
 void cut(SimplicialArrangementBuilder<Int, 2>& builder, BSPNode<2>& root, size_t cut_plane_index)
 {
     EdgeIndexMap edge_map;
     edge_map.reserve(builder.get_num_planes());
     ::cut(builder, edge_map, root, cut_plane_index);
 }
+#endif
 
 void cut(SimplicialArrangementBuilder<double, 3>& builder, BSPNode<3>& root, size_t cut_plane_index)
 {
@@ -701,11 +723,13 @@ void cut(SimplicialArrangementBuilder<double, 3>& builder, BSPNode<3>& root, siz
     ::cut(builder, edge_map, root, cut_plane_index);
 }
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
 void cut(SimplicialArrangementBuilder<Int, 3>& builder, BSPNode<3>& root, size_t cut_plane_index)
 {
     EdgeIndexMap edge_map;
     edge_map.reserve(builder.get_num_planes() * builder.get_num_planes());
     ::cut(builder, edge_map, root, cut_plane_index);
 }
+#endif
 
 } // namespace simplicial_arrangement::internal

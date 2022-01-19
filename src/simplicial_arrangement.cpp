@@ -116,10 +116,12 @@ Arrangement<2> compute_arrangement(const std::vector<Plane<double, 2>>& planes)
     return compute_arrangement_impl<double, 2>(planes);
 }
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
 Arrangement<2> compute_arrangement(const std::vector<Plane<Int, 2>>& planes)
 {
     return compute_arrangement_impl<Int, 2>(planes);
 }
+#endif
 
 Arrangement<3> compute_arrangement(const std::vector<Plane<double, 3>>& planes)
 {
@@ -129,6 +131,7 @@ Arrangement<3> compute_arrangement(const std::vector<Plane<double, 3>>& planes)
     return compute_arrangement_impl<double, 3>(planes);
 }
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
 Arrangement<3> compute_arrangement(const std::vector<Plane<Int, 3>>& planes)
 {
     if (use_lookup_table && two_func_lookup_table) {
@@ -136,6 +139,7 @@ Arrangement<3> compute_arrangement(const std::vector<Plane<Int, 3>>& planes)
     }
     return compute_arrangement_impl<Int, 3>(planes);
 }
+#endif
 
 
 } // namespace simplicial_arrangement

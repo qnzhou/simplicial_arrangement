@@ -28,6 +28,8 @@ option(SIMPLICIAL_ARRANGEMENT_LOOKUP_TABLE_GEN
     "Lookup table generation mode (for developers only)" OFF)
 option(SIMPLICIAL_ARRANGEMENT_DETERMINISTIC
     "Reqruire deterministic result (slightly slower)" OFF)
+option(SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+    "Use non-robust predicates (for developers only)" OFF)
 
 file(GLOB INC_FILES ${CMAKE_CURRENT_LIST_DIR}/include/*.h)
 file(GLOB SRC_FILES ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp)
@@ -45,6 +47,10 @@ endif()
 if (SIMPLICIAL_ARRANGEMENT_DETERMINISTIC)
     target_compile_definitions(simplicial_arrangement PRIVATE
         -DSIMPLICIAL_ARRANGEMENT_DETERMINISTIC)
+endif()
+if (SIMPLICIAL_ARRANGEMENT_NON_ROBUST)
+    target_compile_definitions(simplicial_arrangement PRIVATE
+        -DSIMPLICIAL_ARRANGEMENT_NON_ROBUST)
 endif()
 if (NOT MSVC)
     target_compile_options(simplicial_arrangement PRIVATE "-Wall" "-Werror")
@@ -80,6 +86,10 @@ if (SIMPLICIAL_ARRANGEMENT_UNIT_TESTS)
             target_compile_options(simplicial_arrangement_tests PRIVATE -fprofile-instr-generate -fcoverage-mapping)
             target_link_options(simplicial_arrangement_tests PRIVATE -fprofile-instr-generate -fcoverage-mapping)
         endif()
+    endif()
+    if (SIMPLICIAL_ARRANGEMENT_NON_ROBUST)
+        target_compile_definitions(simplicial_arrangement_tests PRIVATE
+            -DSIMPLICIAL_ARRANGEMENT_NON_ROBUST)
     endif()
 endif()
 
