@@ -28,6 +28,7 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
     SECTION("Simplicial arrangement - point intersection")
     {
         size_t success = 0;
+        size_t type2_failure = 0; // Failure due to invalid state.
         for (size_t i = 0; i < N; i++) {
             planes.clear();
             for (size_t j = 0; j < M; j++) {
@@ -37,24 +38,31 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
                 Scalar v3 = -v0 - v1 - v2;
                 planes.push_back({v0, v1, v2, v3});
             }
-            const auto r1 = compute_arrangement(planes);
+            try {
+                const auto r1 = compute_arrangement(planes);
 
-            std::reverse(planes.begin(), planes.end());
-            const auto r2 = compute_arrangement(planes);
+                std::reverse(planes.begin(), planes.end());
+                const auto r2 = compute_arrangement(planes);
 
-            // A necessary condition for success.
-            if (r1.cells.size() == r2.cells.size() && r1.faces.size() == r2.faces.size() &&
-                r1.vertices.size() == r2.vertices.size()) {
-                success++;
+                // A necessary condition for success.
+                if (r1.cells.size() == r2.cells.size() && r1.faces.size() == r2.faces.size() &&
+                    r1.vertices.size() == r2.vertices.size()) {
+                    success++;
+                }
+            } catch (const std::runtime_error&) {
+                type2_failure++;
             }
         }
 
+        INFO("Type 1 failure: " << N - success - type2_failure);
+        INFO("Type 2 failure: " << type2_failure);
         REQUIRE(success == N);
     }
 
     SECTION("Simplicial arrangement - near point intersection")
     {
         size_t success = 0;
+        size_t type2_failure = 0; // Failure due to invalid state.
         for (size_t i = 0; i < N; i++) {
             planes.clear();
             for (size_t j = 0; j < M; j++) {
@@ -72,6 +80,7 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
 
                 planes.push_back({v0, v1, v2, v3});
             }
+            try {
             const auto r1 = compute_arrangement(planes);
 
             std::reverse(planes.begin(), planes.end());
@@ -82,17 +91,20 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
                 r1.vertices.size() == r2.vertices.size()) {
                 success++;
             }
+            } catch (const std::runtime_error&) {
+                type2_failure++;
+            }
         }
 
+        INFO("Type 1 failure: " << N - success - type2_failure);
+        INFO("Type 2 failure: " << type2_failure);
         REQUIRE(success == N);
     }
 
-
     SECTION("Simplicial arrangement - line intersection")
     {
-        // Sadly, the non-robust version enters an infinite loop for this test.
-#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
         size_t success = 0;
+        size_t type2_failure = 0; // Failure due to invalid state.
         for (size_t i = 0; i < N; i++) {
             planes.clear();
             for (size_t j = 0; j < M; j++) {
@@ -100,27 +112,31 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
                 Scalar b = distrib(gen);
                 planes.push_back({a + 2 * b, -2 * a - 3 * b, a, b});
             }
-            const auto r1 = compute_arrangement(planes);
+            try {
+                const auto r1 = compute_arrangement(planes);
 
-            std::reverse(planes.begin(), planes.end());
-            const auto r2 = compute_arrangement(planes);
+                std::reverse(planes.begin(), planes.end());
+                const auto r2 = compute_arrangement(planes);
 
-            // A necessary condition for success.
-            if (r1.cells.size() == r2.cells.size() && r1.faces.size() == r2.faces.size() &&
-                r1.vertices.size() == r2.vertices.size()) {
-                success++;
+                // A necessary condition for success.
+                if (r1.cells.size() == r2.cells.size() && r1.faces.size() == r2.faces.size() &&
+                    r1.vertices.size() == r2.vertices.size()) {
+                    success++;
+                }
+            } catch (const std::runtime_error&) {
+                type2_failure++;
             }
         }
 
+        INFO("Type 1 failure: " << N - success - type2_failure);
+        INFO("Type 2 failure: " << type2_failure);
         REQUIRE(success == N);
-#endif
     }
 
     SECTION("Simplicial arrangement - nearly coplanar quads")
     {
-        // Sadly, the non-robust version enters an infinite loop for this test.
-#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
         size_t success = 0;
+        size_t type2_failure = 0; // Failure due to invalid state.
         for (size_t i = 0; i < N; i++) {
             planes.clear();
             for (size_t j = 0; j < M; j++) {
@@ -132,27 +148,31 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
                 Scalar t3 = distrib(gen) / (1 << 30);
                 planes.push_back({a + t0, a + t1, -a + t2, -a + t3});
             }
-            const auto r1 = compute_arrangement(planes);
+            try {
+                const auto r1 = compute_arrangement(planes);
 
-            std::reverse(planes.begin(), planes.end());
-            const auto r2 = compute_arrangement(planes);
+                std::reverse(planes.begin(), planes.end());
+                const auto r2 = compute_arrangement(planes);
 
-            // A necessary condition for success.
-            if (r1.cells.size() == r2.cells.size() && r1.faces.size() == r2.faces.size() &&
-                r1.vertices.size() == r2.vertices.size()) {
-                success++;
+                // A necessary condition for success.
+                if (r1.cells.size() == r2.cells.size() && r1.faces.size() == r2.faces.size() &&
+                    r1.vertices.size() == r2.vertices.size()) {
+                    success++;
+                }
+            } catch (const std::runtime_error&) {
+                type2_failure++;
             }
         }
 
+        INFO("Type 1 failure: " << N - success - type2_failure);
+        INFO("Type 2 failure: " << type2_failure);
         REQUIRE(success == N);
-#endif
     }
 
     SECTION("Simplicial arrangement - nearly coplanar triangles")
     {
-        // Sadly, the non-robust version enters an infinite loop for this test.
-#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
         size_t success = 0;
+        size_t type2_failure = 0; // Failure due to invalid state.
         for (size_t i = 0; i < N; i++) {
             planes.clear();
             for (size_t j = 0; j < M; j++) {
@@ -164,20 +184,25 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
                 Scalar t3 = distrib(gen) / (1 << 30);
                 planes.push_back({a + t0, -a + t1, -a + t2, -a + t3});
             }
-            const auto r1 = compute_arrangement(planes);
+            try {
+                const auto r1 = compute_arrangement(planes);
 
-            std::reverse(planes.begin(), planes.end());
-            const auto r2 = compute_arrangement(planes);
+                std::reverse(planes.begin(), planes.end());
+                const auto r2 = compute_arrangement(planes);
 
-            // A necessary condition for success.
-            if (r1.cells.size() == r2.cells.size() && r1.faces.size() == r2.faces.size() &&
-                r1.vertices.size() == r2.vertices.size()) {
-                success++;
+                // A necessary condition for success.
+                if (r1.cells.size() == r2.cells.size() && r1.faces.size() == r2.faces.size() &&
+                    r1.vertices.size() == r2.vertices.size()) {
+                    success++;
+                }
+            } catch (const std::runtime_error&) {
+                type2_failure++;
             }
         }
 
+        INFO("Type 1 failure: " << N - success - type2_failure);
+        INFO("Type 2 failure: " << type2_failure);
         REQUIRE(success == N);
-#endif
     }
 
     std::vector<Material<Scalar, 3>> materials;
@@ -185,6 +210,7 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
     SECTION("Material interface - point intersection")
     {
         size_t success = 0;
+        size_t type2_failure = 0; // Failure due to invalid state.
         for (size_t i = 0; i < N; i++) {
             materials.clear();
             for (size_t j = 0; j <= M; j++) {
@@ -194,6 +220,7 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
                 Scalar v3 = -v0 - v1 - v2;
                 materials.push_back({v0, v1, v2, v3});
             }
+            try {
             const auto r1 = compute_material_interface(materials);
 
             std::reverse(materials.begin(), materials.end());
@@ -204,8 +231,13 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
                 r1.vertices.size() == r2.vertices.size()) {
                 success++;
             }
+            } catch (const std::runtime_error&) {
+                type2_failure++;
+            }
         }
 
+        INFO("Type 1 failure: " << N - success - type2_failure);
+        INFO("Type 2 failure: " << type2_failure);
         REQUIRE(success == N);
     }
 }

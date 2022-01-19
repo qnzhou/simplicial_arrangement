@@ -2,6 +2,7 @@
 
 #include "MIComplex.h"
 #include "MaterialInterfaceBuilder.h"
+#include "robust_assert.h"
 
 #include <absl/container/flat_hash_map.h>
 #include <absl/container/flat_hash_set.h>
@@ -61,7 +62,7 @@ size_t mi_union_1_faces(MIComplex<DIM>& mi_complex,
             toggle(e.vertices[0]);
             toggle(e.vertices[1]);
         }
-        assert(bd_vertices.size() == 2);
+        ROBUST_ASSERT(bd_vertices.size() == 2);
         return bd_vertices;
     };
 
@@ -78,16 +79,16 @@ size_t mi_union_1_faces(MIComplex<DIM>& mi_complex,
         combined_eid = edges.size() - 1;
         logger().debug("Adding combined edge: {}", combined_eid);
     } else {
-        assert(bd_edge_indices.size() == 1);
+        ROBUST_ASSERT(bd_edge_indices.size() == 1);
         combined_eid = bd_edge_indices[0];
     }
-    assert(combined_eid != INVALID);
+    ROBUST_ASSERT(combined_eid != INVALID);
     auto& combined_edge = edges[combined_eid];
 
     if constexpr (DIM == 3) {
         if (edge_map != nullptr) {
             // Register combined edge in edge map.
-            assert(edge_group_key != INVALID);
+            ROBUST_ASSERT(edge_group_key != INVALID);
             edge_map->insert({edge_group_key, combined_eid});
         }
     }
@@ -123,8 +124,8 @@ size_t mi_union_1_faces(MIComplex<DIM>& mi_complex,
         auto correct_edge_material = [&](size_t i) {
             if (combined_edge.supporting_materials[i] > 3) {
                 combined_edge.supporting_materials[i] = material_index;
-                assert(combined_edge.supporting_materials[(i + 1) % 3] <= 3);
-                assert(combined_edge.supporting_materials[(i + 2) % 3] <= 3);
+                ROBUST_ASSERT(combined_edge.supporting_materials[(i + 1) % 3] <= 3);
+                ROBUST_ASSERT(combined_edge.supporting_materials[(i + 2) % 3] <= 3);
             }
         };
         correct_edge_material(0);
@@ -137,14 +138,14 @@ size_t mi_union_1_faces(MIComplex<DIM>& mi_complex,
             edges[bd_edge_indices.front()].negative_material_label;
         if (combined_edge.positive_material_label > 2) {
             combined_edge.positive_material_label = material_index;
-            assert(combined_edge.negative_material_label <= 2);
+            ROBUST_ASSERT(combined_edge.negative_material_label <= 2);
         } else if (combined_edge.negative_material_label > 2) {
             combined_edge.negative_material_label = material_index;
-            assert(combined_edge.positive_material_label <= 2);
+            ROBUST_ASSERT(combined_edge.positive_material_label <= 2);
         } else {
             logger().error(
                 "Both positive and negative materials of an edge are boundary material!");
-            assert(false);
+            ROBUST_ASSERT(false);
         }
     }
 
@@ -212,7 +213,7 @@ size_t mi_union_2_faces(MIComplex<DIM>& mi_complex,
         }
 
         if constexpr (DIM == 2) {
-            assert(f.material_label == material_index);
+            ROBUST_ASSERT(f.material_label == material_index);
         }
     }
 
@@ -231,10 +232,10 @@ size_t mi_union_2_faces(MIComplex<DIM>& mi_complex,
         auto& e = edges[eid];
         if constexpr (DIM == 2) {
             if (e.positive_material_label <= 2) {
-                assert(e.negative_material_label > 2);
+                ROBUST_ASSERT(e.negative_material_label > 2);
                 to_merge[e.positive_material_label].push_back(eid);
             } else if (e.negative_material_label <= 2) {
-                assert(e.positive_material_label > 2);
+                ROBUST_ASSERT(e.positive_material_label > 2);
                 to_merge[e.negative_material_label].push_back(eid);
             }
         } else {
@@ -242,7 +243,7 @@ size_t mi_union_2_faces(MIComplex<DIM>& mi_complex,
             size_t m0 = e.supporting_materials[0];
             size_t m1 = e.supporting_materials[1];
             if (m1 <= 3) {
-                assert(e.supporting_materials[2] > 3);
+                ROBUST_ASSERT(e.supporting_materials[2] > 3);
                 if (m0 == 0 && m1 == 1) {
                     to_merge[0].push_back(eid);
                 } else if (m0 == 0 && m1 == 2) {
@@ -264,7 +265,7 @@ size_t mi_union_2_faces(MIComplex<DIM>& mi_complex,
             if (edge_group.empty()) continue;
 
             size_t out_eid = mi_union_1_faces(mi_complex, material_index, edge_group, edge_map);
-            assert(out_eid != INVALID);
+            ROBUST_ASSERT(out_eid != INVALID);
             for (auto eid : edge_group) {
                 bd_edges.erase(eid);
             }
@@ -282,18 +283,20 @@ size_t mi_union_2_faces(MIComplex<DIM>& mi_complex,
                     break;
                 }
             }
-            assert(bd_edge_orientations.find(out_eid) != bd_edge_orientations.end());
+            ROBUST_ASSERT(bd_edge_orientations.find(out_eid) != bd_edge_orientations.end());
 
             if constexpr (DIM == 2) {
                 // Change material labels in 2D so it is consistent with vertex
                 // ordering.
                 if (bd_edge_orientations[out_eid]) {
                     if (out_edge.negative_material_label != material_index) {
-                        std::swap(out_edge.positive_material_label, out_edge.negative_material_label);
+                        std::swap(
+                            out_edge.positive_material_label, out_edge.negative_material_label);
                     }
                 } else {
                     if (out_edge.positive_material_label != material_index) {
-                        std::swap(out_edge.positive_material_label, out_edge.negative_material_label);
+                        std::swap(
+                            out_edge.positive_material_label, out_edge.negative_material_label);
                     }
                 }
             }
@@ -325,7 +328,7 @@ size_t mi_union_2_faces(MIComplex<DIM>& mi_complex,
             const auto& e = edges[eid];
             size_t end_vid = bd_edge_orientations[eid] ? e.vertices[1] : e.vertices[0];
             auto itr = v2e.find(end_vid);
-            assert(itr != v2e.end());
+            ROBUST_ASSERT(itr != v2e.end());
             size_t next_eid = itr->second;
             combined_face.edges.push_back(next_eid);
         }
@@ -336,9 +339,9 @@ size_t mi_union_2_faces(MIComplex<DIM>& mi_complex,
                 const auto& e = edges[eid];
                 bool ori = bd_edge_orientations[eid];
                 if (ori) {
-                    assert(e.negative_material_label == material_index);
+                    ROBUST_ASSERT(e.negative_material_label == material_index);
                 } else {
-                    assert(e.positive_material_label == material_index);
+                    ROBUST_ASSERT(e.positive_material_label == material_index);
                 }
             }
         }
@@ -351,16 +354,16 @@ size_t mi_union_2_faces(MIComplex<DIM>& mi_complex,
         combined_face.negative_material_label = material_index; // by construction.
         const auto& old_face = faces[bd_face_indices.front()];
         if (old_face.positive_material_label <= 3) {
-            assert(old_face.negative_material_label > 3);
+            ROBUST_ASSERT(old_face.negative_material_label > 3);
             combined_face.positive_material_label = old_face.positive_material_label;
         } else {
-            assert(old_face.positive_material_label > 3);
-            assert(old_face.negative_material_label <= 3);
+            ROBUST_ASSERT(old_face.positive_material_label > 3);
+            ROBUST_ASSERT(old_face.negative_material_label <= 3);
             combined_face.positive_material_label = old_face.negative_material_label;
         }
     }
 
-    assert(utils::edges_are_ordered(edges, combined_face.edges));
+    ROBUST_ASSERT(utils::edges_are_ordered(edges, combined_face.edges));
     faces.push_back(std::move(combined_face));
     return faces.size() - 1;
 }
@@ -398,7 +401,7 @@ size_t mi_union_3_faces(
 
     for (size_t cid : bd_cell_indices) {
         const auto& c = cells[cid];
-        assert(c.material_label == material_index);
+        ROBUST_ASSERT(c.material_label == material_index);
         for (size_t fid : c.faces) {
             toggle(fid);
         }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MIComplex.h"
+#include "robust_assert.h"
 #include "utils.h"
 
 #include <array>
@@ -23,7 +24,7 @@ std::array<size_t, 3> mi_cut_2_face(MIComplex<DIM>& mi_complex,
     const auto& f = faces[fid];
     const size_t num_bd_edges = f.edges.size();
     logger().debug("face {} has {} bd edges", fid, num_bd_edges);
-    assert(utils::edges_are_ordered(edges, f.edges));
+    ROBUST_ASSERT(utils::edges_are_ordered(edges, f.edges));
 
     std::vector<size_t> positive_subedges, negative_subedges;
     positive_subedges.reserve(num_bd_edges + 1);
@@ -43,7 +44,7 @@ std::array<size_t, 3> mi_cut_2_face(MIComplex<DIM>& mi_complex,
         if (e0.vertices[0] == e1.vertices[0] || e0.vertices[0] == e1.vertices[1]) {
             return e0.vertices[0];
         } else {
-            assert(e0.vertices[1] == e1.vertices[0] || e0.vertices[1] == e1.vertices[1]);
+            ROBUST_ASSERT(e0.vertices[1] == e1.vertices[0] || e0.vertices[1] == e1.vertices[1]);
             return e0.vertices[1];
         }
     };
@@ -100,14 +101,14 @@ std::array<size_t, 3> mi_cut_2_face(MIComplex<DIM>& mi_complex,
     if (positive_subedges.empty() || negative_subedges.empty()) {
         // No cut.
         if (positive_subedges.empty()) {
-            assert(!negative_subedges.empty());
+            ROBUST_ASSERT(!negative_subedges.empty());
             if constexpr (DIM == 2) {
                 faces[fid].material_label = material_index;
             }
             return {INVALID, fid, cut_edge_index};
         } else {
-            assert(!positive_subedges.empty());
-            assert(negative_subedges.empty());
+            ROBUST_ASSERT(!positive_subedges.empty());
+            ROBUST_ASSERT(negative_subedges.empty());
             return {fid, INVALID, cut_edge_index};
         }
     }
@@ -138,7 +139,7 @@ std::array<size_t, 3> mi_cut_2_face(MIComplex<DIM>& mi_complex,
         negative_subface.negative_material_label = f.negative_material_label;
     }
 
-    assert(cut_edge_index != INVALID);
+    ROBUST_ASSERT(cut_edge_index != INVALID);
     if (cut_edge_positive_location != positive_subedges.size()) {
         std::rotate(positive_subedges.begin(),
             positive_subedges.begin() + cut_edge_positive_location,
@@ -156,7 +157,7 @@ std::array<size_t, 3> mi_cut_2_face(MIComplex<DIM>& mi_complex,
             if (e.positive_material_label == f.material_label) {
                 e.positive_material_label = material_index;
             } else {
-                assert(e.negative_material_label == f.material_label);
+                ROBUST_ASSERT(e.negative_material_label == f.material_label);
                 e.negative_material_label = material_index;
             }
         }
@@ -164,10 +165,10 @@ std::array<size_t, 3> mi_cut_2_face(MIComplex<DIM>& mi_complex,
 
     positive_subedges.push_back(cut_edge_index);
     positive_subface.edges = std::move(positive_subedges);
-    assert(positive_subface.edges.size() > 2);
+    ROBUST_ASSERT(positive_subface.edges.size() > 2);
     negative_subedges.push_back(cut_edge_index);
     negative_subface.edges = std::move(negative_subedges);
-    assert(negative_subface.edges.size() > 2);
+    ROBUST_ASSERT(negative_subface.edges.size() > 2);
 
     faces.push_back(std::move(positive_subface));
     faces.push_back(std::move(negative_subface));
@@ -176,8 +177,8 @@ std::array<size_t, 3> mi_cut_2_face(MIComplex<DIM>& mi_complex,
     logger().debug("Adding positive subface: {}", positive_subface_id);
     logger().debug("Adding negative subface: {}", negative_subface_id);
 
-    assert(utils::edges_are_ordered(edges, faces[positive_subface_id].edges));
-    assert(utils::edges_are_ordered(edges, faces[negative_subface_id].edges));
+    ROBUST_ASSERT(utils::edges_are_ordered(edges, faces[positive_subface_id].edges));
+    ROBUST_ASSERT(utils::edges_are_ordered(edges, faces[negative_subface_id].edges));
 
     return {positive_subface_id, negative_subface_id, cut_edge_index};
 }

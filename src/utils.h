@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common.h"
+#include "robust_assert.h"
 
 #include <implicit_predicates/implicit_predicates.h>
 
@@ -10,10 +11,7 @@ namespace simplicial_arrangement::utils {
 
 inline int8_t signof(implicit_predicates::Orientation o)
 {
-    if (o == implicit_predicates::INVALID) {
-        logger().error("Invalid orientation detected.");
-        throw std::runtime_error("Invalid orientation");
-    }
+    ROBUST_ASSERT(o != implicit_predicates::INVALID);
     if (o > 0)
         return 1;
     else if (o < 0)
