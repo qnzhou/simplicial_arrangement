@@ -498,3 +498,37 @@ inline int sign(double x)
 {
     return (x > 0) ? 1 : ((x < 0) ? -1 : 0);
 }
+
+// tetrahedron dual contouring
+// input:
+// pts & tets: tet mesh
+// funcVals: |pts| * |num_func| matrix, function values at tet vertices
+// funcSigns: |pts| * |num_func| matrix, true if function j is positive at vertex i
+// output:
+// mesh_verts
+// mesh_tris
+void tet_dual_contouring(const std::vector<std::array<double,3>> &pts,
+    const std::vector<std::array<size_t,4>> &tets,
+    const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &funcVals,
+    const Eigen::Matrix<bool, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &funcSigns,
+    std::vector<std::array<double,3>> &mesh_verts,
+    std::vector<std::array<size_t,3>> &mesh_tris);
+
+// tetrahedron dual contouring
+// input:
+// pts & tets: tet mesh
+// funcVals: |pts| * |num_func| matrix, function values at tet vertices
+// funcSigns: |pts| * |num_func| matrix, true if function j is positive at vertex i
+// func_in_tet and start_index_of_tet: function indices in each tet, stored as CRS vector.
+// output:
+// mesh_verts
+// mesh_tris
+void tet_dual_contouring(size_t num_1func, size_t num_2func, size_t num_more_func,
+    const std::vector<std::array<double,3>> &pts,
+    const std::vector<std::array<size_t,4>> &tets,
+    const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &funcVals,
+    const Eigen::Matrix<bool, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &funcSigns,
+    const std::vector<size_t> &func_in_tet,
+    const std::vector<size_t> &start_index_of_tet,
+    std::vector<std::array<double,3>> &mesh_verts,
+    std::vector<std::array<size_t,3>> &mesh_tris);

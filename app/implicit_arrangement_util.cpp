@@ -21,8 +21,8 @@ bool parse_config_file(const std::string& filename,
     bool& use_2func_lookup,
     bool& use_topo_ray_shooting,
     bool& use_bbox,
-    std::array<double,3> &bbox_min,
-    std::array<double,3> &bbox_max)
+    std::array<double, 3>& bbox_min,
+    std::array<double, 3>& bbox_max)
 {
     using json = nlohmann::json;
     std::ifstream fin(filename.c_str());
@@ -164,12 +164,12 @@ bool save_result(const std::string& filename,
     }
     //
     json jShells;
-    for (const auto & shell : shells) {
+    for (const auto& shell : shells) {
         jShells.push_back(json(shell));
     }
     //
     json jComponents;
-    for (const auto & component : components) {
+    for (const auto& component : components) {
         jComponents.push_back(json(component));
     }
     //
@@ -228,17 +228,17 @@ bool save_result_msh(const std::string& filename,
         }
 
         std::vector<std::array<double, 3>> vertices(num_vertices);
-        for (size_t j=0; j<vertex_map.size(); j++) {
-            if (vertex_map[j]  == INVALID) continue;
+        for (size_t j = 0; j < vertex_map.size(); j++) {
+            if (vertex_map[j] == INVALID) continue;
             vertices[vertex_map[j]] = iso_pts[j];
         }
 
         msh.add_edge_vertices(num_vertices, [&](size_t j) { return vertices[j]; });
         msh.add_edges(chain.size(), [&](size_t j) -> std::array<size_t, 2> {
-                const auto eid = chain[j];
-                const auto& e = iso_edges[eid];
-                return {vertex_map[e.v1], vertex_map[e.v2]};
-                });
+            const auto eid = chain[j];
+            const auto& e = iso_edges[eid];
+            return {vertex_map[e.v1], vertex_map[e.v2]};
+        });
     };
     for (size_t i = 0; i < chains.size(); i++) {
         extract_chain(i);
@@ -270,10 +270,10 @@ bool save_result_msh(const std::string& filename,
             const size_t s = f.vert_indices.size();
             add_vertex(f.vert_indices[0]);
             add_vertex(f.vert_indices[1]);
-            for (size_t i = 2; i < s; i++) {
-                triangles.push_back({f.vert_indices[0], f.vert_indices[i - 1], f.vert_indices[i]});
+            for (size_t j = 2; j < s; j++) {
+                triangles.push_back({f.vert_indices[0], f.vert_indices[j - 1], f.vert_indices[j]});
                 polygon_ids.push_back(poly_id);
-                add_vertex(f.vert_indices[i]);
+                add_vertex(f.vert_indices[j]);
             }
         }
 
@@ -294,14 +294,13 @@ bool save_result_msh(const std::string& filename,
 
     std::vector<size_t> patch_ids;
     std::vector<size_t> polygon_ids;
-    for (size_t i=0; i<patches.size(); i++) {
+    for (size_t i = 0; i < patches.size(); i++) {
         auto r = extract_patch(i);
         const auto& vertices = std::get<0>(r);
         const auto& triangles = std::get<1>(r);
         const auto& local_polygon_ids = std::get<2>(r);
         msh.add_face_vertices(vertices.size(), [&](size_t j) { return vertices[j]; });
-        msh.add_faces(
-            triangles.size(), [&](size_t j) { return triangles[j]; });
+        msh.add_faces(triangles.size(), [&](size_t j) { return triangles[j]; });
         patch_ids.insert(patch_ids.end(), triangles.size(), i);
         polygon_ids.insert(polygon_ids.end(), local_polygon_ids.begin(), local_polygon_ids.end());
     }
@@ -325,7 +324,7 @@ bool save_result_msh(const std::string& filename,
             }
         };
 
-        for (auto shell_id: cell) {
+        for (auto shell_id : cell) {
             const auto& shell = shells[shell_id];
             for (auto half_patch_id : shell) {
                 size_t patch_id = half_patch_id / 2;
@@ -335,9 +334,10 @@ bool save_result_msh(const std::string& filename,
                     const size_t s = f.vert_indices.size();
                     add_vertex(f.vert_indices[0]);
                     add_vertex(f.vert_indices[1]);
-                    for (size_t i = 2; i < s; i++) {
-                        triangles.push_back({f.vert_indices[0], f.vert_indices[i - 1], f.vert_indices[i]});
-                        add_vertex(f.vert_indices[i]);
+                    for (size_t j = 2; j < s; j++) {
+                        triangles.push_back(
+                            {f.vert_indices[0], f.vert_indices[j - 1], f.vert_indices[j]});
+                        add_vertex(f.vert_indices[j]);
                     }
                 }
             }
@@ -362,7 +362,7 @@ bool save_result_msh(const std::string& filename,
     };
 
     std::vector<size_t> cell_ids;
-    for (size_t i=0; i< arrangement_cells.size(); i++) {
+    for (size_t i = 0; i < arrangement_cells.size(); i++) {
         size_t num_faces = extract_cell(i);
         cell_ids.insert(cell_ids.end(), num_faces, i);
     }
@@ -381,10 +381,10 @@ bool save_nesting_data(const std::string& filename,
     json jNextVert(next_vert);
     //
     json jExtremeEdge;
-    size_t num_components = extremal_edge_of_component.size()/2;
+    size_t num_components = extremal_edge_of_component.size() / 2;
     for (size_t i = 0; i < num_components; ++i) {
-        jExtremeEdge.push_back({extremal_edge_of_component[2*i],
-            extremal_edge_of_component[2*i + 1]});
+        jExtremeEdge.push_back(
+            {extremal_edge_of_component[2 * i], extremal_edge_of_component[2 * i + 1]});
     }
     //
     json jOut;
@@ -506,8 +506,6 @@ bool save_timings(const std::string& filename,
     fout.close();
     return true;
 }
-
-
 
 
 // extract the boundary triangle mesh of a tet mesh
@@ -655,25 +653,25 @@ void extract_iso_mesh_pure(size_t num_1_func,
             }
             is_iso_face.clear();
             if (arrangement.unique_planes.empty()) { // all planes are unique
-                for (size_t j = 0; j < faces.size(); ++j) {
+                for (const auto& face : faces) {
                     is_iso_face.push_back(false);
-                    if (faces[j].supporting_plane > 3) { // plane 0,1,2,3 are tet boundaries
+                    if (face.supporting_plane > 3) { // plane 0,1,2,3 are tet boundaries
                         is_iso_face.back() = true;
-                        for (const auto& vid : faces[j].vertices) {
+                        for (const auto& vid : face.vertices) {
                             is_iso_vert[vid] = true;
                         }
                     }
                 }
             } else {
-                for (size_t j = 0; j < faces.size(); j++) {
+                for (const auto& face : faces) {
                     is_iso_face.push_back(false);
-                    auto pid = faces[j].supporting_plane;
+                    auto pid = face.supporting_plane;
                     auto uid = arrangement.unique_plane_indices[pid];
                     for (const auto& plane_id : arrangement.unique_planes[uid]) {
                         if (plane_id > 3) { // plane 0,1,2,3 are tet boundaries
                             //                        is_iso_face[j] = true;
                             is_iso_face.back() = true;
-                            for (const auto& vid : faces[j].vertices) {
+                            for (const auto& vid : face.vertices) {
                                 is_iso_vert[vid] = true;
                             }
                             break;
@@ -824,8 +822,8 @@ void extract_iso_mesh_pure(size_t num_1_func,
             for (size_t j = 0; j < faces.size(); j++) {
                 if (is_iso_face[j]) {
                     face_verts.clear();
-                    for (size_t k = 0; k < faces[j].vertices.size(); k++) {
-                        face_verts.push_back(iso_vId_of_vert[faces[j].vertices[k]]);
+                    for (unsigned long vId : faces[j].vertices) {
+                        face_verts.push_back(iso_vId_of_vert[vId]);
                     }
                     //
                     // face is on tet boundary if face.negative_cell is NONE
@@ -866,7 +864,8 @@ void extract_iso_mesh_marching_tet(const std::vector<bool>& has_isosurface,
     // (tet vertex1 index, tet vertex2 index) --> iso-vertex index
     absl::flat_hash_map<std::array<size_t, 2>, size_t> vert_on_tetEdge;
     // hash table for faces on the boundary of tetrahedron
-    // (smallest iso-vert Id, second smallest iso-vert Id, largest iso-vert Id) --> iso-face index
+    // (smallest iso-vert index, second smallest iso-vert index, largest iso-vert index) -->
+    // iso-face index
     absl::flat_hash_map<std::array<size_t, 3>, size_t> face_on_tetFace;
     //
     size_t num_tet = has_isosurface.size();
@@ -1519,7 +1518,7 @@ void compute_shells_and_components(size_t num_patch,
         }
     }
     // find connected component of patch-adjacency graph
-    // each component is a iso-surface component
+    // each component is an iso-surface component
     std::vector<bool> visited_patch(num_patch, false);
     components.clear();
     component_of_patch.resize(num_patch);
@@ -1539,8 +1538,8 @@ void compute_shells_and_components(size_t num_patch,
                 Q.pop();
                 // 1-side of patch
                 for (auto hp : half_patch_adj_list[2 * patch]) {
-                    if (!visited_patch[hp/2]) {
-                        auto p = hp/2;
+                    if (!visited_patch[hp / 2]) {
+                        auto p = hp / 2;
                         component.push_back(p);
                         component_of_patch[p] = component_Id;
                         Q.push(p);
@@ -1549,8 +1548,8 @@ void compute_shells_and_components(size_t num_patch,
                 }
                 // -1-side of patch
                 for (auto hp : half_patch_adj_list[2 * patch + 1]) {
-                    if (!visited_patch[hp/2]) {
-                        auto p = hp/2;
+                    if (!visited_patch[hp / 2]) {
+                        auto p = hp / 2;
                         component.push_back(p);
                         component_of_patch[p] = component_Id;
                         Q.push(p);
@@ -1561,11 +1560,11 @@ void compute_shells_and_components(size_t num_patch,
         }
     }
     // get shells as list of patch indices
-//    for (auto& shell : shells) {
-//        for (auto& pId : shell) {
-//            pId /= 2; // get patch index of half-patch
-//        }
-//    }
+    //    for (auto& shell : shells) {
+    //        for (auto& pId : shell) {
+    //            pId /= 2; // get patch index of half-patch
+    //        }
+    //    }
 }
 
 
@@ -1575,7 +1574,7 @@ void compute_edge_intersection_order(
     const auto& vertices = tet_cut_result.vertices;
     const auto& faces = tet_cut_result.faces;
     //
-    std::array<bool,4> edge_flag {true, true, true, true};
+    std::array<bool, 4> edge_flag{true, true, true, true};
     edge_flag[v] = false;
     edge_flag[u] = false;
 
@@ -1590,21 +1589,21 @@ void compute_edge_intersection_order(
         other_plane = Arrangement<3>::None;
         const auto& vert = vertices[i];
         for (int j = 0; j < 3; ++j) {
-            if (vert[j] < 4) {  // 0,1,2,3 are tet boundary planes
+            if (vert[j] < 4) { // 0,1,2,3 are tet boundary planes
                 if (edge_flag[vert[j]]) {
                     ++flag_count;
                 } else {
-                   other_plane = vert[j];
+                    other_plane = vert[j];
                 }
             }
         }
         if (flag_count == 2) {
             is_on_edge_vu[i] = true;
-            if (other_plane == u) {  // current vertex is v
+            if (other_plane == u) { // current vertex is v
                 v_id = i;
-            } else if (other_plane == v) {  // current vertex is u
+            } else if (other_plane == v) { // current vertex is u
                 u_id = i;
-            } else {  // current vertex is in interior of edge v->u
+            } else { // current vertex is in interior of edge v->u
                 ++num_vert_in_edge_vu;
             }
         }
@@ -1616,14 +1615,14 @@ void compute_edge_intersection_order(
     }
 
     // find all faces on triangle v->u->w, w is a third tet vertex
-    size_t pId;  // plane index of v->u->w, pick pId != v and pId != u
+    size_t pId; // plane index of v->u->w, pick pId != v and pId != u
     for (size_t i = 0; i < 4; ++i) {
         if (edge_flag[i]) {
             pId = i;
             break;
         }
     }
-//    std::vector<bool> is_on_tri_vuw(faces.size(), false);
+    //    std::vector<bool> is_on_tri_vuw(faces.size(), false);
     std::vector<size_t> faces_on_tri_vuw;
     for (size_t i = 0; i < faces.size(); ++i) {
         const auto& face = faces[i];
@@ -1636,7 +1635,7 @@ void compute_edge_intersection_order(
 
     // build edge-face connectivity on triangle v->u->w
     // map: edge (v1, v2) --> incident faces (f1, f2), f2 is None if (v1,v2) is on triangle boundary
-    absl::flat_hash_map<std::pair<size_t, size_t>, std::pair<size_t,size_t>> faces_of_edge;
+    absl::flat_hash_map<std::pair<size_t, size_t>, std::pair<size_t, size_t>> faces_of_edge;
     for (auto fId : faces_on_tri_vuw) {
         const auto& face = faces[fId];
         size_t num_vert = face.vertices.size();
@@ -1646,16 +1645,14 @@ void compute_edge_intersection_order(
             size_t vi_next = face.vertices[i_next];
             // add fId to edge (vi, vi_next)
             auto iter_inserted = faces_of_edge.try_emplace(
-                std::make_pair(vi, vi_next),
-                std::make_pair(fId, Arrangement<3>::None));
-            if (!iter_inserted.second) {  // inserted before
+                std::make_pair(vi, vi_next), std::make_pair(fId, Arrangement<3>::None));
+            if (!iter_inserted.second) { // inserted before
                 iter_inserted.first->second.second = fId;
             }
             // add fId to edge (vi_next, vi)
             iter_inserted = faces_of_edge.try_emplace(
-                std::make_pair(vi_next, vi),
-                std::make_pair(fId, Arrangement<3>::None));
-            if (!iter_inserted.second) {  // inserted before
+                std::make_pair(vi_next, vi), std::make_pair(fId, Arrangement<3>::None));
+            if (!iter_inserted.second) { // inserted before
                 iter_inserted.first->second.second = fId;
             }
         }
@@ -1701,13 +1698,14 @@ void compute_edge_intersection_order(
         size_t num_vert = face.vertices.size();
         // visit all edges of face, find edge_prev, edge_next and edge_on_vu
         for (size_t i = 0; i < num_vert; ++i) {
-            size_t i_next = (i+1) % num_vert;
+            size_t i_next = (i + 1) % num_vert;
             size_t vi = face.vertices[i];
             size_t vi_next = face.vertices[i_next];
             if (is_on_edge_vu[vi] && !is_on_edge_vu[vi_next]) {
                 auto& two_faces = faces_of_edge[std::make_pair(vi, vi_next)];
                 auto other_face = (two_faces.first == f_curr) ? two_faces.second : two_faces.first;
-                if (vi == v_id || (other_face != Arrangement<3>::None && visited_face[other_face])) {
+                if (vi == v_id ||
+                    (other_face != Arrangement<3>::None && visited_face[other_face])) {
                     edge_prev.first = vi;
                     edge_prev.second = vi_next;
                 } else {
@@ -1717,7 +1715,8 @@ void compute_edge_intersection_order(
             } else if (is_on_edge_vu[vi_next] && !is_on_edge_vu[vi]) {
                 auto& two_faces = faces_of_edge[std::make_pair(vi, vi_next)];
                 auto other_face = (two_faces.first == f_curr) ? two_faces.second : two_faces.first;
-                if (vi_next == v_id || (other_face != Arrangement<3>::None && visited_face[other_face])) {
+                if (vi_next == v_id ||
+                    (other_face != Arrangement<3>::None && visited_face[other_face])) {
                     edge_prev.first = vi;
                     edge_prev.second = vi_next;
                 } else {
@@ -1751,7 +1750,8 @@ void compute_edge_intersection_order(
 
 
 void compute_passing_face(
-    const Arrangement<3>& tet_cut_result, size_t v, size_t u, std::pair<size_t, int>& face_orient){
+    const Arrangement<3>& tet_cut_result, size_t v, size_t u, std::pair<size_t, int>& face_orient)
+{
     // find a face incident to edge v -> u
     const auto& faces = tet_cut_result.faces;
     size_t incident_face_id;
@@ -1761,8 +1761,8 @@ void compute_passing_face(
         size_t num_vert = face.vertices.size();
         for (size_t j = 0; j < num_vert; ++j) {
             size_t vId1 = face.vertices[j];
-            size_t vId2 = face.vertices[(j+1) % num_vert];
-            if ((vId1==v && vId2==u) || (vId1==u && vId2 == v)) {
+            size_t vId2 = face.vertices[(j + 1) % num_vert];
+            if ((vId1 == v && vId2 == u) || (vId1 == u && vId2 == v)) {
                 incident_face_id = i;
                 found_incident_face = true;
                 break;
@@ -1803,7 +1803,8 @@ void compute_passing_face_pair(const Arrangement<3>& tet_cut_result,
     size_t v1,
     size_t v2,
     std::pair<size_t, int>& face_orient1,
-    std::pair<size_t, int>& face_orient2){
+    std::pair<size_t, int>& face_orient2)
+{
     // find a face incident to edge v1 -> v2
     const auto& faces = tet_cut_result.faces;
     size_t incident_face_id;
@@ -1813,8 +1814,8 @@ void compute_passing_face_pair(const Arrangement<3>& tet_cut_result,
         size_t num_vert = face.vertices.size();
         for (size_t j = 0; j < num_vert; ++j) {
             size_t vId1 = face.vertices[j];
-            size_t vId2 = face.vertices[(j+1) % num_vert];
-            if ((vId1==v1 && vId2==v2) || (vId1==v2 && vId2 == v1)) {
+            size_t vId2 = face.vertices[(j + 1) % num_vert];
+            if ((vId1 == v1 && vId2 == v2) || (vId1 == v2 && vId2 == v1)) {
                 incident_face_id = i;
                 found_incident_face = true;
                 break;
@@ -1857,7 +1858,8 @@ void compute_passing_face_pair(const Arrangement<3>& tet_cut_result,
 
 void compute_arrangement_cells(size_t num_shell,
     const std::vector<std::pair<size_t, size_t>>& shell_links,
-    std::vector<std::vector<size_t>>& arrangement_cells){
+    std::vector<std::vector<size_t>>& arrangement_cells)
+{
     // build shell adjacency list
     size_t sink_shell = num_shell;
     absl::flat_hash_map<size_t, std::vector<size_t>> adjacent_shells;
@@ -1876,9 +1878,9 @@ void compute_arrangement_cells(size_t num_shell,
 
     // find connected components of shell adjacency graph
     // each component is an arrangement cells
-    std::vector<bool> visited_shell(num_shell+1, false);
-//    arrangement_cells.clear();
-    for (size_t i = 0; i < num_shell+1 ; ++i) {
+    std::vector<bool> visited_shell(num_shell + 1, false);
+    //    arrangement_cells.clear();
+    for (size_t i = 0; i < num_shell + 1; ++i) {
         if (!visited_shell[i]) {
             // create new component
             arrangement_cells.emplace_back();
@@ -1958,7 +1960,7 @@ bool load_seeds(const std::string& filename, std::vector<std::array<double, 3>>&
         }
     }
     return true;
-};
+}
 
 
 void extract_MI_mesh_pure(size_t num_2_func,
@@ -1995,7 +1997,7 @@ void extract_MI_mesh_pure(size_t num_2_func,
     // num face vert estimate = (2 * n_3func + 4 * n_moreFunc) /2
     vert_on_tetFace.reserve(num_3_func + 2 * num_more_func);
     // map: face on tet boundary -> material label
-    absl::flat_hash_map<std::array<long long,3>, size_t> material_of_bndry_face;
+    absl::flat_hash_map<std::array<long long, 3>, size_t> material_of_bndry_face;
     //
     std::vector<bool> is_MI_vert;
     is_MI_vert.reserve(8);
@@ -2007,7 +2009,7 @@ void extract_MI_mesh_pure(size_t num_2_func,
     face_verts.reserve(4);
     std::vector<long long> bndry_face_verts;
     bndry_face_verts.reserve(4);
-    std::array<long long,3> key3;
+    std::array<long long, 3> key3;
     std::array<size_t, 4> key4;
     std::array<size_t, 6> key6;
     std::array<bool, 4> used_mId;
@@ -2029,7 +2031,7 @@ void extract_MI_mesh_pure(size_t num_2_func,
                 is_MI_vert.push_back(false);
             }
             is_MI_face.clear();
-            for (const auto & face : faces) {
+            for (const auto& face : faces) {
                 // material label 0,1,2,3 represents tet boundary
                 if (face.positive_material_label > 3) {
                     is_MI_face.push_back(true);
@@ -2076,8 +2078,7 @@ void extract_MI_mesh_pure(size_t num_2_func,
                     }
                     // tet vert i is mapped to (-i-1)
                     MI_vId_of_vert.push_back(-tets[i][vId] - 1);
-                }
-                else { // vert on an interior face
+                } else { // vert on an interior face
                     switch (num_bndry_materials) {
                     case 2: // on tet edge
                     {
@@ -2212,7 +2213,7 @@ void extract_MI_mesh_pure(size_t num_2_func,
             // create MI-faces
             for (size_t j = 0; j < faces.size(); j++) {
                 const auto& face = faces[j];
-                if (is_MI_face[j]) {  // face j is in tet interior
+                if (is_MI_face[j]) { // face j is in tet interior
                     face_verts.clear();
                     for (unsigned long vId : face.vertices) {
                         face_verts.push_back(MI_vId_of_vert[vId]);
@@ -2220,12 +2221,14 @@ void extract_MI_mesh_pure(size_t num_2_func,
                     MI_faces.emplace_back();
                     MI_faces.back().vert_indices = face_verts;
                     MI_faces.back().tet_face_indices.emplace_back(i, j);
-                } else {  // face j is on tet boundary
+                } else { // face j is on tet boundary
                     bndry_face_verts.clear();
                     for (unsigned long vId : face.vertices) {
-                        if (MI_vId_of_vert[vId] >= 0 && MI_verts[MI_vId_of_vert[vId]].simplex_size == 1) {
+                        if (MI_vId_of_vert[vId] >= 0 &&
+                            MI_verts[MI_vId_of_vert[vId]].simplex_size == 1) {
                             // intersection on tet vertex
-                            bndry_face_verts.push_back(-MI_verts[MI_vId_of_vert[vId]].simplex_vert_indices[0] - 1);
+                            bndry_face_verts.push_back(
+                                -MI_verts[MI_vId_of_vert[vId]].simplex_vert_indices[0] - 1);
                         } else {
                             bndry_face_verts.push_back(MI_vId_of_vert[vId]);
                         }
@@ -2233,7 +2236,7 @@ void extract_MI_mesh_pure(size_t num_2_func,
                     compute_iso_face_key(bndry_face_verts, key3);
                     auto m = material_in_tet[face.negative_material_label - 4 + start_index];
                     auto iter_inserted = material_of_bndry_face.try_emplace(key3, m);
-                    if (! iter_inserted.second) { // inserted before
+                    if (!iter_inserted.second) { // inserted before
                         if (iter_inserted.first->second == m) {
                             // material labels on both sides of the face are the same
                             // the face is not on material interface
@@ -2244,20 +2247,20 @@ void extract_MI_mesh_pure(size_t num_2_func,
                             face_verts.clear();
                             for (size_t k = 0; k < face.vertices.size(); ++k) {
                                 if (bndry_face_verts[k] < 0) {
-                                        // try to create new vert on tet vertex
-                                        size_t key = -bndry_face_verts[k] - 1;
-                                        auto iter_inserted =
-                                            vert_on_tetVert.try_emplace(key, MI_verts.size());
-                                        if (iter_inserted.second) {
-                                            MI_verts.emplace_back();
-                                            auto& MI_vert = MI_verts.back();
-                                            MI_vert.tet_index = i;
-                                            MI_vert.tet_vert_index = j;
-                                            MI_vert.simplex_size = 1;
-                                            MI_vert.simplex_vert_indices[0] = key;
-                                        }
-                                        //                                    MI_vId_of_vert.push_back(iter_inserted.first->second);
-                                    face_verts.push_back(iter_inserted.first->second);
+                                    // try to create new vert on tet vertex
+                                    size_t key = -bndry_face_verts[k] - 1;
+                                    auto iterInserted =
+                                        vert_on_tetVert.try_emplace(key, MI_verts.size());
+                                    if (iterInserted.second) {
+                                        MI_verts.emplace_back();
+                                        auto& MI_vert = MI_verts.back();
+                                        MI_vert.tet_index = i;
+                                        MI_vert.tet_vert_index = j;
+                                        MI_vert.simplex_size = 1;
+                                        MI_vert.simplex_vert_indices[0] = key;
+                                    }
+                                    //                                    MI_vId_of_vert.push_back(iterInserted.first->second);
+                                    face_verts.push_back(iterInserted.first->second);
                                 } else {
                                     face_verts.push_back(MI_vId_of_vert[face.vertices[k]]);
                                 }
@@ -2331,12 +2334,12 @@ bool save_result_MI(const std::string& filename,
     }
     //
     json jShells;
-    for (const auto & shell : shells) {
+    for (const auto& shell : shells) {
         jShells.push_back(json(shell));
     }
     //
     json jComponents;
-    for (const auto & component : components) {
+    for (const auto& component : components) {
         jComponents.push_back(json(component));
     }
     //
@@ -2444,11 +2447,11 @@ void compute_MI_vert_xyz(const std::vector<MI_Vert>& MI_verts,
             //
             compute_barycentric_coords(f1s4, f2s4, f3s4, b4);
             MI_pts[i][0] = b4[0] * pts[vId1][0] + b4[1] * pts[vId2][0] + b4[2] * pts[vId3][0] +
-                            b4[3] * pts[vId4][0];
+                           b4[3] * pts[vId4][0];
             MI_pts[i][1] = b4[0] * pts[vId1][1] + b4[1] * pts[vId2][1] + b4[2] * pts[vId3][1] +
-                            b4[3] * pts[vId4][1];
+                           b4[3] * pts[vId4][1];
             MI_pts[i][2] = b4[0] * pts[vId1][2] + b4[1] * pts[vId2][2] + b4[2] * pts[vId3][2] +
-                            b4[3] * pts[vId4][2];
+                           b4[3] * pts[vId4][2];
             break;
         }
         case 1: // on tet vertex
@@ -2485,8 +2488,8 @@ void compute_face_order_in_one_tet_MI(const MaterialInterface<3>& tet_cut_result
             max_material_label = cell.material_label;
         }
     }
-    std::vector<size_t> cell_of_material(max_material_label+1, MaterialInterface<3>::None);
-    for (size_t i = 0; i < tet_cut_result.cells.size() ; ++i) {
+    std::vector<size_t> cell_of_material(max_material_label + 1, MaterialInterface<3>::None);
+    for (size_t i = 0; i < tet_cut_result.cells.size(); ++i) {
         cell_of_material[tet_cut_result.cells[i].material_label] = i;
     }
 
@@ -2552,7 +2555,7 @@ void compute_edge_intersection_order_MI(const MaterialInterface<3>& tet_cut_resu
     const auto& vertices = tet_cut_result.vertices;
     const auto& faces = tet_cut_result.faces;
     //
-    std::array<bool,4> edge_flag {true, true, true, true};
+    std::array<bool, 4> edge_flag{true, true, true, true};
     edge_flag[v] = false;
     edge_flag[u] = false;
 
@@ -2568,7 +2571,7 @@ void compute_edge_intersection_order_MI(const MaterialInterface<3>& tet_cut_resu
         const auto& vert = vertices[i];
         // vert.size() == 4
         for (int j = 0; j < 4; ++j) {
-            if (vert[j] < 4) {  // 0,1,2,3 are tet boundary
+            if (vert[j] < 4) { // 0,1,2,3 are tet boundary
                 if (edge_flag[vert[j]]) {
                     ++flag_count;
                 } else {
@@ -2578,11 +2581,11 @@ void compute_edge_intersection_order_MI(const MaterialInterface<3>& tet_cut_resu
         }
         if (flag_count == 2) {
             is_on_edge_vu[i] = true;
-            if (other_plane == u) {  // current vertex is v
+            if (other_plane == u) { // current vertex is v
                 v_id = i;
-            } else if (other_plane == v) {  // current vertex is u
+            } else if (other_plane == v) { // current vertex is u
                 u_id = i;
-            } else {  // current vertex is in interior of edge v->u
+            } else { // current vertex is in interior of edge v->u
                 ++num_vert_in_edge_vu;
             }
         }
@@ -2594,7 +2597,7 @@ void compute_edge_intersection_order_MI(const MaterialInterface<3>& tet_cut_resu
     }
 
     // find all faces on triangle v->u->w, w is a third tet vertex
-    size_t pId;  // plane index of v->u->w, pick pId != v and pId != u
+    size_t pId; // plane index of v->u->w, pick pId != v and pId != u
     for (size_t i = 0; i < 4; ++i) {
         if (edge_flag[i]) {
             pId = i;
@@ -2611,7 +2614,7 @@ void compute_edge_intersection_order_MI(const MaterialInterface<3>& tet_cut_resu
 
     // build edge-face connectivity on triangle v->u->w
     // map: edge (v1, v2) --> incident faces (f1, f2), f2 is None if (v1,v2) is on triangle boundary
-    absl::flat_hash_map<std::pair<size_t, size_t>, std::pair<size_t,size_t>> faces_of_edge;
+    absl::flat_hash_map<std::pair<size_t, size_t>, std::pair<size_t, size_t>> faces_of_edge;
     for (auto fId : faces_on_tri_vuw) {
         const auto& face = faces[fId];
         size_t num_vert = face.vertices.size();
@@ -2621,16 +2624,14 @@ void compute_edge_intersection_order_MI(const MaterialInterface<3>& tet_cut_resu
             size_t vi_next = face.vertices[i_next];
             // add fId to edge (vi, vi_next)
             auto iter_inserted = faces_of_edge.try_emplace(
-                std::make_pair(vi, vi_next),
-                std::make_pair(fId, MaterialInterface<3>::None));
-            if (!iter_inserted.second) {  // inserted before
+                std::make_pair(vi, vi_next), std::make_pair(fId, MaterialInterface<3>::None));
+            if (!iter_inserted.second) { // inserted before
                 iter_inserted.first->second.second = fId;
             }
             // add fId to edge (vi_next, vi)
             iter_inserted = faces_of_edge.try_emplace(
-                std::make_pair(vi_next, vi),
-                std::make_pair(fId, MaterialInterface<3>::None));
-            if (!iter_inserted.second) {  // inserted before
+                std::make_pair(vi_next, vi), std::make_pair(fId, MaterialInterface<3>::None));
+            if (!iter_inserted.second) { // inserted before
                 iter_inserted.first->second.second = fId;
             }
         }
@@ -2676,13 +2677,14 @@ void compute_edge_intersection_order_MI(const MaterialInterface<3>& tet_cut_resu
         size_t num_vert = face.vertices.size();
         // visit all edges of face, find edge_prev, edge_next and edge_on_vu
         for (size_t i = 0; i < num_vert; ++i) {
-            size_t i_next = (i+1) % num_vert;
+            size_t i_next = (i + 1) % num_vert;
             size_t vi = face.vertices[i];
             size_t vi_next = face.vertices[i_next];
             if (is_on_edge_vu[vi] && !is_on_edge_vu[vi_next]) {
                 auto& two_faces = faces_of_edge[std::make_pair(vi, vi_next)];
                 auto other_face = (two_faces.first == f_curr) ? two_faces.second : two_faces.first;
-                if (vi == v_id || (other_face != MaterialInterface<3>::None && visited_face[other_face])) {
+                if (vi == v_id ||
+                    (other_face != MaterialInterface<3>::None && visited_face[other_face])) {
                     edge_prev.first = vi;
                     edge_prev.second = vi_next;
                 } else {
@@ -2692,7 +2694,8 @@ void compute_edge_intersection_order_MI(const MaterialInterface<3>& tet_cut_resu
             } else if (is_on_edge_vu[vi_next] && !is_on_edge_vu[vi]) {
                 auto& two_faces = faces_of_edge[std::make_pair(vi, vi_next)];
                 auto other_face = (two_faces.first == f_curr) ? two_faces.second : two_faces.first;
-                if (vi_next == v_id || (other_face != MaterialInterface<3>::None && visited_face[other_face])) {
+                if (vi_next == v_id ||
+                    (other_face != MaterialInterface<3>::None && visited_face[other_face])) {
                     edge_prev.first = vi;
                     edge_prev.second = vi_next;
                 } else {
@@ -2739,8 +2742,8 @@ void compute_passing_face_pair_MI(const MaterialInterface<3>& tet_cut_result,
         size_t num_vert = face.vertices.size();
         for (size_t j = 0; j < num_vert; ++j) {
             size_t vId1 = face.vertices[j];
-            size_t vId2 = face.vertices[(j+1) % num_vert];
-            if ((vId1==v1 && vId2==v2) || (vId1==v2 && vId2 == v1)) {
+            size_t vId2 = face.vertices[(j + 1) % num_vert];
+            if ((vId1 == v1 && vId2 == v2) || (vId1 == v2 && vId2 == v1)) {
                 incident_face_id = i;
                 found_incident_face = true;
                 break;
@@ -2759,8 +2762,8 @@ void compute_passing_face_pair_MI(const MaterialInterface<3>& tet_cut_result,
             max_material_label = cell.material_label;
         }
     }
-    std::vector<size_t> cell_of_material(max_material_label+1, MaterialInterface<3>::None);
-    for (size_t i = 0; i < tet_cut_result.cells.size() ; ++i) {
+    std::vector<size_t> cell_of_material(max_material_label + 1, MaterialInterface<3>::None);
+    for (size_t i = 0; i < tet_cut_result.cells.size(); ++i) {
         cell_of_material[tet_cut_result.cells[i].material_label] = i;
     }
     // faces[incident_face_id].positive_material_label will be a tet boundary
@@ -2784,11 +2787,13 @@ void compute_passing_face_pair_MI(const MaterialInterface<3>& tet_cut_result,
         if (found_v1 && !found_v2) {
             // the current face passes v1 but not v2
             face_orient1.first = fId;
-            face_orient1.second = (cell_of_material[face.positive_material_label] == cell_id) ? 1 : -1;
+            face_orient1.second =
+                (cell_of_material[face.positive_material_label] == cell_id) ? 1 : -1;
         } else if (!found_v1 && found_v2) {
             // the current face passes v2 but not v1
             face_orient2.first = fId;
-            face_orient2.second = (cell_of_material[face.positive_material_label] == cell_id) ? 1 : -1;
+            face_orient2.second =
+                (cell_of_material[face.positive_material_label] == cell_id) ? 1 : -1;
         }
     }
 }
@@ -2807,8 +2812,8 @@ void compute_passing_face_MI(const MaterialInterface<3>& tet_cut_result,
         size_t num_vert = face.vertices.size();
         for (size_t j = 0; j < num_vert; ++j) {
             size_t vId1 = face.vertices[j];
-            size_t vId2 = face.vertices[(j+1) % num_vert];
-            if ((vId1==v && vId2==u) || (vId1==u && vId2 == v)) {
+            size_t vId2 = face.vertices[(j + 1) % num_vert];
+            if ((vId1 == v && vId2 == u) || (vId1 == u && vId2 == v)) {
                 incident_face_id = i;
                 found_incident_face = true;
                 break;
@@ -2827,8 +2832,8 @@ void compute_passing_face_MI(const MaterialInterface<3>& tet_cut_result,
             max_material_label = cell.material_label;
         }
     }
-    std::vector<size_t> cell_of_material(max_material_label+1, MaterialInterface<3>::None);
-    for (size_t i = 0; i < tet_cut_result.cells.size() ; ++i) {
+    std::vector<size_t> cell_of_material(max_material_label + 1, MaterialInterface<3>::None);
+    for (size_t i = 0; i < tet_cut_result.cells.size(); ++i) {
         cell_of_material[tet_cut_result.cells[i].material_label] = i;
     }
     // faces[incident_face_id].positive_material_label will be a tet boundary
@@ -2852,7 +2857,8 @@ void compute_passing_face_MI(const MaterialInterface<3>& tet_cut_result,
         if (found_v && !found_u) {
             // the current face passes v but not u
             face_orient.first = fId;
-            face_orient.second = (cell_of_material[face.positive_material_label] == cell_id) ? 1 : -1;
+            face_orient.second =
+                (cell_of_material[face.positive_material_label] == cell_id) ? 1 : -1;
             return;
         }
     }
@@ -2934,24 +2940,24 @@ void extract_iso_mesh(size_t num_1_func,
             }
             is_iso_face.clear();
             if (arrangement.unique_planes.empty()) { // all planes are unique
-                for (size_t j = 0; j < faces.size(); ++j) {
+                for (const auto& face : faces) {
                     is_iso_face.push_back(false);
-                    if (faces[j].supporting_plane > 3) { // plane 0,1,2,3 are tet boundaries
+                    if (face.supporting_plane > 3) { // plane 0,1,2,3 are tet boundaries
                         is_iso_face.back() = true;
-                        for (const auto& vid : faces[j].vertices) {
+                        for (const auto& vid : face.vertices) {
                             is_iso_vert[vid] = true;
                         }
                     }
                 }
             } else {
-                for (size_t j = 0; j < faces.size(); j++) {
+                for (const auto& face : faces) {
                     is_iso_face.push_back(false);
-                    auto uid = arrangement.unique_plane_indices[faces[j].supporting_plane];
+                    auto uid = arrangement.unique_plane_indices[face.supporting_plane];
                     for (const auto& plane_id : arrangement.unique_planes[uid]) {
                         if (plane_id > 3) { // plane 0,1,2,3 are tet boundaries
                             //                        is_iso_face[j] = true;
                             is_iso_face.back() = true;
-                            for (const auto& vid : faces[j].vertices) {
+                            for (const auto& vid : face.vertices) {
                                 is_iso_vert[vid] = true;
                             }
                             break;
@@ -2969,8 +2975,7 @@ void extract_iso_mesh(size_t num_1_func,
                 // vertex.size() == 3
                 for (size_t k = 0; k < 3; k++) {
                     if (vertex[k] > 3) { // plane 0,1,2,3 are tet boundaries
-                        implicit_pIds[num_impl_planes] =
-                            func_in_tet[vertex[k] - 4 + start_index];
+                        implicit_pIds[num_impl_planes] = func_in_tet[vertex[k] - 4 + start_index];
                         ++num_impl_planes;
                     } else {
                         bndry_pIds[num_bndry_planes] = vertex[k];
@@ -2995,8 +3000,7 @@ void extract_iso_mesh(size_t num_1_func,
                     }
                     global_vId_of_tet_vert.push_back(-tets[i][vId] - 1);
                     iso_vId_of_vert.push_back(Arrangement<3>::None);
-                }
-                else {  // iso-vertex
+                } else { // iso-vertex
                     switch (num_bndry_planes) {
                     case 2: // on tet edge
                     {
@@ -3124,8 +3128,8 @@ void extract_iso_mesh(size_t num_1_func,
                 iso_fId_of_tet_face.push_back(Arrangement<3>::None);
                 if (is_iso_face[j]) {
                     face_verts.clear();
-                    for (size_t k = 0; k < faces[j].vertices.size(); k++) {
-                        face_verts.push_back(iso_vId_of_vert[faces[j].vertices[k]]);
+                    for (unsigned long vId : faces[j].vertices) {
+                        face_verts.push_back(iso_vId_of_vert[vId]);
                     }
                     //
                     // face is on tet boundary if face.negative_cell is NONE
@@ -3156,4 +3160,339 @@ void extract_iso_mesh(size_t num_1_func,
         }
     }
     //
+}
+
+void tet_dual_contouring(const std::vector<std::array<double, 3>>& pts,
+    const std::vector<std::array<size_t, 4>>& tets,
+    const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& funcVals,
+    const Eigen::Matrix<bool, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& funcSigns,
+    std::vector<std::array<double, 3>>& mesh_verts,
+    std::vector<std::array<size_t, 3>>& mesh_tris)
+{
+    // 6 tet edges, each edge is a pair of tet vertex
+    size_t edge_verts[6][2] = {{0, 1}, {0, 2}, {0, 3}, {1, 2}, {1, 3}, {2, 3}};
+    // 4 tet faces, each face is three tet edges
+    size_t face_edges[4][3] = {{3, 5, 4}, {1, 2, 5}, {2, 0, 4}, {0, 1, 3}};
+    // face i is opposite to vertex i
+    size_t face_verts[4][3] = {{1, 2, 3}, {0, 2, 3}, {0, 1, 3}, {0, 1, 2}};
+    // incident faces of edges
+    size_t edge_faces[6][2] = {{3, 2}, {1, 3}, {2, 1}, {3, 0}, {0, 2}, {1, 0}};
+    // estimate size of output mesh, reserve memory for output mesh
+    mesh_verts.reserve(pts.size() / 20);
+    mesh_tris.reserve(pts.size() / 10);
+    //
+    size_t n_func = funcVals.cols();
+    size_t none = std::numeric_limits<size_t>::max();
+    size_t v1, v2, vTmp;
+    std::pair<size_t, size_t> key2;
+    std::array<size_t, 3> key3;
+    std::array<size_t, 6> vId_of_edge;
+    std::array<size_t, 4> vId_of_face;
+    size_t vId_of_tet;
+    bool found_edge_vert;
+    std::array<double, 3> xyz;
+    double b1, b2;
+    int count;
+    // hash table
+    // if edge contains a vert, record the vert index in mesh_verts
+    // if edge doesn't contain a vert, record None
+    absl::flat_hash_map<std::pair<size_t, size_t>, size_t> mesh_vId_of_edge;
+    mesh_vId_of_edge.reserve(tets.size());
+    // if face contains a vert, record the vert index in mesh_verts
+    absl::flat_hash_map<std::array<size_t, 3>, size_t> mesh_vId_of_face;
+    mesh_vId_of_face.reserve(pts.size() / 20);
+    for (const auto& tet : tets) {
+        // init
+        vId_of_edge.fill(none);
+        found_edge_vert = false;
+        // visit each edge
+        for (size_t i = 0; i < 6; ++i) {
+            v1 = tet[edge_verts[i][0]];
+            v2 = tet[edge_verts[i][1]];
+            if (v1 > v2) {
+                vTmp = v2;
+                v2 = v1;
+                v1 = vTmp;
+            }
+            key2.first = v1;
+            key2.second = v2;
+            auto iter = mesh_vId_of_edge.find(key2);
+            if (iter == mesh_vId_of_edge.end()) { // edge has not been inserted
+                // check if two end vertices have different labels
+                // and compute the coordinates of vertex on edge
+                count = 0;
+                b1 = 0;
+                for (size_t j = 0; j < n_func; ++j) {
+                    if (funcSigns(v1, j) != funcSigns(v2, j)) {
+                        // func j has different signs on v1 and v2
+                        ++count;
+                        b1 += funcVals(v2, j) / (funcVals(v2, j) - funcVals(v1, j));
+                    }
+                }
+                if (count == 0) {
+                    // two end vertices have the same label
+                    mesh_vId_of_edge.try_emplace(key2, none);
+                } else {
+                    // two end vertices have different label
+                    // create new vertex
+                    b1 /= count;
+                    b2 = 1 - b1;
+                    mesh_vId_of_edge.try_emplace(key2, mesh_verts.size());
+                    vId_of_edge[i] = mesh_verts.size();
+                    mesh_verts.emplace_back();
+                    mesh_verts.back() = {b1 * pts[v1][0] + b2 * pts[v2][0],
+                        b1 * pts[v1][1] + b2 * pts[v2][1],
+                        b1 * pts[v1][2] + b2 * pts[v2][2]};
+                    found_edge_vert = true;
+                }
+                //
+            } else if (iter->second != none) { // edge has been inserted and contains a vert
+                vId_of_edge[i] = iter->second;
+                found_edge_vert = true;
+            }
+        }
+        //
+        if (found_edge_vert) {
+            vId_of_face.fill(none);
+            // visit each face
+            for (size_t i = 0; i < 4; ++i) {
+                key3 = {tet[face_verts[i][0]], tet[face_verts[i][1]], tet[face_verts[i][2]]};
+                std::sort(key3.begin(), key3.end());
+                auto iter = mesh_vId_of_face.find(key3);
+                if (iter == mesh_vId_of_face.end()) {
+                    // face not inserted before
+                    // check if we need to create face vertex
+                    count = 0;
+                    xyz.fill(0);
+                    for (size_t j = 0; j < 3; ++j) {
+                        if (vId_of_edge[face_edges[i][j]] != none) {
+                            // this edge of the face contains a mesh vertex
+                            const auto& p = mesh_verts[vId_of_edge[face_edges[i][j]]];
+                            ++count;
+                            xyz[0] += p[0];
+                            xyz[1] += p[1];
+                            xyz[2] += p[2];
+                        }
+                    }
+                    //
+                    if (count > 0) {
+                        // create a new face vertex
+                        xyz[0] /= count;
+                        xyz[1] /= count;
+                        xyz[2] /= count;
+                        mesh_vId_of_face.try_emplace(key3, mesh_verts.size());
+                        vId_of_face[i] = mesh_verts.size();
+                        mesh_verts.emplace_back(xyz);
+                    }
+                } else { // face inserted before
+                    vId_of_face[i] = iter->second;
+                    // a face is shared by at most two tets
+                    mesh_vId_of_face.erase(iter);
+                }
+            }
+            // create vertex in tet
+            count = 0;
+            xyz.fill(0);
+            for (size_t i = 0; i < 4; ++i) {
+                if (vId_of_face[i] != none) {
+                    ++count;
+                    const auto& p = mesh_verts[vId_of_face[i]];
+                    xyz[0] += p[0];
+                    xyz[1] += p[1];
+                    xyz[2] += p[2];
+                }
+            }
+            xyz[0] /= count;
+            xyz[1] /= count;
+            xyz[2] /= count;
+            vId_of_tet = mesh_verts.size();
+            mesh_verts.emplace_back(xyz);
+            // create a quad for each edge vertex
+            for (size_t i = 0; i < 6; ++i) {
+                if (vId_of_edge[i] != none) {
+                    mesh_tris.emplace_back(std::array<size_t, 3>{
+                        vId_of_edge[i], vId_of_face[edge_faces[i][0]], vId_of_tet});
+                    mesh_tris.emplace_back(std::array<size_t, 3>{
+                        vId_of_edge[i], vId_of_tet, vId_of_face[edge_faces[i][1]]});
+                }
+            }
+        }
+    }
+}
+
+void tet_dual_contouring(size_t num_1func,
+    size_t num_2func,
+    size_t num_more_func,
+    const std::vector<std::array<double, 3>>& pts,
+    const std::vector<std::array<size_t, 4>>& tets,
+    const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& funcVals,
+    const Eigen::Matrix<bool, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& funcSigns,
+    const std::vector<size_t>& func_in_tet,
+    const std::vector<size_t>& start_index_of_tet,
+    std::vector<std::array<double, 3>>& mesh_verts,
+    std::vector<std::array<size_t, 3>>& mesh_tris)
+{
+    // 6 tet edges, each edge is a pair of tet vertex
+    size_t edge_verts[6][2] = {{0, 1}, {0, 2}, {0, 3}, {1, 2}, {1, 3}, {2, 3}};
+    // 4 tet faces, each face is three tet edges
+    size_t face_edges[4][3] = {{3, 5, 4}, {1, 2, 5}, {2, 0, 4}, {0, 1, 3}};
+    // face i is opposite to vertex i
+    size_t face_verts[4][3] = {{1, 2, 3}, {0, 2, 3}, {0, 1, 3}, {0, 1, 2}};
+    // incident faces of edges
+    size_t edge_faces[6][2] = {{3, 2}, {1, 3}, {2, 1}, {3, 0}, {0, 2}, {1, 0}};
+    // estimate size of output mesh, reserve memory for output mesh
+    // in a tet, two triangles are created for each edge vertex.
+    // 1 func in tet: number of edge vertex is either 3 or 4, producing an average of 7 triangles
+    // 2 func in tet: similar analysis shows that the average number of edge vertex is around 4~5,
+    // leading to around 9 triangles
+    // more func in tet: most likely, all the 6 tet edge will have edge vertex, leading to 12
+    // triangles
+    size_t num_tris_estimate = 7 * num_1func + 9 * num_2func + 12 * num_more_func;
+    mesh_tris.reserve(num_tris_estimate);
+    // for a triangle mesh, number of vertices is about half the number of triangles
+    mesh_verts.reserve(num_tris_estimate / 2);
+    //
+    size_t n_func = funcVals.cols();
+    size_t none = std::numeric_limits<size_t>::max();
+    size_t start_index;
+    size_t end_index;
+    size_t v1, v2, vTmp;
+    std::pair<size_t, size_t> key2;
+    std::array<size_t, 3> key3;
+    // edge vertices' indices in mesh_verts, none if no such vertex
+    std::array<size_t, 6> vId_of_edge;
+    // face vertices' indices in mesh_verts, none if no such vertex
+    std::array<size_t, 4> vId_of_face;
+    // tet vertex's index in mesh_verts
+    size_t vId_of_tet;
+    std::array<double, 3> xyz;
+    // barycentric coordinates on an edge
+    double b1, b2;
+    int count;
+    // hash table
+    // if edge contains a vert, record the vert index in mesh_verts
+    absl::flat_hash_map<std::pair<size_t, size_t>, size_t> mesh_vId_of_edge;
+    // 1 func: about 3.5 edge vertex per tet
+    // 2 func: about 4.5 edge vertex per tet
+    // more func: about 6 edge vertex per tet
+    // an edge is shared by about 6 tets
+    // (3.5 n1 + 4.5 n2 + 6 n3)/6 is about (n1/2 + n2/2 + n3)
+    mesh_vId_of_edge.reserve(num_1func / 2 + num_2func / 2 + num_more_func);
+    // if face contains a vert, record the vert index in mesh_verts
+    absl::flat_hash_map<std::array<size_t, 3>, size_t> mesh_vId_of_face;
+    // non-empty tet has at least 3 face vertices, a face is shared by 2 tets
+    // so, number of face vertices is at least 3(n1+n2+n3)/2
+    mesh_vId_of_face.reserve(3 * (num_1func + num_2func + num_more_func) / 2);
+    for (size_t tId = 0; tId < tets.size(); tId++) {
+        if (start_index_of_tet[tId + 1] > start_index_of_tet[tId]) { // non-empty tet
+            const auto& tet = tets[tId];
+            start_index = start_index_of_tet[tId];
+            end_index = start_index_of_tet[tId + 1];
+            // init
+            vId_of_edge.fill(none);
+            // visit each edge
+            for (size_t i = 0; i < 6; ++i) {
+                v1 = tet[edge_verts[i][0]];
+                v2 = tet[edge_verts[i][1]];
+                if (v1 > v2) {
+                    vTmp = v2;
+                    v2 = v1;
+                    v1 = vTmp;
+                }
+                key2.first = v1;
+                key2.second = v2;
+                auto iter = mesh_vId_of_edge.find(key2);
+                if (iter == mesh_vId_of_edge.end()) { // edge has not been inserted
+                    // check if two end vertices have different labels
+                    // and compute the coordinates of vertex on edge
+                    count = 0;
+                    b1 = 0;
+                    for (size_t j = start_index; j < end_index; ++j) {
+                        size_t fId = func_in_tet[j];
+                        if (funcSigns(v1, fId) != funcSigns(v2, fId)) {
+                            // func fId has different signs on v1 and v2
+                            ++count;
+                            b1 += funcVals(v2, fId) / (funcVals(v2, fId) - funcVals(v1, fId));
+                        }
+                    }
+                    if (count != 0) {
+                        // two end vertices have different labels
+                        // create new vertex
+                        b1 /= count;
+                        b2 = 1 - b1;
+                        mesh_vId_of_edge.try_emplace(key2, mesh_verts.size());
+                        vId_of_edge[i] = mesh_verts.size();
+                        mesh_verts.emplace_back();
+                        mesh_verts.back() = {b1 * pts[v1][0] + b2 * pts[v2][0],
+                            b1 * pts[v1][1] + b2 * pts[v2][1],
+                            b1 * pts[v1][2] + b2 * pts[v2][2]};
+                    }
+                } else { // edge has been inserted and contains a vert
+                    vId_of_edge[i] = iter->second;
+                }
+            }
+            //
+            vId_of_face.fill(none);
+            // visit each face
+            for (size_t i = 0; i < 4; ++i) {
+                key3 = {tet[face_verts[i][0]], tet[face_verts[i][1]], tet[face_verts[i][2]]};
+                std::sort(key3.begin(), key3.end());
+                auto iter = mesh_vId_of_face.find(key3);
+                if (iter == mesh_vId_of_face.end()) {
+                    // face not inserted before
+                    // check if we need to create face vertex
+                    count = 0;
+                    xyz.fill(0);
+                    for (size_t j = 0; j < 3; ++j) {
+                        if (vId_of_edge[face_edges[i][j]] != none) {
+                            // this edge of the face contains a mesh vertex
+                            const auto& p = mesh_verts[vId_of_edge[face_edges[i][j]]];
+                            ++count;
+                            xyz[0] += p[0];
+                            xyz[1] += p[1];
+                            xyz[2] += p[2];
+                        }
+                    }
+                    //
+                    if (count > 0) {
+                        // create a new face vertex
+                        xyz[0] /= count;
+                        xyz[1] /= count;
+                        xyz[2] /= count;
+                        mesh_vId_of_face.try_emplace(key3, mesh_verts.size());
+                        vId_of_face[i] = mesh_verts.size();
+                        mesh_verts.emplace_back(xyz);
+                    }
+                } else { // face inserted before
+                    vId_of_face[i] = iter->second;
+                }
+            }
+            // create vertex in tet
+            count = 0;
+            xyz.fill(0);
+            for (size_t i = 0; i < 4; ++i) {
+                if (vId_of_face[i] != none) {
+                    ++count;
+                    const auto& p = mesh_verts[vId_of_face[i]];
+                    xyz[0] += p[0];
+                    xyz[1] += p[1];
+                    xyz[2] += p[2];
+                }
+            }
+            xyz[0] /= count;
+            xyz[1] /= count;
+            xyz[2] /= count;
+            vId_of_tet = mesh_verts.size();
+            mesh_verts.emplace_back(xyz);
+            // create a pair of triangles for each edge vertex
+            for (size_t i = 0; i < 6; ++i) {
+                if (vId_of_edge[i] != none) {
+                    mesh_tris.emplace_back(std::array<size_t, 3>{
+                        vId_of_edge[i], vId_of_face[edge_faces[i][0]], vId_of_tet});
+                    mesh_tris.emplace_back(std::array<size_t, 3>{
+                        vId_of_edge[i], vId_of_tet, vId_of_face[edge_faces[i][1]]});
+                }
+            }
+        }
+    }
 }
