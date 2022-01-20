@@ -1,4 +1,5 @@
 #include "ar_cut_3_face.h"
+#include "robust_assert.h"
 
 #include <absl/container/flat_hash_map.h>
 
@@ -33,14 +34,14 @@ std::array<size_t, 3> ar_cut_3_face(ARComplex<3>& ar_complex,
 
     auto compute_cut_edge_orientation = [&](size_t fid,
                                             const std::array<size_t, 3>& subface) -> bool {
-        assert(subface[2] != INVALID);
+        ROBUST_ASSERT(subface[2] != INVALID);
         const auto& f = faces[fid];
         bool s = c.signs[f.supporting_plane];
 
         if (subface[0] == INVALID || subface[1] == INVALID) {
             // Intersection edge is on the boundary of the face.
             auto itr = std::find(f.edges.begin(), f.edges.end(), subface[2]);
-            assert(itr != f.edges.end());
+            ROBUST_ASSERT(itr != f.edges.end());
             size_t curr_i = itr - f.edges.begin();
             size_t next_i = (curr_i + 1) % f.edges.size();
 
@@ -97,7 +98,7 @@ std::array<size_t, 3> ar_cut_3_face(ARComplex<3>& ar_complex,
     // Chain cut edges into a loop.
     {
         size_t num_cut_edges = cut_edges.size();
-        assert(num_cut_edges >= 3);
+        ROBUST_ASSERT(num_cut_edges >= 3);
         absl::flat_hash_map<size_t, size_t> v2e;
         v2e.reserve(num_cut_edges);
         for (size_t i = 0; i < num_cut_edges; i++) {
@@ -117,7 +118,7 @@ std::array<size_t, 3> ar_cut_3_face(ARComplex<3>& ar_complex,
             const auto& e = edges[cut_edges[i]];
             const size_t vid = cut_edge_orientations[i] ? e.vertices[1] : e.vertices[0];
             const auto itr = v2e.find(vid);
-            assert(itr != v2e.end());
+            ROBUST_ASSERT(itr != v2e.end());
             const size_t next_i = itr->second;
             if (cut_edges[next_i] == cut_edges[chained_cut_edges.front()]) {
                 break;
@@ -132,7 +133,7 @@ std::array<size_t, 3> ar_cut_3_face(ARComplex<3>& ar_complex,
     }
 
     // Cross cut.
-    assert(!cut_edges.empty());
+    ROBUST_ASSERT(!cut_edges.empty());
     ARFace<3> cut_face;
     cut_face.edges = std::move(cut_edges);
     cut_face.supporting_plane = plane_index;
@@ -165,7 +166,7 @@ std::array<size_t, 3> ar_cut_3_face(ARComplex<3>& ar_complex,
     // Update cell id on each side of involved faces.
     {
         // cut face
-        assert(cut_face_id != INVALID);
+        ROBUST_ASSERT(cut_face_id != INVALID);
         auto& cut_f = faces[cut_face_id];
         cut_f.positive_cell = positive_cell_id;
         cut_f.negative_cell = negative_cell_id;
@@ -176,7 +177,7 @@ std::array<size_t, 3> ar_cut_3_face(ARComplex<3>& ar_complex,
         for (auto fid : positive_c.faces) {
             if (fid == cut_face_id) continue;
             auto& f = faces[fid];
-            assert(f.positive_cell == cid || f.negative_cell == cid);
+            ROBUST_ASSERT(f.positive_cell == cid || f.negative_cell == cid);
             if (f.positive_cell == cid) {
                 f.positive_cell = positive_cell_id;
             } else {
@@ -186,7 +187,7 @@ std::array<size_t, 3> ar_cut_3_face(ARComplex<3>& ar_complex,
         for (auto fid : negative_c.faces) {
             if (fid == cut_face_id) continue;
             auto& f = faces[fid];
-            assert(f.positive_cell == cid || f.negative_cell == cid);
+            ROBUST_ASSERT(f.positive_cell == cid || f.negative_cell == cid);
             if (f.positive_cell == cid) {
                 f.positive_cell = negative_cell_id;
             } else {

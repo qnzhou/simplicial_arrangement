@@ -33,6 +33,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
                 {static_cast<double>(v0), static_cast<double>(v1), static_cast<double>(v2)});
         }
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
         BENCHMARK_ADVANCED("2D arrangement (int, 3 planes)")(Catch::Benchmark::Chronometer meter)
         {
             std::vector<Plane<Int, 2>> planes;
@@ -43,6 +44,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 
             meter.measure([&]() { return compute_arrangement(planes); });
         };
+#endif
         BENCHMARK_ADVANCED("2D arrangement (double, 3 planes)")(Catch::Benchmark::Chronometer meter)
         {
             std::vector<Plane<double, 2>> planes;
@@ -54,9 +56,10 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
             meter.measure([&]() { return compute_arrangement(planes); });
         };
 
-        size_t num_vertices = 0;
-        size_t num_faces = 0;
-        size_t num_cells = 0;
+        [[maybe_unused]] size_t num_vertices = 0;
+        [[maybe_unused]] size_t num_faces = 0;
+        [[maybe_unused]] size_t num_cells = 0;
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
         BENCHMARK("2D arrangement (int, 100 planes)")
         {
             auto r = compute_arrangement(int_data);
@@ -65,12 +68,15 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
             num_cells = r.cells.size();
             return r;
         };
+#endif
         BENCHMARK("2D arrangement (double, 100 planes)")
         {
             auto r = compute_arrangement(double_data);
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
             REQUIRE(r.vertices.size() == num_vertices);
             REQUIRE(r.faces.size() == num_faces);
             REQUIRE(r.cells.size() == num_cells);
+#endif
             return r;
         };
     }
@@ -97,6 +103,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
                 {static_cast<double>(v0), static_cast<double>(v1), static_cast<double>(v2)});
         }
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
         BENCHMARK_ADVANCED("2D material interface (int, 3 planes)")(Catch::Benchmark::Chronometer meter)
         {
             std::vector<Material<Int, 2>> materials;
@@ -107,6 +114,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 
             meter.measure([&]() { return compute_material_interface(materials); });
         };
+#endif
         BENCHMARK_ADVANCED("2D material interafce (double, 3 planes)")(Catch::Benchmark::Chronometer meter)
         {
             std::vector<Material<double, 2>> materials;
@@ -118,9 +126,10 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
             meter.measure([&]() { return compute_material_interface(materials); });
         };
 
-        size_t num_vertices = 0;
-        size_t num_faces = 0;
-        size_t num_cells = 0;
+        [[maybe_unused]] size_t num_vertices = 0;
+        [[maybe_unused]] size_t num_faces = 0;
+        [[maybe_unused]] size_t num_cells = 0;
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
         BENCHMARK("2D material interface (int, 100 materials)")
         {
             auto r = compute_material_interface(int_data);
@@ -129,12 +138,15 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
             num_cells = r.cells.size();
             return r;
         };
+#endif
         BENCHMARK("2D material interface (double, 100 materials)")
         {
             auto r = compute_material_interface(double_data);
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
             REQUIRE(r.vertices.size() == num_vertices);
             REQUIRE(r.faces.size() == num_faces);
             REQUIRE(r.cells.size() == num_cells);
+#endif
             return r;
         };
     }
@@ -164,6 +176,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
                 static_cast<double>(v3)});
         }
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
         BENCHMARK_ADVANCED("3D arrangement (int, 1 planes, w/o lookup)")(Catch::Benchmark::Chronometer meter)
         {
             disable_lookup_table();
@@ -182,6 +195,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 
             meter.measure([&]() { return compute_arrangement(planes); });
         };
+#endif
 
         BENCHMARK_ADVANCED("3D arrangement (double, 1 planes, w/o lookup)")(Catch::Benchmark::Chronometer meter)
         {
@@ -203,6 +217,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
             meter.measure([&]() { return compute_arrangement(planes); });
         };
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
         BENCHMARK_ADVANCED("3D arrangement (int, 2 planes, w/o lookup)")(Catch::Benchmark::Chronometer meter)
         {
             disable_lookup_table();
@@ -224,6 +239,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 
             meter.measure([&]() { return compute_arrangement(planes); });
         };
+#endif
 
         BENCHMARK_ADVANCED("3D arrangement (double, 2 planes, w/o lookup)")(Catch::Benchmark::Chronometer meter)
         {
@@ -247,6 +263,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
             meter.measure([&]() { return compute_arrangement(planes); });
         };
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
         BENCHMARK_ADVANCED("3D arrangement (int, 3 planes)")(Catch::Benchmark::Chronometer meter)
         {
             std::vector<Plane<Int, 3>> planes;
@@ -257,6 +274,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 
             meter.measure([&]() { return compute_arrangement(planes); });
         };
+#endif
         BENCHMARK_ADVANCED("3D arrangement (double, 3 planes)")(Catch::Benchmark::Chronometer meter)
         {
             std::vector<Plane<double, 3>> planes;
@@ -268,9 +286,10 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
             meter.measure([&]() { return compute_arrangement(planes); });
         };
 
-        size_t num_vertices = 0;
-        size_t num_faces = 0;
-        size_t num_cells = 0;
+        [[maybe_unused]] size_t num_vertices = 0;
+        [[maybe_unused]] size_t num_faces = 0;
+        [[maybe_unused]] size_t num_cells = 0;
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
         BENCHMARK("3D arrangement (int, 100 planes)")
         {
             auto r = compute_arrangement(int_data);
@@ -279,12 +298,15 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
             num_cells = r.cells.size();
             return r;
         };
+#endif
         BENCHMARK("3D arrangement (double, 100 planes)")
         {
             auto r = compute_arrangement(double_data);
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
             REQUIRE(r.vertices.size() == num_vertices);
             REQUIRE(r.faces.size() == num_faces);
             REQUIRE(r.cells.size() == num_cells);
+#endif
             return r;
         };
     }
@@ -314,6 +336,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
                 static_cast<double>(v3)});
         }
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
         BENCHMARK_ADVANCED("3D material interface(int, 1 materials)")(Catch::Benchmark::Chronometer meter)
         {
             std::vector<Material<Int, 3>> materials;
@@ -322,6 +345,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 
             meter.measure([&]() { return compute_material_interface(materials); });
         };
+#endif
         BENCHMARK_ADVANCED("3D material interface (double, 1 materials)")(Catch::Benchmark::Chronometer meter)
         {
             std::vector<Material<double, 3>> materials;
@@ -331,6 +355,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
             meter.measure([&]() { return compute_material_interface(materials); });
         };
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
         BENCHMARK_ADVANCED("3D material interface (int, 2 materials, w/o lookup)")(Catch::Benchmark::Chronometer meter)
         {
             disable_lookup_table();
@@ -351,6 +376,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 
             meter.measure([&]() { return compute_material_interface(materials); });
         };
+#endif
         BENCHMARK_ADVANCED("3D material interface (double, 2 materials, w/o lookup)")(Catch::Benchmark::Chronometer meter)
         {
             disable_lookup_table();
@@ -372,6 +398,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
             meter.measure([&]() { return compute_material_interface(materials); });
         };
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
         BENCHMARK_ADVANCED("3D material interface (int, 3 materials, w/o lookup)")(Catch::Benchmark::Chronometer meter)
         {
             disable_lookup_table();
@@ -394,6 +421,7 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
 
             meter.measure([&]() { return compute_material_interface(materials); });
         };
+#endif
         BENCHMARK_ADVANCED("3D material interface (double, 3 materials, w/o lookup)")(Catch::Benchmark::Chronometer meter)
         {
             disable_lookup_table();
@@ -417,9 +445,10 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
             meter.measure([&]() { return compute_material_interface(materials); });
         };
 
-        size_t num_vertices = 0;
-        size_t num_faces = 0;
-        size_t num_cells = 0;
+        [[maybe_unused]] size_t num_vertices = 0;
+        [[maybe_unused]] size_t num_faces = 0;
+        [[maybe_unused]] size_t num_cells = 0;
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
         BENCHMARK("3D material interface (int, 100 planes)")
         {
             auto r = compute_material_interface(int_data);
@@ -428,12 +457,15 @@ TEST_CASE("benchmark", "[arrangement][.benchmark]")
             num_cells = r.cells.size();
             return r;
         };
+#endif
         BENCHMARK("3D material interface (double, 100 planes)")
         {
             auto r = compute_material_interface(double_data);
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
             REQUIRE(r.vertices.size() == num_vertices);
             REQUIRE(r.faces.size() == num_faces);
             REQUIRE(r.cells.size() == num_cells);
+#endif
             return r;
         };
     }

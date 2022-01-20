@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ARComplex.h"
+#include "robust_assert.h"
 
 #include <algorithm>
 #include <array>
@@ -42,7 +43,7 @@ std::array<size_t, 3> ar_cut_2_face(ARComplex<DIM>& ar_complex,
         if (e0.vertices[0] == e1.vertices[0] || e0.vertices[0] == e1.vertices[1]) {
             return e0.vertices[0];
         } else {
-            assert(e0.vertices[1] == e1.vertices[0] || e0.vertices[1] == e1.vertices[1]);
+            ROBUST_ASSERT(e0.vertices[1] == e1.vertices[0] || e0.vertices[1] == e1.vertices[1]);
             return e0.vertices[1];
         }
     };
@@ -101,18 +102,18 @@ std::array<size_t, 3> ar_cut_2_face(ARComplex<DIM>& ar_complex,
     if (positive_subedges.empty() || negative_subedges.empty()) {
         // No cut.
         if (positive_subedges.empty()) {
-            assert(!negative_subedges.empty());
+            ROBUST_ASSERT(!negative_subedges.empty());
             if constexpr (DIM == 2) f.signs[plane_index] = false;
             return {INVALID, fid, cut_edge_index};
         } else {
-            assert(!positive_subedges.empty());
-            assert(negative_subedges.empty());
+            ROBUST_ASSERT(!positive_subedges.empty());
+            ROBUST_ASSERT(negative_subedges.empty());
             if constexpr (DIM == 2) f.signs[plane_index] = true;
             return {fid, INVALID, cut_edge_index};
         }
     }
 
-    assert(cut_edge_index == INVALID);
+    ROBUST_ASSERT(cut_edge_index == INVALID);
     {
         // Insert cut edge.
         if constexpr (DIM == 2) {
@@ -141,7 +142,7 @@ std::array<size_t, 3> ar_cut_2_face(ARComplex<DIM>& ar_complex,
         negative_subface.negative_cell = f.negative_cell;
     }
 
-    assert(cut_edge_index != INVALID);
+    ROBUST_ASSERT(cut_edge_index != INVALID);
     if (cut_edge_positive_location != positive_subedges.size()) {
         std::rotate(positive_subedges.begin(),
             positive_subedges.begin() + cut_edge_positive_location,
@@ -154,10 +155,10 @@ std::array<size_t, 3> ar_cut_2_face(ARComplex<DIM>& ar_complex,
     }
     positive_subedges.push_back(cut_edge_index);
     positive_subface.edges = std::move(positive_subedges);
-    assert(positive_subface.edges.size() > 2);
+    ROBUST_ASSERT(positive_subface.edges.size() > 2);
     negative_subedges.push_back(cut_edge_index);
     negative_subface.edges = std::move(negative_subedges);
-    assert(negative_subface.edges.size() > 2);
+    ROBUST_ASSERT(negative_subface.edges.size() > 2);
 
     faces.push_back(std::move(positive_subface));
     faces.push_back(std::move(negative_subface));
@@ -181,7 +182,7 @@ std::array<size_t, 3> ar_cut_2_face(ARComplex<DIM>& ar_complex,
         for (auto eid : positive_f.edges) {
             if (eid == cut_edge_index) continue;
             auto& e = edges[eid];
-            assert(e.positive_face == fid || e.negative_face == fid);
+            ROBUST_ASSERT(e.positive_face == fid || e.negative_face == fid);
             if (e.positive_face == fid) {
                 e.positive_face = positive_fid;
             } else {
@@ -191,7 +192,7 @@ std::array<size_t, 3> ar_cut_2_face(ARComplex<DIM>& ar_complex,
         for (auto eid : negative_f.edges) {
             if (eid == cut_edge_index) continue;
             auto& e = edges[eid];
-            assert(e.positive_face == fid || e.negative_face == fid);
+            ROBUST_ASSERT(e.positive_face == fid || e.negative_face == fid);
             if (e.positive_face == fid) {
                 e.positive_face = negative_fid;
             } else {

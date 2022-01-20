@@ -14,9 +14,13 @@ struct BSPNode;
 namespace simplicial_arrangement::internal {
 
 void cut(SimplicialArrangementBuilder<double, 2>& builder, BSPNode<2>& root, size_t cut_plane);
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
 void cut(SimplicialArrangementBuilder<Int, 2>& builder, BSPNode<2>& root, size_t cut_plane);
+#endif
 
 void cut(SimplicialArrangementBuilder<double, 3>& builder, BSPNode<3>& root, size_t cut_plane);
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
 void cut(SimplicialArrangementBuilder<Int, 3>& builder, BSPNode<3>& root, size_t cut_plane);
+#endif
 
 } // namespace simplicial_arrangement::internal
