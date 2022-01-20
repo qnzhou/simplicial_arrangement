@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common.h"
+#include "robust_assert.h"
 
 #include <implicit_predicates/implicit_predicates.h>
 
@@ -10,7 +11,7 @@ namespace simplicial_arrangement::utils {
 
 inline int8_t signof(implicit_predicates::Orientation o)
 {
-    assert(o != implicit_predicates::INVALID);
+    ROBUST_ASSERT(o != implicit_predicates::INVALID);
     if (o > 0)
         return 1;
     else if (o < 0)

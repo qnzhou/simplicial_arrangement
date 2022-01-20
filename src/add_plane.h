@@ -24,9 +24,13 @@ namespace internal {
  *         plane if exists.  Otherwise, return `INVALID`.
  */
 size_t add_plane(const PlaneRepo<double, 2>& repo, ARComplex<2>& ar_complex, size_t plane_index);
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
 size_t add_plane(const PlaneRepo<Int, 2>& repo, ARComplex<2>& ar_complex, size_t plane_index);
+#endif
 size_t add_plane(const PlaneRepo<double, 3>& repo, ARComplex<3>& ar_complex, size_t plane_index);
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
 size_t add_plane(const PlaneRepo<Int, 3>& repo, ARComplex<3>& ar_complex, size_t plane_index);
+#endif
 
 } // namespace internal
 

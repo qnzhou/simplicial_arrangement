@@ -1,9 +1,12 @@
 #include <simplicial_arrangement/lookup_table.h>
 #include <simplicial_arrangement/simplicial_arrangement.h>
+
+#include <implicit_predicates/implicit_predicates.h>
+
 #include <spdlog/spdlog.h>
 #include <catch2/catch.hpp>
 
-#include <implicit_predicates/implicit_predicates.h>
+#include <cmath>
 
 namespace {
 
@@ -624,14 +627,20 @@ void test_3D()
 TEST_CASE("Arrangement 2D", "[arrangement][2D]")
 {
     using namespace simplicial_arrangement;
+    disable_lookup_table();
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
     SECTION("Int") { test_2D<Int>(); }
+#endif
     SECTION("double") { test_2D<double>(); }
 }
 
 TEST_CASE("Arrangement 3D", "[arrangement][3d]")
 {
     using namespace simplicial_arrangement;
+    disable_lookup_table();
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
     SECTION("Int") { test_3D<Int>(); }
+#endif
     SECTION("double") { test_3D<double>(); }
 }
 
@@ -641,7 +650,9 @@ TEST_CASE("Lookup 3D", "[lookup][3D]")
     bool loaded = load_lookup_table(ARRANGEMENT);
     REQUIRE(loaded == true);
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
     SECTION("Int") { test_3D<Int>(); }
+#endif
     SECTION("double") { test_3D<double>(); }
 
     SECTION("Consistency check")
@@ -774,6 +785,99 @@ TEST_CASE("Lookup 3D", "[lookup][3D]")
 
                 assert_equivalent(r1, r2);
             }
+        }
+    }
+}
+
+/**
+ * Note that the following tests will fail when
+ * `SIMPLICIAL_ARRANGMEENT_NON_ROBUST` compiler flag is set.
+ */
+TEST_CASE("Arrangement degeneracy", "[ar][3D]")
+{
+    using namespace simplicial_arrangement;
+    disable_lookup_table();
+
+    using Scalar = double;
+    constexpr Scalar EPS = std::numeric_limits<Scalar>::epsilon();
+    constexpr Scalar LARGE = M_PI * 1e6;
+    std::vector<Plane<Scalar, 3>> planes;
+
+    SECTION("Near parallel planes") {
+        // Reference case:
+        planes.push_back({-1.1, -1.2, 1.3, 1.4});
+        planes.push_back({-1.2, -1.1, 1.3, 1.4});
+        planes.push_back({-1.3, -1.2, 1.1, 1.4});
+        planes.push_back({-1.4, -1.2, 1.3, 1.1});
+        const auto r1 = compute_arrangement(planes);
+
+        SECTION("With normal values")
+        {
+            Scalar v1 = M_PI;
+            Scalar v2 = M_PI + 1e-4;
+            Scalar v3 = M_PI + 1e-3;
+            Scalar v4 = M_PI + 2e-3;
+            planes.clear();
+            planes.push_back({-v1, -v2, v3, v4});
+            planes.push_back({-v2, -v1, v3, v4});
+            planes.push_back({-v3, -v2, v1, v4});
+            planes.push_back({-v4, -v2, v3, v1});
+            const auto r2 = compute_arrangement(planes);
+            assert_equivalent(r1, r2);
+        }
+
+        SECTION("With small values")
+        {
+            const Scalar EPS2 = std::nextafter(EPS, 1.0);
+            const Scalar EPS3 = std::nextafter(EPS2, 1.0);
+            const Scalar EPS4 = std::nextafter(EPS3, 1.0);
+            planes.clear();
+            planes.push_back({-EPS, -EPS2, EPS3, EPS4});
+            planes.push_back({-EPS2, -EPS, EPS3, EPS4});
+            planes.push_back({-EPS3, -EPS2, EPS, EPS4});
+            planes.push_back({-EPS4, -EPS2, EPS3, EPS});
+            //spdlog::set_level(spdlog::level::debug);
+            const auto r2 = compute_arrangement(planes);
+            assert_equivalent(r1, r2);
+        }
+
+        SECTION("With large values")
+        {
+            const Scalar LARGE2 = std::nextafter(LARGE, 1.0);
+            const Scalar LARGE3 = std::nextafter(LARGE2, 1.0);
+            const Scalar LARGE4 = std::nextafter(LARGE3, 1.0);
+            planes.clear();
+            planes.push_back({-LARGE, -LARGE2, LARGE3, LARGE4});
+            planes.push_back({-LARGE2, -LARGE, LARGE3, LARGE4});
+            planes.push_back({-LARGE3, -LARGE2, LARGE, LARGE4});
+            planes.push_back({-LARGE4, -LARGE2, LARGE3, LARGE});
+            const auto r3 = compute_arrangement(planes);
+            assert_equivalent(r1, r3);
+        }
+    }
+
+    SECTION("4 planes intersecting at the same point")
+    {
+        // Reference case:
+        planes.push_back({-1, -1, 1, 1});
+        planes.push_back({-1, 1, -1, 1});
+        planes.push_back({-1, 1, 1, -1});
+        planes.push_back({2, -1, -2, 1});
+        const auto r1 = compute_arrangement(planes);
+
+        SECTION("With normal values")
+        {
+            const Scalar v1 = M_PI;
+            const Scalar v2 = M_PI / 3;
+            const Scalar v3 = 1.1;
+            const Scalar v4 = std::sqrt(99);
+            planes.clear();
+            planes.push_back({-v1, -v1, v1, v1});
+            planes.push_back({-v2, v2, -v2, v2});
+            planes.push_back({-v3, v3, v3, -v3});
+            planes.push_back({v4, -v2, -v4, v2});
+            const auto r2 = compute_arrangement(planes);
+            assert_equivalent(r1, r2);
         }
     }
 }

@@ -1,6 +1,7 @@
 #include "extract_arrangement.h"
 #include "ARComplex.h"
 #include "SimplicialArrangementBuilder.h"
+#include "robust_assert.h"
 
 #include <absl/container/flat_hash_map.h>
 
@@ -38,7 +39,7 @@ void extract_unique_planes(Arrangement<DIM>& r, SimplicialArrangementBuilder<Sca
     std::vector<bool> coplanar_plane_orientations(unique_plane_indices.size(), true);
     for (const auto& planes : coplanar_planes) {
         const size_t num_planes = planes.size();
-        assert(num_planes > 0);
+        ROBUST_ASSERT(num_planes > 0);
         coplanar_plane_orientations[planes[0]] = true;
         const auto& ref_plane = builder.get_plane(planes[0]);
         for (size_t i = 1; i < num_planes; i++) {
@@ -55,7 +56,7 @@ void extract_unique_planes(Arrangement<DIM>& r, SimplicialArrangementBuilder<Sca
 template <typename T>
 typename T::iterator cyclic_next(T& container, const typename T::iterator& itr)
 {
-    assert(itr != container.end());
+    ROBUST_ASSERT(itr != container.end());
     typename T::iterator next_itr = std::next(itr);
     if (next_itr == container.end()) {
         next_itr = container.begin();
@@ -66,7 +67,7 @@ typename T::iterator cyclic_next(T& container, const typename T::iterator& itr)
 template <typename T>
 typename T::iterator cyclic_prev(T& container, const typename T::iterator& itr)
 {
-    assert(itr != container.end());
+    ROBUST_ASSERT(itr != container.end());
     typename T::iterator prev_itr;
     if (itr == container.begin()) {
         prev_itr = std::prev(container.end());
@@ -92,7 +93,7 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangementBuilder<Scalar, 2>& b
                         size_t v1,
                         size_t supporting_plane_index,
                         bool cell_on_positive_side_of_supporting_plane) -> size_t {
-        assert(v0 != v1);
+        ROBUST_ASSERT(v0 != v1);
 
         // Compute canonical ordering of the face.
         bool reversed = v0 > v1;
@@ -175,8 +176,8 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangementBuilder<Scalar, 2>& b
             bounding_plane_orientations[node.separating_plane] = false;
             depth_first_traversal(*node.negative);
         } else {
-            assert(node.positive == nullptr);
-            assert(node.negative == nullptr);
+            ROBUST_ASSERT(node.positive == nullptr);
+            ROBUST_ASSERT(node.negative == nullptr);
             add_cell(node.cell, bounding_plane_orientations);
         }
     };
@@ -199,7 +200,7 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangementBuilder<Scalar, 3>& b
     auto add_face = [&](const Face<3>& face,
                         bool cell_on_positive_side_of_supporting_plane) -> size_t {
         const size_t num_edges = face.edge_planes.size();
-        assert(num_edges >= 3);
+        ROBUST_ASSERT(num_edges >= 3);
 
         // Step 1: convert boundary edge plane loop into vertex index loop.
         std::vector<size_t> vertex_indices;
@@ -209,7 +210,7 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangementBuilder<Scalar, 3>& b
             size_t prev_i = (i + num_edges - 1) % num_edges;
             vertex_indices.push_back(builder.get_vertex_index(
                 {face.edge_planes[i], face.edge_planes[prev_i], face.supporting_plane}));
-            assert(vertex_indices.back() < builder.get_vertex_count());
+            ROBUST_ASSERT(vertex_indices.back() < builder.get_vertex_count());
         }
 
         // Step 2: reorder vertex indices such that a face always starts
@@ -290,8 +291,8 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangementBuilder<Scalar, 3>& b
             bounding_plane_orientations[node.separating_plane] = false;
             depth_first_traversal(*node.negative);
         } else {
-            assert(node.positive == nullptr);
-            assert(node.negative == nullptr);
+            ROBUST_ASSERT(node.positive == nullptr);
+            ROBUST_ASSERT(node.negative == nullptr);
             add_cell(node.cell, bounding_plane_orientations);
         }
     };
@@ -371,7 +372,7 @@ Arrangement<3> extract_arrangement(ARComplex<3>&& ar_complex)
         auto& cf = faces[i];
         auto& f = ar.faces[i];
         const size_t num_bd_edges = cf.edges.size();
-        assert(num_bd_edges >= 3);
+        ROBUST_ASSERT(num_bd_edges >= 3);
         f.vertices.reserve(num_bd_edges);
 
         for (size_t j = 0; j < num_bd_edges; j++) {
@@ -381,8 +382,8 @@ Arrangement<3> extract_arrangement(ARComplex<3>&& ar_complex)
                 curr_e.vertices[0] == next_e.vertices[1]) {
                 f.vertices.push_back(curr_e.vertices[0]);
             } else {
-                assert(curr_e.vertices[1] == next_e.vertices[0] ||
-                       curr_e.vertices[1] == next_e.vertices[1]);
+                ROBUST_ASSERT(curr_e.vertices[1] == next_e.vertices[0] ||
+                              curr_e.vertices[1] == next_e.vertices[1]);
                 f.vertices.push_back(curr_e.vertices[1]);
             }
         }
