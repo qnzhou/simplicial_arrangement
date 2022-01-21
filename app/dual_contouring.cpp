@@ -243,6 +243,13 @@ int main(int argc, const char* argv[])
             shells,
             components,
             arrangement_cells);
+        save_result_msh_DC(output_dir + "/DC_mesh",
+            mesh_verts,
+            mesh_faces,
+            patches,
+            mesh_edges,
+            chains,
+            non_manifold_edges_of_vert);
     }
     save_timings(output_dir + "/timings.json", timing_labels, timings);
 
