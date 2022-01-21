@@ -332,7 +332,7 @@ int main(int argc, const char* argv[])
         compute_patches(edges_of_MI_face, MI_edges, patches);
         timings.push_back(timer.toc());
     }
-    // std::cout << "num patches = " << patches.size() << std::endl;
+    std::cout << "num patches = " << patches.size() << std::endl;
 
     // compute map: MI-face Id --> patch Id
     std::vector<size_t> patch_of_face;
@@ -371,7 +371,7 @@ int main(int argc, const char* argv[])
         compute_chains(MI_edges, non_manifold_edges_of_vert, chains);
         timings.push_back(timer.toc());
     }
-    //     std::cout << "num chains = " << chains.size() << std::endl;
+    std::cout << "num chains = " << chains.size() << std::endl;
 
     // vert-tet connectivity
     absl::flat_hash_map<size_t, std::vector<size_t>> incident_tets;
