@@ -79,15 +79,15 @@ int main(int argc, const char* argv[])
     load_spheres(material_file, spheres);
     size_t n_func = spheres.size();
 
-    Eigen::MatrixXd funcVals;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals;
     {
         timing_labels.emplace_back("func values");
         ScopedTimer<> timer("func values");
-        funcVals.resize(n_func, n_pts);
-        for (Eigen::Index j = 0; j < n_pts; j++) {
-            const auto& p = pts[j];
-            for (Eigen::Index i = 0; i < n_func; i++) {
-                funcVals(i, j) = compute_sphere_distance(spheres[i].first, spheres[i].second, p);
+        funcVals.resize(n_pts, n_func);
+        for (Eigen::Index i = 0; i < n_pts; ++i) {
+            const auto& p = pts[i];
+            for (Eigen::Index j = 0; j < n_func; j++) {
+                funcVals(i, j) = compute_sphere_distance(spheres[j].first, spheres[j].second, p);
             }
         }
         timings.push_back(timer.toc());
@@ -105,14 +105,14 @@ int main(int argc, const char* argv[])
         ScopedTimer<> timer("highest func");
         is_degenerate_vertex.resize(n_pts, false);
         highest_material_at_vert.reserve(n_pts);
-        for (Eigen::Index j = 0; j < n_pts; j++) {
-            double max = funcVals(0, j);
+        for (Eigen::Index i = 0; i < n_pts; i++) {
+            double max = funcVals(i, 0);
             size_t max_id = 0;
             size_t max_count = 1;
-            for (Eigen::Index i = 1; i < n_func; i++) {
+            for (Eigen::Index j = 1; j < n_func; j++) {
                 if (funcVals(i,j) > max) {
                     max = funcVals(i,j);
-                    max_id = i;
+                    max_id = j;
                     max_count = 1;
                 } else if (funcVals(i,j) == max) {
                     ++max_count;
@@ -121,13 +121,13 @@ int main(int argc, const char* argv[])
             highest_material_at_vert.push_back(max_id);
             //
             if (max_count > 1) {
-                is_degenerate_vertex[j] = true;
+                is_degenerate_vertex[i] = true;
                 found_degenerate_vertex = true;
-                auto& materials = highest_materials_at_vert[j];
+                auto& materials = highest_materials_at_vert[i];
                 materials.reserve(max_count);
-                for (Eigen::Index i = 0; i < n_func; i++) {
+                for (Eigen::Index j = 0; j < n_func; j++) {
                     if (funcVals(i,j) == max) {
-                        materials.push_back(i);
+                        materials.push_back(j);
                     }
                 }
             }
@@ -169,8 +169,8 @@ int main(int argc, const char* argv[])
             min_h.fill(std::numeric_limits<double>::max());
             for(auto it = materials.begin(); it != materials.end(); it++) {
                 for (size_t j = 0; j < 4; ++j) {
-                    if (funcVals(*it, tet[j]) < min_h[j]) {
-                        min_h[j] = funcVals(*it, tet[j]);
+                    if (funcVals(tet[j], *it) < min_h[j]) {
+                        min_h[j] = funcVals(tet[j], *it);
                     }
                 }
             }
@@ -179,7 +179,7 @@ int main(int argc, const char* argv[])
             for (size_t j = 0; j < n_func; ++j) {
                 greater_count = 0;
                 for (size_t k = 0; k < 4; ++k) {
-                    if (funcVals(j,tet[k]) > min_h[k]) {
+                    if (funcVals(tet[k],j) > min_h[k]) {
                         ++greater_count;
                     }
                 }
@@ -235,10 +235,10 @@ int main(int argc, const char* argv[])
                 size_t f_id = material_in_tet[start_index + j];
                 materials.emplace_back();
                 auto& material = materials.back();
-                material[0] = funcVals(f_id, v1);
-                material[1] = funcVals(f_id, v2);
-                material[2] = funcVals(f_id, v3);
-                material[3] = funcVals(f_id, v4);
+                material[0] = funcVals(v1, f_id);
+                material[1] = funcVals(v2, f_id);
+                material[2] = funcVals(v3, f_id);
+                material[3] = funcVals(v4, f_id);
             }
             //
             if (!use_3func_lookup && num_func == 3) {

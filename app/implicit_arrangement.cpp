@@ -90,10 +90,11 @@ int main(int argc, const char* argv[])
     {
         timing_labels.emplace_back("func values");
         ScopedTimer<> timer("func values");
-        funcVals.resize(n_func, n_pts);
-        for (Eigen::Index i = 0; i < n_func; i++) {
-            for (Eigen::Index j = 0; j < n_pts; j++) {
-                funcVals(i, j) = sphere_function(spheres[i].first, spheres[i].second, pts[j]);
+        funcVals.resize(n_pts, n_func);
+        for (Eigen::Index i = 0; i < n_pts; ++i) {
+            const auto& p = pts[i];
+            for (Eigen::Index j = 0; j < n_func; ++j) {
+                funcVals(i,j) = sphere_function(spheres[j].first, spheres[j].second, p);
             }
         }
         timings.push_back(timer.toc());
@@ -101,19 +102,19 @@ int main(int argc, const char* argv[])
 
 
     // function signs at vertices
-    Eigen::MatrixXi funcSigns;
+    Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcSigns;
     std::vector<bool> is_degenerate_vertex;
     bool found_degenerate_vertex = false;
     {
         timing_labels.emplace_back("func signs");
         ScopedTimer<> timer("func signs");
         is_degenerate_vertex.resize(n_pts, false);
-        funcSigns.resize(n_func, n_pts);
-        for (Eigen::Index i = 0; i < n_func; i++) {
-            for (Eigen::Index j = 0; j < n_pts; j++) {
+        funcSigns.resize(n_pts, n_func);
+        for (Eigen::Index i = 0; i < n_pts; i++) {
+            for (Eigen::Index j = 0; j < n_func; j++) {
                 funcSigns(i, j) = sign(funcVals(i, j));
                 if (funcSigns(i, j) == 0) {
-                    is_degenerate_vertex[j] = true;
+                    is_degenerate_vertex[i] = true;
                     found_degenerate_vertex = true;
                 }
             }
@@ -137,9 +138,9 @@ int main(int argc, const char* argv[])
                 pos_count = 0;
                 neg_count = 0;
                 for (size_t& vId : tets[i]) {
-                    if (funcSigns(j, vId) == 1) {
+                    if (funcSigns( vId,j) == 1) {
                         pos_count += 1;
-                    } else if (funcSigns(j, vId) == -1) {
+                    } else if (funcSigns( vId,j) == -1) {
                         neg_count += 1;
                     }
                 }
@@ -196,10 +197,10 @@ int main(int argc, const char* argv[])
                 size_t f_id = func_in_tet[start_index + j];
                 planes.emplace_back();
                 auto& plane = planes.back();
-                plane[0] = funcVals(f_id, v1);
-                plane[1] = funcVals(f_id, v2);
-                plane[2] = funcVals(f_id, v3);
-                plane[3] = funcVals(f_id, v4);
+                plane[0] = funcVals(v1, f_id);
+                plane[1] = funcVals(v2, f_id);
+                plane[2] = funcVals(v3, f_id);
+                plane[3] = funcVals(v4, f_id);
             }
             //
             if (!use_2func_lookup && num_func == 2) {
