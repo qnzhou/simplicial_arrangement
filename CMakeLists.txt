@@ -158,6 +158,16 @@ if (SIMPLICIAL_ARRANGEMENT_TEST_COVERAGE)
     endif()
 endif()
 
+add_executable(dual_contouring_MI "app/dual_contouring_MI.cpp")
+target_compile_features(dual_contouring_MI PRIVATE cxx_std_17)
+target_link_libraries(dual_contouring_MI impl_arrangement_util igl::core CLI11::CLI11)
+if (SIMPLICIAL_ARRANGEMENT_TEST_COVERAGE)
+    if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
+        target_compile_options(dual_contouring_MI PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+        target_link_options(dual_contouring_MI PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+    endif()
+endif()
+
 add_executable(generate_material_interface_lookup_table
     "app/generate_material_interface_lookup_table.cpp")
 target_link_libraries(generate_material_interface_lookup_table PRIVATE
