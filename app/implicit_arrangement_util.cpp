@@ -3337,7 +3337,7 @@ void tet_dual_contouring(size_t num_1func,
     // 4 tet faces, each face is three tet edges
     size_t face_edges[4][3] = {{3, 5, 4}, {1, 2, 5}, {2, 0, 4}, {0, 1, 3}};
     // face i is opposite to vertex i
-    size_t face_verts[4][3] = {{1, 2, 3}, {0, 2, 3}, {0, 1, 3}, {0, 1, 2}};
+    size_t face_verts[4][3] = {{1, 2, 3}, {0, 3, 2}, {0, 1, 3}, {0, 2, 1}};
     // incident faces of edges
     size_t edge_faces[6][2] = {{3, 2}, {1, 3}, {2, 1}, {3, 0}, {0, 2}, {1, 0}};
     // estimate size of output mesh, reserve memory for output mesh
@@ -3356,11 +3356,14 @@ void tet_dual_contouring(size_t num_1func,
     size_t none = std::numeric_limits<size_t>::max();
     size_t start_index;
     size_t end_index;
-    size_t v1, v2, vTmp;
+    size_t v1, v2;
     std::pair<size_t, size_t> key2;
     std::array<size_t, 3> key3;
     // edge vertices' indices in mesh_verts, none if no such vertex
     std::array<size_t, 6> vId_of_edge;
+    // label of vertex v = {sign(f0(v)), sign(f1(v)), ...}
+    // edge (v1,v2): true if on the last different label entry, v1 has positive sign.
+    std::array<bool, 6> orient_of_edge;
     // face vertices' indices in mesh_verts, none if no such vertex
     std::array<size_t, 4> vId_of_face;
     // tet vertex's index in mesh_verts
@@ -3369,15 +3372,16 @@ void tet_dual_contouring(size_t num_1func,
     // barycentric coordinates on an edge
     double b1, b2;
     int count;
+    size_t last_diff_pos;
     // hash table
-    // if edge contains a vert, record the vert index in mesh_verts
-    absl::flat_hash_map<std::pair<size_t, size_t>, size_t> mesh_vId_of_edge;
+    // if edge contains a vert, record the vert index in mesh_verts and its orientation
+    absl::flat_hash_map<std::pair<size_t, size_t>, std::pair<size_t,bool>> mesh_vId_orient_of_edge;
     // 1 func: about 3.5 edge vertex per tet
     // 2 func: about 4.5 edge vertex per tet
     // more func: about 6 edge vertex per tet
     // an edge is shared by about 6 tets
     // (3.5 n1 + 4.5 n2 + 6 n3)/6 is about (n1/2 + n2/2 + n3)
-    mesh_vId_of_edge.reserve(num_1func / 2 + num_2func / 2 + num_more_func);
+    mesh_vId_orient_of_edge.reserve(num_1func / 2 + num_2func / 2 + num_more_func);
     // if face contains a vert, record the vert index in mesh_verts
     absl::flat_hash_map<std::array<size_t, 3>, size_t> mesh_vId_of_face;
     // non-empty tet has at least 3 face vertices, a face is shared by 2 tets
@@ -3390,45 +3394,50 @@ void tet_dual_contouring(size_t num_1func,
             end_index = start_index_of_tet[tId + 1];
             // init
             vId_of_edge.fill(none);
+            orient_of_edge.fill(false);
             // visit each edge
             for (size_t i = 0; i < 6; ++i) {
                 v1 = tet[edge_verts[i][0]];
                 v2 = tet[edge_verts[i][1]];
-                if (v1 > v2) {
-                    vTmp = v2;
-                    v2 = v1;
-                    v1 = vTmp;
+                if (v1 < v2) {
+                    key2.first = v1;
+                    key2.second = v2;
+                } else {
+                    key2.first = v2;
+                    key2.second = v1;
                 }
-                key2.first = v1;
-                key2.second = v2;
-                auto iter = mesh_vId_of_edge.find(key2);
-                if (iter == mesh_vId_of_edge.end()) { // edge has not been inserted
+                auto iter = mesh_vId_orient_of_edge.find(key2);
+                if (iter == mesh_vId_orient_of_edge.end()) { // edge has not been inserted
                     // check if two end vertices have different labels
                     // and compute the coordinates of vertex on edge
                     count = 0;
+                    last_diff_pos = none;
                     b1 = 0;
                     for (size_t j = start_index; j < end_index; ++j) {
                         size_t fId = func_in_tet[j];
                         if (funcSigns(v1, fId) != funcSigns(v2, fId)) {
                             // func fId has different signs on v1 and v2
                             ++count;
+                            last_diff_pos = j;
                             b1 += funcVals(v2, fId) / (funcVals(v2, fId) - funcVals(v1, fId));
                         }
                     }
                     if (count != 0) {
                         // two end vertices have different labels
                         // create new vertex
+                        vId_of_edge[i] = mesh_verts.size();
+                        orient_of_edge[i] = funcSigns(v1, func_in_tet[last_diff_pos]);
+                        mesh_vId_orient_of_edge.try_emplace(key2, std::make_pair(vId_of_edge[i], orient_of_edge[i]));
+                        mesh_verts.emplace_back();
                         b1 /= count;
                         b2 = 1 - b1;
-                        mesh_vId_of_edge.try_emplace(key2, mesh_verts.size());
-                        vId_of_edge[i] = mesh_verts.size();
-                        mesh_verts.emplace_back();
                         mesh_verts.back() = {b1 * pts[v1][0] + b2 * pts[v2][0],
                             b1 * pts[v1][1] + b2 * pts[v2][1],
                             b1 * pts[v1][2] + b2 * pts[v2][2]};
                     }
                 } else { // edge has been inserted and contains a vert
-                    vId_of_edge[i] = iter->second;
+                    vId_of_edge[i] = iter->second.first;
+                    orient_of_edge[i] = iter->second.second;
                 }
             }
             //
@@ -3487,12 +3496,313 @@ void tet_dual_contouring(size_t num_1func,
             // create a pair of triangles for each edge vertex
             for (size_t i = 0; i < 6; ++i) {
                 if (vId_of_edge[i] != none) {
-                    mesh_tris.emplace_back(std::array<size_t, 3>{
-                        vId_of_edge[i], vId_of_face[edge_faces[i][0]], vId_of_tet});
-                    mesh_tris.emplace_back(std::array<size_t, 3>{
-                        vId_of_edge[i], vId_of_tet, vId_of_face[edge_faces[i][1]]});
+                    if (orient_of_edge[i]) {
+                        mesh_tris.emplace_back(std::array<size_t, 3>{
+                            vId_of_edge[i], vId_of_face[edge_faces[i][0]], vId_of_tet});
+                        mesh_tris.emplace_back(std::array<size_t, 3>{
+                            vId_of_edge[i], vId_of_tet, vId_of_face[edge_faces[i][1]]});
+                    } else {
+                        mesh_tris.emplace_back(std::array<size_t, 3>{
+                            vId_of_face[edge_faces[i][0]],vId_of_edge[i],  vId_of_tet});
+                        mesh_tris.emplace_back(std::array<size_t, 3>{
+                            vId_of_tet, vId_of_edge[i], vId_of_face[edge_faces[i][1]]});
+                    }
                 }
             }
         }
     }
+}
+
+void tet_dual_contouring_MI(size_t num_2func,
+    size_t num_3func,
+    size_t num_more_func,
+    const std::vector<std::array<double, 3>>& pts,
+    const std::vector<std::array<size_t, 4>>& tets,
+    const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& funcVals,
+    const std::vector<size_t>& highest_func,
+    const std::vector<bool>& has_intersection,
+    std::vector<std::array<double, 3>>& mesh_verts,
+    std::vector<std::array<size_t, 3>>& mesh_tris)
+{
+    // 6 tet edges, each edge is a pair of tet vertex
+    size_t edge_verts[6][2] = {{0, 1}, {0, 2}, {0, 3}, {1, 2}, {1, 3}, {2, 3}};
+    // 4 tet faces, each face is three tet edges
+    size_t face_edges[4][3] = {{3, 5, 4}, {1, 2, 5}, {2, 0, 4}, {0, 1, 3}};
+    // face i is opposite to vertex i
+    size_t face_verts[4][3] = {{1, 2, 3}, {0, 3, 2}, {0, 1, 3}, {0, 2, 1}};
+    // incident faces of edges
+    size_t edge_faces[6][2] = {{3, 2}, {1, 3}, {2, 1}, {3, 0}, {0, 2}, {1, 0}};
+    // estimate size of output mesh, reserve memory for output mesh
+    // in a tet, two triangles are created for each edge vertex.
+    // 2 func in tet: number of edge vertex is either 3 or 4, producing an average of 7 triangles
+    // 3 func in tet: number of edge vertex is 5, producing 10 triangles
+    // more func in tet: all the 6 tet edge will have edge vertex, leading to 12 triangles
+    size_t num_tris_estimate = 7 * num_2func + 10 * num_3func + 12 * num_more_func;
+    mesh_tris.reserve(num_tris_estimate);
+    // for a triangle mesh, number of vertices is about half the number of triangles
+    mesh_verts.reserve(num_tris_estimate / 2);
+    //
+    size_t n_func = funcVals.cols();
+    size_t none = std::numeric_limits<size_t>::max();
+    size_t v1, v2;
+    size_t fId1, fId2;
+    double df1, df2;
+    std::pair<size_t, size_t> key2;
+    std::array<size_t, 3> key3;
+    // edge vertices' indices in mesh_verts, none if no such vertex
+    std::array<size_t, 6> vId_of_edge;
+    // edge (v1, v2): true if v1 smaller material label than v2
+    std::array<bool,6> orient_of_edge;
+    // face vertices' indices in mesh_verts, none if no such vertex
+    std::array<size_t, 4> vId_of_face;
+    // tet vertex's index in mesh_verts
+    size_t vId_of_tet;
+    std::array<double, 3> xyz;
+    // barycentric coordinates on an edge
+    double b1, b2;
+    int count;
+    // hash table
+    // if edge contains a vert, record the vert index in mesh_verts
+    absl::flat_hash_map<std::pair<size_t, size_t>, size_t> mesh_vId_of_edge;
+    // 2 func: about 3.5 edge vertex per tet
+    // 3 func: 5 edge vertex per tet
+    // more func: 6 edge vertex per tet
+    // an edge is shared by about 6 tets
+    // (3.5 n2 + 5 n3 + 6 n4)/6 is about (n1/2 + n3 + n4)
+    mesh_vId_of_edge.reserve(num_2func / 2 + num_3func + num_more_func);
+    // if face contains a vert, record the vert index in mesh_verts
+    absl::flat_hash_map<std::array<size_t, 3>, size_t> mesh_vId_of_face;
+    // non-empty tet has at least 3 face vertices, a face is shared by 2 tets
+    // so, number of face vertices is at least 3(n2+n3+n4)/2
+    mesh_vId_of_face.reserve(3 * (num_2func + num_3func + num_more_func) / 2);
+    //
+    for (size_t tId = 0; tId < tets.size(); tId++) {
+        if (has_intersection[tId]) {
+            const auto& tet = tets[tId];
+            // init
+            vId_of_edge.fill(none);
+            orient_of_edge.fill(false);
+            // visit each edge
+            for (size_t i = 0; i < 6; ++i) {
+                v1 = tet[edge_verts[i][0]];
+                v2 = tet[edge_verts[i][1]];
+                if (v1 < v2) {
+                    key2.first = v1;
+                    key2.second = v2;
+                } else {
+                    key2.first = v2;
+                    key2.second = v1;
+                }
+                auto iter = mesh_vId_of_edge.find(key2);
+                if (iter == mesh_vId_of_edge.end()) { // edge has not been inserted
+                    // check if two end vertices have different labels
+                    // and compute the coordinates of vertex on edge
+                    if (highest_func[v1] != highest_func[v2]) {
+                        // two end vertex have different labels
+                        // create new vertex
+                        fId1 = highest_func[v1];
+                        fId2 = highest_func[v2];
+                        df1 = funcVals(v1, fId1) - funcVals(v1, fId2);
+                        df2 = funcVals(v2, fId1) - funcVals(v2, fId2);
+                        b1 = df2 / (df2 - df1);
+                        b2 = 1 - b1;
+                        mesh_vId_of_edge.try_emplace(key2, mesh_verts.size());
+                        vId_of_edge[i] = mesh_verts.size();
+                        mesh_verts.emplace_back();
+                        mesh_verts.back() = {b1 * pts[v1][0] + b2 * pts[v2][0],
+                            b1 * pts[v1][1] + b2 * pts[v2][1],
+                            b1 * pts[v1][2] + b2 * pts[v2][2]};
+                        orient_of_edge[i] = (highest_func[v1] < highest_func[v2]);
+                    }
+                } else { // edge has been inserted and contains a vert
+                    vId_of_edge[i] = iter->second;
+                    orient_of_edge[i] = (highest_func[v1] < highest_func[v2]);
+                }
+            }
+            //
+            vId_of_face.fill(none);
+            // visit each face
+            for (size_t i = 0; i < 4; ++i) {
+                key3 = {tet[face_verts[i][0]], tet[face_verts[i][1]], tet[face_verts[i][2]]};
+                std::sort(key3.begin(), key3.end());
+                auto iter = mesh_vId_of_face.find(key3);
+                if (iter == mesh_vId_of_face.end()) {
+                    // face not inserted before
+                    // check if we need to create face vertex
+                    count = 0;
+                    xyz.fill(0);
+                    for (size_t j = 0; j < 3; ++j) {
+                        if (vId_of_edge[face_edges[i][j]] != none) {
+                            // this edge of the face contains a mesh vertex
+                            const auto& p = mesh_verts[vId_of_edge[face_edges[i][j]]];
+                            ++count;
+                            xyz[0] += p[0];
+                            xyz[1] += p[1];
+                            xyz[2] += p[2];
+                        }
+                    }
+                    //
+                    if (count > 0) {
+                        // create a new face vertex
+                        xyz[0] /= count;
+                        xyz[1] /= count;
+                        xyz[2] /= count;
+                        mesh_vId_of_face.try_emplace(key3, mesh_verts.size());
+                        vId_of_face[i] = mesh_verts.size();
+                        mesh_verts.emplace_back(xyz);
+                    }
+                } else { // face inserted before
+                    vId_of_face[i] = iter->second;
+                }
+            }
+            // create vertex in tet
+            count = 0;
+            xyz.fill(0);
+            for (size_t i = 0; i < 4; ++i) {
+                if (vId_of_face[i] != none) {
+                    ++count;
+                    const auto& p = mesh_verts[vId_of_face[i]];
+                    xyz[0] += p[0];
+                    xyz[1] += p[1];
+                    xyz[2] += p[2];
+                }
+            }
+            xyz[0] /= count;
+            xyz[1] /= count;
+            xyz[2] /= count;
+            vId_of_tet = mesh_verts.size();
+            mesh_verts.emplace_back(xyz);
+            // create a pair of triangles for each edge vertex
+            for (size_t i = 0; i < 6; ++i) {
+                if (vId_of_edge[i] != none) {
+                    if (orient_of_edge[i]) {
+                        mesh_tris.emplace_back(std::array<size_t, 3>{
+                            vId_of_edge[i], vId_of_face[edge_faces[i][0]], vId_of_tet});
+                        mesh_tris.emplace_back(std::array<size_t, 3>{
+                            vId_of_edge[i], vId_of_tet, vId_of_face[edge_faces[i][1]]});
+                    } else {
+                        mesh_tris.emplace_back(std::array<size_t, 3>{
+                            vId_of_face[edge_faces[i][0]], vId_of_edge[i], vId_of_tet});
+                        mesh_tris.emplace_back(std::array<size_t, 3>{
+                            vId_of_tet, vId_of_edge[i], vId_of_face[edge_faces[i][1]]});
+                    }
+                }
+            }
+        }
+    }
+}
+bool save_result_msh_DC(const std::string& filename,
+    const std::vector<std::array<double, 3>>& iso_pts,
+    const std::vector<PolygonFace>& iso_faces,
+    const std::vector<std::vector<size_t>>& patches,
+    const std::vector<Edge>& iso_edges,
+    const std::vector<std::vector<size_t>>& chains,
+    const std::vector<std::vector<size_t>>& non_manifold_edges_of_vert)
+{
+    constexpr size_t INVALID = std::numeric_limits<size_t>::max();
+    std::vector<size_t> vertex_map(iso_pts.size(), INVALID);
+    wmtk::MshData msh, msh2;
+
+    // Save chains.
+    auto extract_chain = [&](size_t i) {
+        std::fill(vertex_map.begin(), vertex_map.end(), INVALID);
+        const auto& chain = chains[i];
+        size_t num_vertices = 0;
+        for (auto eid : chain) {
+            const auto& e = iso_edges[eid];
+            if (vertex_map[e.v1] == INVALID) {
+                vertex_map[e.v1] = num_vertices;
+                num_vertices++;
+            }
+            if (vertex_map[e.v2] == INVALID) {
+                vertex_map[e.v2] = num_vertices;
+                num_vertices++;
+            }
+        }
+
+        std::vector<std::array<double, 3>> vertices(num_vertices);
+        for (size_t j = 0; j < vertex_map.size(); j++) {
+            if (vertex_map[j] == INVALID) continue;
+            vertices[vertex_map[j]] = iso_pts[j];
+        }
+
+        msh.add_edge_vertices(num_vertices, [&](size_t j) { return vertices[j]; });
+        msh.add_edges(chain.size(), [&](size_t j) -> std::array<size_t, 2> {
+            const auto eid = chain[j];
+            const auto& e = iso_edges[eid];
+            return {vertex_map[e.v1], vertex_map[e.v2]};
+        });
+    };
+    for (size_t i = 0; i < chains.size(); i++) {
+        extract_chain(i);
+    }
+
+    // Save patches
+    auto extract_patch = [&](size_t i) -> std::tuple<std::vector<std::array<double, 3>>,
+                                           std::vector<std::array<size_t, 3>>,
+                                           std::vector<size_t>> {
+        std::fill(vertex_map.begin(), vertex_map.end(), INVALID);
+        std::vector<std::array<double, 3>> vertices;
+        std::vector<std::array<size_t, 3>> triangles;
+        std::vector<size_t> polygon_ids;
+
+        size_t num_vertices = 0;
+        auto add_vertex = [&](size_t vi) {
+            if (vertex_map[vi] == INVALID) {
+                vertex_map[vi] = num_vertices;
+                num_vertices++;
+            }
+        };
+
+        const auto& patch = patches[i];
+        triangles.reserve(patch.size() * 2);
+        polygon_ids.reserve(patch.size() * 2);
+
+        for (const auto poly_id : patch) {
+            const auto& f = iso_faces[poly_id];
+            const size_t s = f.vert_indices.size();
+            add_vertex(f.vert_indices[0]);
+            add_vertex(f.vert_indices[1]);
+            for (size_t j = 2; j < s; j++) {
+                triangles.push_back({f.vert_indices[0], f.vert_indices[j - 1], f.vert_indices[j]});
+                polygon_ids.push_back(poly_id);
+                add_vertex(f.vert_indices[j]);
+            }
+        }
+
+        vertices.resize(num_vertices);
+        for (size_t j = 0; j < iso_pts.size(); j++) {
+            if (vertex_map[j] == INVALID) continue;
+            const auto& p = iso_pts[j];
+            vertices[vertex_map[j]] = p;
+        }
+
+        for (auto& t : triangles) {
+            t[0] = vertex_map[t[0]];
+            t[1] = vertex_map[t[1]];
+            t[2] = vertex_map[t[2]];
+        }
+        return {vertices, triangles, polygon_ids};
+    };
+
+    std::vector<size_t> patch_ids;
+    std::vector<size_t> polygon_ids;
+    for (size_t i = 0; i < patches.size(); i++) {
+        auto r = extract_patch(i);
+        const auto& vertices = std::get<0>(r);
+        const auto& triangles = std::get<1>(r);
+        const auto& local_polygon_ids = std::get<2>(r);
+        msh.add_face_vertices(vertices.size(), [&](size_t j) { return vertices[j]; });
+        msh.add_faces(triangles.size(), [&](size_t j) { return triangles[j]; });
+        patch_ids.insert(patch_ids.end(), triangles.size(), i);
+        polygon_ids.insert(polygon_ids.end(), local_polygon_ids.begin(), local_polygon_ids.end());
+    }
+
+    msh.add_face_attribute<1>("patch_id", [&](size_t i) { return patch_ids[i]; });
+    msh.add_face_attribute<1>("polygon_id", [&](size_t i) { return polygon_ids[i]; });
+    msh.save(filename + "_patches.msh");
+
+
+    msh2.save(filename + "_cells.msh");
+    return true;
 }

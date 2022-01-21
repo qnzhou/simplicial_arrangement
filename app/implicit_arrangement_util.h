@@ -157,6 +157,14 @@ bool save_result_msh(const std::string& filename,
     const std::vector<std::vector<size_t>>& components,
     const std::vector<std::vector<size_t>>& arrangement_cells);
 
+bool save_result_msh_DC(const std::string& filename,
+    const std::vector<std::array<double, 3>>& iso_pts,
+    const std::vector<PolygonFace>& iso_faces,
+    const std::vector<std::vector<size_t>>& patches,
+    const std::vector<Edge>& iso_edges,
+    const std::vector<std::vector<size_t>>& chains,
+    const std::vector<std::vector<size_t>>& non_manifold_edges_of_vert);
+
 bool save_nesting_data(const std::string& filename,
     const std::vector<size_t> &next_vert,
     const std::vector<size_t> &extremal_edge_of_component);
@@ -530,5 +538,23 @@ void tet_dual_contouring(size_t num_1func, size_t num_2func, size_t num_more_fun
     const Eigen::Matrix<bool, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &funcSigns,
     const std::vector<size_t> &func_in_tet,
     const std::vector<size_t> &start_index_of_tet,
+    std::vector<std::array<double,3>> &mesh_verts,
+    std::vector<std::array<size_t,3>> &mesh_tris);
+
+// tetrahedron dual contouring for material interface
+// input:
+// pts & tets: tet mesh
+// funcVals: |pts| * |num_func| matrix, function values at tet vertices
+// highest_func: |pts| vector, index of the highest function at vertices
+// has_intersection: |tets| vector, whether there is material interface in tet
+// output:
+// mesh_verts
+// mesh_tris
+void tet_dual_contouring_MI(size_t num_2func, size_t num_3func, size_t num_more_func,
+    const std::vector<std::array<double,3>> &pts,
+    const std::vector<std::array<size_t,4>> &tets,
+    const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &funcVals,
+    const std::vector<size_t> &highest_func,
+    const std::vector<bool>& has_intersection,
     std::vector<std::array<double,3>> &mesh_verts,
     std::vector<std::array<size_t,3>> &mesh_tris);
