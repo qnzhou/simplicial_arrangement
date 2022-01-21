@@ -1034,7 +1034,7 @@ void extract_iso_mesh_marching_tet(const std::vector<bool>& has_isosurface,
 }
 
 void compute_iso_vert_xyz(const std::vector<IsoVert>& iso_verts,
-    const Eigen::MatrixXd& funcVals,
+    const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &funcVals,
     const std::vector<std::array<double, 3>>& pts,
     std::vector<std::array<double, 3>>& iso_pts)
 {
@@ -1055,8 +1055,8 @@ void compute_iso_vert_xyz(const std::vector<IsoVert>& iso_verts,
             auto vId1 = iso_vert.simplex_vert_indices[0];
             auto vId2 = iso_vert.simplex_vert_indices[1];
             auto fId = iso_vert.func_indices[0];
-            auto f1 = funcVals(fId, vId1);
-            auto f2 = funcVals(fId, vId2);
+            auto f1 = funcVals(vId1, fId);
+            auto f2 = funcVals(vId2, fId);
             //
             compute_barycentric_coords(f1, f2, b2);
             iso_pts[i][0] = b2[0] * pts[vId1][0] + b2[1] * pts[vId2][0];
@@ -1072,13 +1072,13 @@ void compute_iso_vert_xyz(const std::vector<IsoVert>& iso_verts,
             auto fId1 = iso_vert.func_indices[0];
             auto fId2 = iso_vert.func_indices[1];
             //
-            f1s3[0] = funcVals(fId1, vId1);
-            f1s3[1] = funcVals(fId1, vId2);
-            f1s3[2] = funcVals(fId1, vId3);
+            f1s3[0] = funcVals(vId1, fId1);
+            f1s3[1] = funcVals(vId2, fId1);
+            f1s3[2] = funcVals(vId3, fId1);
             //
-            f2s3[0] = funcVals(fId2, vId1);
-            f2s3[1] = funcVals(fId2, vId2);
-            f2s3[2] = funcVals(fId2, vId3);
+            f2s3[0] = funcVals(vId1, fId2);
+            f2s3[1] = funcVals(vId2, fId2);
+            f2s3[2] = funcVals(vId3, fId2);
             //
             compute_barycentric_coords(f1s3, f2s3, b3);
             iso_pts[i][0] = b3[0] * pts[vId1][0] + b3[1] * pts[vId2][0] + b3[2] * pts[vId3][0];
@@ -1095,20 +1095,20 @@ void compute_iso_vert_xyz(const std::vector<IsoVert>& iso_verts,
             auto fId1 = iso_vert.func_indices[0];
             auto fId2 = iso_vert.func_indices[1];
             auto fId3 = iso_vert.func_indices[2];
-            f1s4[0] = funcVals(fId1, vId1);
-            f1s4[1] = funcVals(fId1, vId2);
-            f1s4[2] = funcVals(fId1, vId3);
-            f1s4[3] = funcVals(fId1, vId4);
+            f1s4[0] = funcVals(vId1, fId1);
+            f1s4[1] = funcVals(vId2, fId1);
+            f1s4[2] = funcVals(vId3, fId1);
+            f1s4[3] = funcVals(vId4, fId1);
             //
-            f2s4[0] = funcVals(fId2, vId1);
-            f2s4[1] = funcVals(fId2, vId2);
-            f2s4[2] = funcVals(fId2, vId3);
-            f2s4[3] = funcVals(fId2, vId4);
+            f2s4[0] = funcVals(vId1, fId2);
+            f2s4[1] = funcVals(vId2, fId2);
+            f2s4[2] = funcVals(vId3, fId2);
+            f2s4[3] = funcVals(vId4, fId2);
             //
-            f3s4[0] = funcVals(fId3, vId1);
-            f3s4[1] = funcVals(fId3, vId2);
-            f3s4[2] = funcVals(fId3, vId3);
-            f3s4[3] = funcVals(fId3, vId4);
+            f3s4[0] = funcVals(vId1, fId3);
+            f3s4[1] = funcVals(vId2, fId3);
+            f3s4[2] = funcVals(vId3, fId3);
+            f3s4[3] = funcVals(vId4, fId3);
             //
             compute_barycentric_coords(f1s4, f2s4, f3s4, b4);
             iso_pts[i][0] = b4[0] * pts[vId1][0] + b4[1] * pts[vId2][0] + b4[2] * pts[vId3][0] +
@@ -2365,7 +2365,7 @@ bool save_result_MI(const std::string& filename,
 }
 
 void compute_MI_vert_xyz(const std::vector<MI_Vert>& MI_verts,
-    const Eigen::MatrixXd& funcVals,
+    const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &funcVals,
     const std::vector<std::array<double, 3>>& pts,
     std::vector<std::array<double, 3>>& MI_pts)
 {
@@ -2387,8 +2387,8 @@ void compute_MI_vert_xyz(const std::vector<MI_Vert>& MI_verts,
             auto vId2 = MI_vert.simplex_vert_indices[1];
             auto fId1 = MI_vert.material_indices[0];
             auto fId2 = MI_vert.material_indices[1];
-            auto f1 = funcVals(fId1, vId1) - funcVals(fId2, vId1);
-            auto f2 = funcVals(fId1, vId2) - funcVals(fId2, vId2);
+            auto f1 = funcVals(vId1,fId1) - funcVals(vId1,fId2);
+            auto f2 = funcVals(vId2,fId1) - funcVals(vId2,fId2);
             //
             compute_barycentric_coords(f1, f2, b2);
             MI_pts[i][0] = b2[0] * pts[vId1][0] + b2[1] * pts[vId2][0];
@@ -2405,13 +2405,13 @@ void compute_MI_vert_xyz(const std::vector<MI_Vert>& MI_verts,
             auto fId2 = MI_vert.material_indices[1];
             auto fId3 = MI_vert.material_indices[2];
             // f1 - f2
-            f1s3[0] = funcVals(fId1, vId1) - funcVals(fId2, vId1);
-            f1s3[1] = funcVals(fId1, vId2) - funcVals(fId2, vId2);
-            f1s3[2] = funcVals(fId1, vId3) - funcVals(fId2, vId3);
+            f1s3[0] = funcVals(vId1,fId1) - funcVals(vId1,fId2);
+            f1s3[1] = funcVals(vId2,fId1) - funcVals(vId2,fId2);
+            f1s3[2] = funcVals(vId3,fId1) - funcVals(vId3,fId2);
             // f2 - f3
-            f2s3[0] = funcVals(fId2, vId1) - funcVals(fId3, vId1);
-            f2s3[1] = funcVals(fId2, vId2) - funcVals(fId3, vId2);
-            f2s3[2] = funcVals(fId2, vId3) - funcVals(fId3, vId3);
+            f2s3[0] = funcVals(vId1,fId2) - funcVals(vId1,fId3);
+            f2s3[1] = funcVals(vId2,fId2) - funcVals(vId2,fId3);
+            f2s3[2] = funcVals(vId3,fId2) - funcVals(vId3,fId3);
             //
             compute_barycentric_coords(f1s3, f2s3, b3);
             MI_pts[i][0] = b3[0] * pts[vId1][0] + b3[1] * pts[vId2][0] + b3[2] * pts[vId3][0];
@@ -2430,20 +2430,20 @@ void compute_MI_vert_xyz(const std::vector<MI_Vert>& MI_verts,
             auto fId3 = MI_vert.material_indices[2];
             auto fId4 = MI_vert.material_indices[3];
             // f1 - f2
-            f1s4[0] = funcVals(fId1, vId1) - funcVals(fId2, vId1);
-            f1s4[1] = funcVals(fId1, vId2) - funcVals(fId2, vId2);
-            f1s4[2] = funcVals(fId1, vId3) - funcVals(fId2, vId3);
-            f1s4[3] = funcVals(fId1, vId4) - funcVals(fId2, vId4);
+            f1s4[0] = funcVals(vId1,fId1) - funcVals(vId1,fId2);
+            f1s4[1] = funcVals(vId2,fId1) - funcVals(vId2,fId2);
+            f1s4[2] = funcVals(vId3,fId1) - funcVals(vId3,fId2);
+            f1s4[3] = funcVals(vId4,fId1) - funcVals(vId4,fId2);
             // f2 - f3
-            f2s4[0] = funcVals(fId2, vId1) - funcVals(fId3, vId1);
-            f2s4[1] = funcVals(fId2, vId2) - funcVals(fId3, vId2);
-            f2s4[2] = funcVals(fId2, vId3) - funcVals(fId3, vId3);
-            f2s4[3] = funcVals(fId2, vId4) - funcVals(fId3, vId4);
+            f2s4[0] = funcVals(vId1,fId2) - funcVals(vId1,fId3);
+            f2s4[1] = funcVals(vId2,fId2) - funcVals(vId2,fId3);
+            f2s4[2] = funcVals(vId3,fId2) - funcVals(vId3,fId3);
+            f2s4[3] = funcVals(vId4,fId2) - funcVals(vId4,fId3);
             // f3 - f4
-            f3s4[0] = funcVals(fId3, vId1) - funcVals(fId4, vId1);
-            f3s4[1] = funcVals(fId3, vId2) - funcVals(fId4, vId2);
-            f3s4[2] = funcVals(fId3, vId3) - funcVals(fId4, vId3);
-            f3s4[3] = funcVals(fId3, vId4) - funcVals(fId4, vId4);
+            f3s4[0] = funcVals(vId1,fId3) - funcVals(vId1,fId4);
+            f3s4[1] = funcVals(vId2,fId3) - funcVals(vId2,fId4);
+            f3s4[2] = funcVals(vId3,fId3) - funcVals(vId3,fId4);
+            f3s4[3] = funcVals(vId4,fId3) - funcVals(vId4,fId4);
             //
             compute_barycentric_coords(f1s4, f2s4, f3s4, b4);
             MI_pts[i][0] = b4[0] * pts[vId1][0] + b4[1] * pts[vId2][0] + b4[2] * pts[vId3][0] +
@@ -3804,5 +3804,45 @@ bool save_result_msh_DC(const std::string& filename,
 
 
     msh2.save(filename + "_cells.msh");
+    return true;
+}
+
+bool load_tet_mesh_func(const std::string& filename,
+    std::vector<std::array<double, 3>>& pts,
+    std::vector<std::array<size_t, 4>>& tets,
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& funcVals)
+{
+    using json = nlohmann::json;
+    std::ifstream fin(filename.c_str());
+    if (!fin) {
+        std::cout << "tet mesh file not exist!" << std::endl;
+        return false;
+    }
+    json data;
+    fin >> data;
+    fin.close();
+    //
+    pts.resize(data[0].size());
+    for (size_t j = 0; j < pts.size(); j++) {
+        for (size_t k = 0; k < 3; k++) {
+            pts[j][k] = data[0][j][k].get<double>();
+        }
+    }
+    //
+    tets.resize(data[1].size());
+    for (size_t j = 0; j < tets.size(); j++) {
+        for (size_t k = 0; k < 4; k++) {
+            tets[j][k] = data[1][j][k].get<size_t>();
+        }
+    }
+    //
+    size_t n_pts = pts.size();
+    size_t n_func = data[2][0].size();
+    funcVals.resize(n_pts, n_func);
+    for (size_t j = 0; j < n_pts; j++) {
+        for (size_t k = 0; k < n_func; k++) {
+            funcVals(j,k) = data[2][j][k].get<double>();
+        }
+    }
     return true;
 }

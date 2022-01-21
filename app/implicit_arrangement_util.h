@@ -96,6 +96,11 @@ bool load_spheres(const std::string &filename,
 bool load_seeds(const std::string& filename,
     std::vector<std::array<double,3>> &seeds);
 
+bool load_tet_mesh_func(const std::string &filename,
+    std::vector<std::array<double, 3>> &pts,
+    std::vector<std::array<size_t, 4>> &tets,
+    Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor> &funcVals);
+
 inline double compute_Euclidean_distance(const std::array<double,3> &p, const std::array<double,3>& q)
 {
     return sqrt((p[0]-q[0])*(p[0]-q[0]) + (p[1]-q[1])*(p[1]-q[1]) + (p[2]-q[2])*(p[2]-q[2]));
@@ -328,14 +333,14 @@ void extract_iso_mesh_marching_tet(const std::vector<bool>& has_isosurface,
 // compute xyz coordinates of iso-vertices
 void compute_iso_vert_xyz(
     const std::vector<IsoVert> &iso_verts, 
-    const Eigen::MatrixXd &funcVals,
+    const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &funcVals,
     const std::vector<std::array<double, 3>> &pts,
     std::vector<std::array<double, 3>>& iso_pts);
 
 // compute xyz coordinates of material interface vertices
 void compute_MI_vert_xyz(
     const std::vector<MI_Vert> &MI_verts,
-    const Eigen::MatrixXd &funcVals,
+    const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &funcVals,
     const std::vector<std::array<double,3>> &pts,
     std::vector<std::array<double,3>>& MI_pts);
 
