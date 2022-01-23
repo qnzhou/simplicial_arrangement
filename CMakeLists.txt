@@ -29,7 +29,7 @@ option(SIMPLICIAL_ARRANGEMENT_LOOKUP_TABLE_GEN
 option(SIMPLICIAL_ARRANGEMENT_DETERMINISTIC
     "Reqruire deterministic result (slightly slower)" OFF)
 option(SIMPLICIAL_ARRANGEMENT_NON_ROBUST
-    "Use non-robust predicates (for developers only)" OFF)
+    "Use non-robust predicates (for developers only)" ON)
 
 file(GLOB INC_FILES ${CMAKE_CURRENT_LIST_DIR}/include/*.h)
 file(GLOB SRC_FILES ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp)
