@@ -49,10 +49,10 @@ int main(int argc, const char* argv[])
         use_bbox,
         bbox_min,
         bbox_max);
-    //    std::string config_path = args.config_file.substr(0, args.config_file.find_last_of('/'));
-    //    std::cout << "config path: " << config_path << std::endl;
-    //    tet_mesh_file = config_path + "/" + tet_mesh_file;
-    //    sphere_file = config_path + "/" + sphere_file;
+        std::string config_path = args.config_file.substr(0, args.config_file.find_last_of('/'));
+        std::cout << "config path: " << config_path << std::endl;
+        tet_mesh_file = config_path + "/" + tet_mesh_file;
+        sphere_file = config_path + "/" + sphere_file;
     if (use_lookup) {
         // load lookup table
         std::cout << "load table ..." << std::endl;
