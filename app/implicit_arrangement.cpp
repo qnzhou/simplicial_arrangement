@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <iostream>
+#include <exception>
 #include <queue>
 #include "ScopedTimer.h"
 
@@ -179,57 +180,61 @@ int main(int argc, const char* argv[])
         size_t num_func;
         std::vector<Plane<double, 3>> planes;
         planes.reserve(3);
-        for (size_t i = 0; i < tets.size(); i++) {
-            start_index = start_index_of_tet[i];
-            num_func = start_index_of_tet[i + 1] - start_index;
-            if (num_func == 0) {
-                cut_result_index.push_back(Arrangement<3>::None);
-                continue;
+        try {
+            for (size_t i = 0; i < tets.size(); i++) {
+                start_index = start_index_of_tet[i];
+                num_func = start_index_of_tet[i + 1] - start_index;
+                if (num_func == 0) {
+                    cut_result_index.push_back(Arrangement<3>::None);
+                    continue;
+                }
+                std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+                //
+                size_t v1 = tets[i][0];
+                size_t v2 = tets[i][1];
+                size_t v3 = tets[i][2];
+                size_t v4 = tets[i][3];
+                planes.clear();
+                for (size_t j = 0; j < num_func; j++) {
+                    size_t f_id = func_in_tet[start_index + j];
+                    planes.emplace_back();
+                    auto& plane = planes.back();
+                    plane[0] = funcVals(v1, f_id);
+                    plane[1] = funcVals(v2, f_id);
+                    plane[2] = funcVals(v3, f_id);
+                    plane[3] = funcVals(v4, f_id);
+                }
+                //
+                if (!use_2func_lookup && num_func == 2) {
+                    cut_result_index.push_back(cut_results.size());
+                    disable_lookup_table();
+                    cut_results.emplace_back(std::move(compute_arrangement(planes)));
+                    enable_lookup_table();
+                } else {
+                    cut_result_index.push_back(cut_results.size());
+                    cut_results.emplace_back(std::move(compute_arrangement(planes)));
+                }
+                //
+                std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+                switch (num_func) {
+                case 1:
+                    time_1_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                    ++num_1_func;
+                    break;
+                case 2:
+                    time_2_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                    ++num_2_func;
+                    break;
+                default:
+                    time_more_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                    ++num_more_func;
+                    break;
+                }
             }
-            std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
-            //
-            size_t v1 = tets[i][0];
-            size_t v2 = tets[i][1];
-            size_t v3 = tets[i][2];
-            size_t v4 = tets[i][3];
-            planes.clear();
-            for (size_t j = 0; j < num_func; j++) {
-                size_t f_id = func_in_tet[start_index + j];
-                planes.emplace_back();
-                auto& plane = planes.back();
-                plane[0] = funcVals(v1, f_id);
-                plane[1] = funcVals(v2, f_id);
-                plane[2] = funcVals(v3, f_id);
-                plane[3] = funcVals(v4, f_id);
-            }
-            //
-            if (!use_2func_lookup && num_func == 2) {
-                cut_result_index.push_back(cut_results.size());
-                disable_lookup_table();
-                cut_results.emplace_back(std::move(compute_arrangement(planes)));
-                enable_lookup_table();
-            } else {
-                cut_result_index.push_back(cut_results.size());
-                cut_results.emplace_back(std::move(compute_arrangement(planes)));
-            }
-
-            //
-            std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
-            switch (num_func) {
-            case 1:
-                time_1_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
-                ++num_1_func;
-                break;
-            case 2:
-                time_2_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
-                ++num_2_func;
-                break;
-            default:
-                time_more_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
-                ++num_more_func;
-                break;
-            }
-        }
+    } catch (std::runtime_error& e) {
+        std::cout << "simplicial arrangement: " << e.what() << std::endl;
+        return -1;
+    }
         timings.push_back(
             timer.toc() - time_1_func.count() - time_2_func.count() - time_more_func.count());
     }
@@ -306,7 +311,7 @@ int main(int argc, const char* argv[])
         compute_mesh_edges(iso_faces, edges_of_iso_face, iso_edges);
         timings.push_back(timer.toc());
     }
-    // std::cout << "num iso-edges = " << iso_edges.size() << std::endl;
+     std::cout << "num iso-edges = " << iso_edges.size() << std::endl;
 
 
     // group iso-faces into patches
@@ -317,7 +322,7 @@ int main(int argc, const char* argv[])
         compute_patches(edges_of_iso_face, iso_edges, patches);
         timings.push_back(timer.toc());
     }
-    // std::cout << "num patches = " << patches.size() << std::endl;
+     std::cout << "num patches = " << patches.size() << std::endl;
 
     // compute map: iso-face Id --> patch Id
     std::vector<size_t> patch_of_face;
@@ -355,7 +360,7 @@ int main(int argc, const char* argv[])
         compute_chains(iso_edges, non_manifold_edges_of_vert, chains);
         timings.push_back(timer.toc());
     }
-    //     std::cout << "num chains = " << chains.size() << std::endl;
+    std::cout << "num chains = " << chains.size() << std::endl;
 
 
     absl::flat_hash_map<size_t, std::vector<size_t>> incident_tets;
@@ -430,8 +435,8 @@ int main(int argc, const char* argv[])
             component_of_patch);
         timings.push_back(timer.toc());
     }
-    //    std::cout << "num shells = " << shells.size() << std::endl;
-    //    std::cout << "num components = " << components.size() << std::endl;
+    std::cout << "num shells = " << shells.size() << std::endl;
+    std::cout << "num components = " << components.size() << std::endl;
 
     // resolve nesting order, compute arrangement cells
     // an arrangement cell is represented by a list of bounding shells
