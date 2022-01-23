@@ -1920,7 +1920,8 @@ bool parse_config_file_MI(const std::string& filename,
     std::string& material_file,
     std::string& output_dir,
     bool& use_lookup,
-    bool& use_3func_lookup)
+    bool& use_3func_lookup,
+    bool& use_topo_ray_shooting)
 {
     using json = nlohmann::json;
     std::ifstream fin(filename.c_str());
@@ -1937,6 +1938,7 @@ bool parse_config_file_MI(const std::string& filename,
     output_dir = data["outputDir"];
     use_lookup = data["useLookup"];
     use_3func_lookup = data["use3funcLookup"];
+    use_topo_ray_shooting = data["useTopoRayShooting"];
     return true;
 }
 
@@ -2255,7 +2257,8 @@ void extract_MI_mesh_pure(size_t num_2_func,
                                         MI_verts.emplace_back();
                                         auto& MI_vert = MI_verts.back();
                                         MI_vert.tet_index = i;
-                                        MI_vert.tet_vert_index = j;
+//                                        MI_vert.tet_vert_index = j;
+                                        MI_vert.tet_vert_index = face.vertices[k];
                                         MI_vert.simplex_size = 1;
                                         MI_vert.simplex_vert_indices[0] = key;
                                     }
@@ -3320,6 +3323,352 @@ void tet_dual_contouring(const std::vector<std::array<double, 3>>& pts,
     }
 }
 
+//void tet_dual_contouring(size_t num_1func,
+//    size_t num_2func,
+//    size_t num_more_func,
+//    const std::vector<std::array<double, 3>>& pts,
+//    const std::vector<std::array<size_t, 4>>& tets,
+//    const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& funcVals,
+//    const Eigen::Matrix<bool, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& funcSigns,
+//    const std::vector<size_t>& func_in_tet,
+//    const std::vector<size_t>& start_index_of_tet,
+//    std::vector<std::array<double, 3>>& mesh_verts,
+//    std::vector<std::array<size_t, 3>>& mesh_tris)
+//{
+//    // 6 tet edges, each edge is a pair of tet vertex
+//    size_t edge_verts[6][2] = {{0, 1}, {0, 2}, {0, 3}, {1, 2}, {1, 3}, {2, 3}};
+//    // 4 tet faces, each face is three tet edges
+//    size_t face_edges[4][3] = {{3, 5, 4}, {1, 2, 5}, {2, 0, 4}, {0, 1, 3}};
+//    // face i is opposite to vertex i
+//    size_t face_verts[4][3] = {{1, 2, 3}, {0, 3, 2}, {0, 1, 3}, {0, 2, 1}};
+//    // incident faces of edges
+//    size_t edge_faces[6][2] = {{3, 2}, {1, 3}, {2, 1}, {3, 0}, {0, 2}, {1, 0}};
+//    // estimate size of output mesh, reserve memory for output mesh
+//    // in a tet, two triangles are created for each edge vertex.
+//    // 1 func in tet: number of edge vertex is either 3 or 4, producing an average of 7 triangles
+//    // 2 func in tet: similar analysis shows that the average number of edge vertex is around 4~5,
+//    // leading to around 9 triangles
+//    // more func in tet: most likely, all the 6 tet edge will have edge vertex, leading to 12
+//    // triangles
+//    size_t num_tris_estimate = 7 * num_1func + 9 * num_2func + 12 * num_more_func;
+//    mesh_tris.reserve(num_tris_estimate);
+//    // for a triangle mesh, number of vertices is about half the number of triangles
+//    mesh_verts.reserve(num_tris_estimate / 2);
+//    //
+//    size_t n_func = funcVals.cols();
+//    size_t none = std::numeric_limits<size_t>::max();
+//    size_t start_index;
+//    size_t end_index;
+//    size_t v1, v2, v3, v4;
+//    size_t fId1, fId2, fId3;
+//    std::pair<size_t, size_t> key2;
+//    std::array<size_t, 3> key3;
+//    // edge vertices' indices in mesh_verts, none if no such vertex
+//    std::array<size_t, 6> vId_of_edge;
+//    // label of vertex v = {sign(f0(v)), sign(f1(v)), ...}
+//    // edge (v1,v2): true if on the last different label entry, v1 has positive sign.
+//    std::array<bool, 6> orient_of_edge;
+//    // the functions that change sign on tet edges
+//    std::array<std::vector<size_t>, 6> funcs_on_edge;
+//    // face vertices' indices in mesh_verts, none if no such vertex
+//    std::array<size_t, 4> vId_of_face;
+//    // true if the face vertex is computed using positive barycentric coordinates
+//    std::array<bool, 4> is_positive_barycentric_face;
+//    // tet vertex's index in mesh_verts
+//    size_t vId_of_tet;
+//    std::array<double, 3> xyz;
+//    std::array<double, 3> xyz2;
+//    // barycentric coordinates
+//    bool all_positive_barycentric;
+//    double barycentric_sum;
+//    absl::flat_hash_set<size_t> functions;
+//    functions.reserve(3);
+//    std::array<double, 2> b2;
+//    std::array<double, 3> f1s3;
+//    std::array<double, 3> f2s3;
+//    std::array<double, 3> b3;
+//    std::array<double, 4> f1s4;
+//    std::array<double, 4> f2s4;
+//    std::array<double, 4> f3s4;
+//    std::array<double, 4> b4;
+//    int pos_barycentric_face_count;
+//    int count;
+//    size_t last_diff_pos;
+//    // hash table
+//    // if edge contains a vert, record the vert index in mesh_verts and its orientation
+//    absl::flat_hash_map<std::pair<size_t, size_t>, std::pair<size_t,bool>> mesh_vId_orient_of_edge;
+//    // 1 func: about 3.5 edge vertex per tet
+//    // 2 func: about 4.5 edge vertex per tet
+//    // more func: about 6 edge vertex per tet
+//    // an edge is shared by about 6 tets
+//    // (3.5 n1 + 4.5 n2 + 6 n3)/6 is about (n1/2 + n2/2 + n3)
+//    mesh_vId_orient_of_edge.reserve(num_1func / 2 + num_2func / 2 + num_more_func);
+//    // if face contains a vert, record the vert index in mesh_verts,
+//    // and whether the vert is computed from positive barycentric coordinates
+//    absl::flat_hash_map<std::array<size_t, 3>, std::pair<size_t,bool>> mesh_vId_posBary_of_face;
+//    // non-empty tet has at least 3 face vertices, a face is shared by 2 tets
+//    // so, number of face vertices is at least 3(n1+n2+n3)/2
+//    mesh_vId_posBary_of_face.reserve(3 * (num_1func + num_2func + num_more_func) / 2);
+//    for (size_t tId = 0; tId < tets.size(); tId++) {
+//        if (start_index_of_tet[tId + 1] > start_index_of_tet[tId]) { // non-empty tet
+//            const auto& tet = tets[tId];
+//            start_index = start_index_of_tet[tId];
+//            end_index = start_index_of_tet[tId + 1];
+//            // init
+//            vId_of_edge.fill(none);
+//            orient_of_edge.fill(false);
+//            // visit each edge
+//            for (size_t i = 0; i < 6; ++i) {
+//                v1 = tet[edge_verts[i][0]];
+//                v2 = tet[edge_verts[i][1]];
+//                if (v1 < v2) {
+//                    key2.first = v1;
+//                    key2.second = v2;
+//                } else {
+//                    key2.first = v2;
+//                    key2.second = v1;
+//                }
+//                auto iter = mesh_vId_orient_of_edge.find(key2);
+//                funcs_on_edge[i].clear();
+//                if (iter == mesh_vId_orient_of_edge.end()) { // edge has not been inserted
+//                    // check if two end vertices have different labels
+//                    // and compute the coordinates of vertex on edge
+//                    count = 0;
+//                    last_diff_pos = none;
+//                    b2[0] = 0;
+//                    for (size_t j = start_index; j < end_index; ++j) {
+//                        size_t fId = func_in_tet[j];
+//                        if (funcSigns(v1, fId) != funcSigns(v2, fId)) {
+//                            // func fId has different signs on v1 and v2
+//                            funcs_on_edge[i].push_back(fId);
+//                            ++count;
+//                            last_diff_pos = j;
+//                            b2[0] += funcVals(v2, fId) / (funcVals(v2, fId) - funcVals(v1, fId));
+//                        }
+//                    }
+//                    if (count != 0) {
+//                        // two end vertices have different labels
+//                        // create new vertex
+//                        vId_of_edge[i] = mesh_verts.size();
+//                        orient_of_edge[i] = funcSigns(v1, func_in_tet[last_diff_pos]);
+//                        mesh_vId_orient_of_edge.try_emplace(key2, std::make_pair(vId_of_edge[i], orient_of_edge[i]));
+//                        mesh_verts.emplace_back();
+//                        b2[0] /= count;
+//                        b2[1] = 1 - b2[0];
+//                        mesh_verts.back() = {b2[0] * pts[v1][0] + b2[1] * pts[v2][0],
+//                            b2[0] * pts[v1][1] + b2[1] * pts[v2][1],
+//                            b2[0] * pts[v1][2] + b2[1] * pts[v2][2]};
+//                    }
+//                } else { // edge has been inserted and contains a vert
+//                    vId_of_edge[i] = iter->second.first;
+//                    orient_of_edge[i] = iter->second.second;
+//                    // collect functions that change sign on the edge
+//                    for (size_t j = start_index; j < end_index; ++j) {
+//                        size_t fId = func_in_tet[j];
+//                        if (funcSigns(v1, fId) != funcSigns(v2, fId)) {
+//                            // func fId has different signs on v1 and v2
+//                            funcs_on_edge[i].push_back(fId);
+//                        }
+//                    }
+//                }
+//            }
+//            //
+//            vId_of_face.fill(none);
+//            is_positive_barycentric_face.fill(false);
+//            // visit each face
+//            for (size_t i = 0; i < 4; ++i) {
+//                key3 = {tet[face_verts[i][0]], tet[face_verts[i][1]], tet[face_verts[i][2]]};
+//                std::sort(key3.begin(), key3.end());
+//                auto iter = mesh_vId_posBary_of_face.find(key3);
+//                if (iter == mesh_vId_posBary_of_face.end()) {
+//                    // face not inserted before
+//                    // check if we need to create face vertex
+//                    functions.clear();
+//                    count = 0;
+//                    xyz.fill(0);
+//                    for (size_t j = 0; j < 3; ++j) {
+//                        if (vId_of_edge[face_edges[i][j]] != none) {
+//                            // this edge of the face contains a mesh vertex
+//                            const auto& p = mesh_verts[vId_of_edge[face_edges[i][j]]];
+//                            ++count;
+//                            xyz[0] += p[0];
+//                            xyz[1] += p[1];
+//                            xyz[2] += p[2];
+//                            // collect intersecting functions
+//                            for (auto fId : funcs_on_edge[face_edges[i][j]]) {
+//                                functions.insert(fId);
+//                            }
+//                        }
+//                    }
+//                    //
+//                    if (count > 0) {
+//                        // create a new face vertex
+//                        if (count == 3 && functions.size() == 2) {
+//                            // compute barycentric coordinates of face vertex
+//                            v1 = tet[face_verts[i][0]];
+//                            v2 = tet[face_verts[i][1]];
+//                            v3 = tet[face_verts[i][2]];
+//                            fId1 = *(functions.begin());
+//                            fId2 = *(++functions.begin());  // functions.begin()++ would cause bug!!!
+//                            //
+//                            f1s3[0] = funcVals(v1, fId1);
+//                            f1s3[1] = funcVals(v2, fId1);
+//                            f1s3[2] = funcVals(v3, fId1);
+//                            //
+//                            f2s3[0] = funcVals(v1, fId2);
+//                            f2s3[1] = funcVals(v2, fId2);
+//                            f2s3[2] = funcVals(v3, fId2);
+//                            //
+//                            compute_barycentric_coords(f1s3, f2s3, b3);
+//                            // snap and normalize
+//                            all_positive_barycentric = true;
+//                            barycentric_sum = 0;
+//                            for (int j = 0; j < 3; ++j) {
+//                                if (b3[j] > 0) {
+//                                    barycentric_sum += b3[j];
+//                                } else {
+//                                    b3[j] = 0;
+//                                    all_positive_barycentric = false;
+//                                }
+//                            }
+//                            is_positive_barycentric_face[i] = all_positive_barycentric;
+//                            if (!all_positive_barycentric) {
+//                                b3[0] /= barycentric_sum;
+//                                b3[1] /= barycentric_sum;
+//                                b3[2] /= barycentric_sum;
+//                            }
+//                            xyz[0] = b3[0] * pts[v1][0] + b3[1] * pts[v2][0] + b3[2] * pts[v3][0];
+//                            xyz[1] = b3[0] * pts[v1][1] + b3[1] * pts[v2][1] + b3[2] * pts[v3][1];
+//                            xyz[2] = b3[0] * pts[v1][2] + b3[1] * pts[v2][2] + b3[2] * pts[v3][2];
+////                            if (!(xyz[0] > -1 && xyz[0] < 1 && xyz[1] > -1 && xyz[1] < 1 && xyz[2] > -1 && xyz[2] < 1)) {
+////                                std::cout << "(fId1, fId2) = " << fId1 << "," << fId2 << std::endl;
+////                                std::cout << "barycentric_sum = " << barycentric_sum << std::endl;
+////                                std::cout << "wrong xyz (bary)" << std::endl;
+////                            }
+//                        } else { // averaging
+//                            xyz[0] /= count;
+//                            xyz[1] /= count;
+//                            xyz[2] /= count;
+////                            if (!(xyz[0] > -1 && xyz[0] < 1 && xyz[1] > -1 && xyz[1] < 1 && xyz[2] > -1 && xyz[2] < 1)) {
+////                                std::cout << "wrong xyz (avg)" << std::endl;
+////                            }
+//                        }
+//                        vId_of_face[i] = mesh_verts.size();
+//                        mesh_vId_posBary_of_face.try_emplace(key3, std::make_pair(vId_of_face[i],
+//                                                               is_positive_barycentric_face[i]));
+//                        mesh_verts.emplace_back(xyz);
+//
+//                    }
+//                } else { // face inserted before
+//                    vId_of_face[i] = iter->second.first;
+//                    is_positive_barycentric_face[i] = iter->second.second;
+//                }
+//            }
+//            // create vertex in tet
+//            count = 0;
+//            pos_barycentric_face_count = 0;
+//            xyz.fill(0);
+//            xyz2.fill(0);
+//            for (size_t i = 0; i < 4; ++i) {
+//                if (vId_of_face[i] != none) {
+//                    ++count;
+//                    const auto& p = mesh_verts[vId_of_face[i]];
+//                    xyz[0] += p[0];
+//                    xyz[1] += p[1];
+//                    xyz[2] += p[2];
+//                    if (is_positive_barycentric_face[i]) {
+//                        ++pos_barycentric_face_count;
+//                        xyz2[0] += p[0];
+//                        xyz2[1] += p[1];
+//                        xyz2[2] += p[2];
+//                    }
+//                }
+//            }
+//            //
+//            if (pos_barycentric_face_count == 2) {
+//                xyz[0] = xyz2[0] / pos_barycentric_face_count;
+//                xyz[1] = xyz2[1] / pos_barycentric_face_count;
+//                xyz[2] = xyz2[2] / pos_barycentric_face_count;
+//            } else if (end_index - start_index == 3) {
+//                // 3 functions, compute barycentric coordinates
+//                v1 = tet[0];
+//                v2 = tet[1];
+//                v3 = tet[2];
+//                v4 = tet[3];
+//                fId1 = func_in_tet[start_index];
+//                fId2 = func_in_tet[start_index + 1];
+//                fId3 = func_in_tet[start_index + 2];
+//                //
+//                f1s4[0] = funcVals(v1, fId1);
+//                f1s4[1] = funcVals(v2, fId1);
+//                f1s4[2] = funcVals(v3, fId1);
+//                f1s4[3] = funcVals(v4, fId1);
+//                //
+//                f2s4[0] = funcVals(v1, fId2);
+//                f2s4[1] = funcVals(v2, fId2);
+//                f2s4[2] = funcVals(v3, fId2);
+//                f2s4[3] = funcVals(v4, fId2);
+//                //
+//                f3s4[0] = funcVals(v1, fId3);
+//                f3s4[1] = funcVals(v2, fId3);
+//                f3s4[2] = funcVals(v3, fId3);
+//                f3s4[3] = funcVals(v4, fId3);
+//                //
+//                compute_barycentric_coords(f1s4, f2s4, f3s4, b4);
+//                // snap and normalize
+//                all_positive_barycentric = true;
+//                barycentric_sum = 0;
+//                for (int j = 0; j < 4; ++j) {
+//                    if (b4[j] > 0) {
+//                        barycentric_sum += b4[j];
+//                    } else {
+//                        b4[j] = 0;
+//                        all_positive_barycentric = false;
+//                    }
+//                }
+//                if (!all_positive_barycentric) {
+//                    b4[0] /= barycentric_sum;
+//                    b4[1] /= barycentric_sum;
+//                    b4[2] /= barycentric_sum;
+//                    b4[3] /= barycentric_sum;
+//                }
+//                //
+//                xyz[0] = b4[0] * pts[v1][0] + b4[1] * pts[v2][0] + b4[2] * pts[v3][0] +
+//                                b4[3] * pts[v4][0];
+//                xyz[1] = b4[0] * pts[v1][1] + b4[1] * pts[v2][1] + b4[2] * pts[v3][1] +
+//                                b4[3] * pts[v4][1];
+//                xyz[2] = b4[0] * pts[v1][2] + b4[1] * pts[v2][2] + b4[2] * pts[v3][2] +
+//                                b4[3] * pts[v4][2];
+//            } else { // averaging
+//                xyz[0] /= count;
+//                xyz[1] /= count;
+//                xyz[2] /= count;
+//            }
+//            vId_of_tet = mesh_verts.size();
+//            mesh_verts.emplace_back(xyz);
+////            if (!(xyz[0] > -1 && xyz[0] < 1 && xyz[1] > -1 && xyz[1] < 1 && xyz[2] > -1 && xyz[2] < 1)) {
+////                std::cout << "wrong xyz" << std::endl;
+////            }
+//            // create a pair of triangles for each edge vertex
+//            for (size_t i = 0; i < 6; ++i) {
+//                if (vId_of_edge[i] != none) {
+//                    if (orient_of_edge[i]) {
+//                        mesh_tris.emplace_back(std::array<size_t, 3>{
+//                            vId_of_edge[i], vId_of_face[edge_faces[i][0]], vId_of_tet});
+//                        mesh_tris.emplace_back(std::array<size_t, 3>{
+//                            vId_of_edge[i], vId_of_tet, vId_of_face[edge_faces[i][1]]});
+//                    } else {
+//                        mesh_tris.emplace_back(std::array<size_t, 3>{
+//                            vId_of_face[edge_faces[i][0]],vId_of_edge[i],  vId_of_tet});
+//                        mesh_tris.emplace_back(std::array<size_t, 3>{
+//                            vId_of_tet, vId_of_edge[i], vId_of_face[edge_faces[i][1]]});
+//                    }
+//                }
+//            }
+//        }
+//    }
+//}
+
 void tet_dual_contouring(size_t num_1func,
     size_t num_2func,
     size_t num_more_func,
@@ -3513,6 +3862,314 @@ void tet_dual_contouring(size_t num_1func,
     }
 }
 
+//void tet_dual_contouring_MI(size_t num_2func,
+//    size_t num_3func,
+//    size_t num_more_func,
+//    const std::vector<std::array<double, 3>>& pts,
+//    const std::vector<std::array<size_t, 4>>& tets,
+//    const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& funcVals,
+//    const std::vector<size_t>& highest_func,
+//    const std::vector<bool>& has_intersection,
+//    std::vector<std::array<double, 3>>& mesh_verts,
+//    std::vector<std::array<size_t, 3>>& mesh_tris)
+//{
+//    // 6 tet edges, each edge is a pair of tet vertex
+//    size_t edge_verts[6][2] = {{0, 1}, {0, 2}, {0, 3}, {1, 2}, {1, 3}, {2, 3}};
+//    // 4 tet faces, each face is three tet edges
+//    size_t face_edges[4][3] = {{3, 5, 4}, {1, 2, 5}, {2, 0, 4}, {0, 1, 3}};
+//    // face i is opposite to vertex i
+//    size_t face_verts[4][3] = {{1, 2, 3}, {0, 3, 2}, {0, 1, 3}, {0, 2, 1}};
+//    // incident faces of edges
+//    size_t edge_faces[6][2] = {{3, 2}, {1, 3}, {2, 1}, {3, 0}, {0, 2}, {1, 0}};
+//    // estimate size of output mesh, reserve memory for output mesh
+//    // in a tet, two triangles are created for each edge vertex.
+//    // 2 func in tet: number of edge vertex is either 3 or 4, producing an average of 7 triangles
+//    // 3 func in tet: number of edge vertex is 5, producing 10 triangles
+//    // more func in tet: all the 6 tet edge will have edge vertex, leading to 12 triangles
+//    size_t num_tris_estimate = 7 * num_2func + 10 * num_3func + 12 * num_more_func;
+//    mesh_tris.reserve(num_tris_estimate);
+//    // for a triangle mesh, number of vertices is about half the number of triangles
+//    mesh_verts.reserve(num_tris_estimate / 2);
+//    //
+//    size_t n_func = funcVals.cols();
+//    size_t none = std::numeric_limits<size_t>::max();
+//    size_t v1, v2, v3, v4;
+//    size_t fId1, fId2, fId3, fId4;
+//    double df1, df2;
+//    std::pair<size_t, size_t> key2;
+//    std::array<size_t, 3> key3;
+//    // edge vertices' indices in mesh_verts, none if no such vertex
+//    std::array<size_t, 6> vId_of_edge;
+//    // edge (v1, v2): true if v1 smaller material label than v2
+//    std::array<bool,6> orient_of_edge;
+//    // face vertices' indices in mesh_verts, none if no such vertex
+//    std::array<size_t, 4> vId_of_face;
+//    // true if the face vertex is computed using positive barycentric coordinates
+//    std::array<bool, 4> is_positive_barycentric_face;
+//    // tet vertex's index in mesh_verts
+//    size_t vId_of_tet;
+//    std::array<double, 3> xyz, xyz2;
+//    // barycentric coordinates computation
+//    std::array<double, 2> b2;
+//    std::array<double, 3> f1s3;
+//    std::array<double, 3> f2s3;
+//    std::array<double, 3> b3;
+//    std::array<double, 4> f1s4;
+//    std::array<double, 4> f2s4;
+//    std::array<double, 4> f3s4;
+//    std::array<double, 4> b4;
+//    bool all_positive_barycentric;
+//    double barycentric_sum;
+//    int count;
+//    int pos_barycentric_face_count;
+//    std::array<size_t,4> pos_barycentric_faces;
+//    // has set
+//    absl::flat_hash_set<size_t> materials;
+//    materials.reserve(4);
+//    // hash table
+//    // if edge contains a vert, record the vert index in mesh_verts
+//    absl::flat_hash_map<std::pair<size_t, size_t>, size_t> mesh_vId_of_edge;
+//    // 2 func: about 3.5 edge vertex per tet
+//    // 3 func: 5 edge vertex per tet
+//    // more func: 6 edge vertex per tet
+//    // an edge is shared by about 6 tets
+//    // (3.5 n2 + 5 n3 + 6 n4)/6 is about (n1/2 + n3 + n4)
+//    mesh_vId_of_edge.reserve(num_2func / 2 + num_3func + num_more_func);
+//    // if face contains a vert, record the vert index in mesh_verts
+//    // and whether it is computed from positive barycentric coordinates
+//    absl::flat_hash_map<std::array<size_t, 3>, std::pair<size_t,bool>> mesh_vId_posBary_of_face;
+//    // non-empty tet has at least 3 face vertices, a face is shared by 2 tets
+//    // so, number of face vertices is at least 3(n2+n3+n4)/2
+//    mesh_vId_posBary_of_face.reserve(3 * (num_2func + num_3func + num_more_func) / 2);
+//    //
+//    for (size_t tId = 0; tId < tets.size(); tId++) {
+//        if (has_intersection[tId]) {
+//            const auto& tet = tets[tId];
+//            // init
+//            vId_of_edge.fill(none);
+//            orient_of_edge.fill(false);
+//            // visit each edge
+//            for (size_t i = 0; i < 6; ++i) {
+//                v1 = tet[edge_verts[i][0]];
+//                v2 = tet[edge_verts[i][1]];
+//                if (v1 < v2) {
+//                    key2.first = v1;
+//                    key2.second = v2;
+//                } else {
+//                    key2.first = v2;
+//                    key2.second = v1;
+//                }
+//                auto iter = mesh_vId_of_edge.find(key2);
+//                if (iter == mesh_vId_of_edge.end()) { // edge has not been inserted
+//                    // check if two end vertices have different labels
+//                    // and compute the coordinates of vertex on edge
+//                    if (highest_func[v1] != highest_func[v2]) {
+//                        // two end vertex have different labels
+//                        // create new vertex
+//                        fId1 = highest_func[v1];
+//                        fId2 = highest_func[v2];
+//                        df1 = funcVals(v1, fId1) - funcVals(v1, fId2);
+//                        df2 = funcVals(v2, fId1) - funcVals(v2, fId2);
+//                        b2[0] = df2 / (df2 - df1);
+//                        b2[1] = 1 - b2[0];
+//                        mesh_vId_of_edge.try_emplace(key2, mesh_verts.size());
+//                        vId_of_edge[i] = mesh_verts.size();
+//                        mesh_verts.emplace_back();
+//                        mesh_verts.back() = {b2[0] * pts[v1][0] + b2[1] * pts[v2][0],
+//                            b2[0] * pts[v1][1] + b2[1] * pts[v2][1],
+//                            b2[0] * pts[v1][2] + b2[1] * pts[v2][2]};
+//                        orient_of_edge[i] = (highest_func[v1] < highest_func[v2]);
+//                    }
+//                } else { // edge has been inserted and contains a vert
+//                    vId_of_edge[i] = iter->second;
+//                    orient_of_edge[i] = (highest_func[v1] < highest_func[v2]);
+//                }
+//            }
+//            //
+//            vId_of_face.fill(none);
+//            is_positive_barycentric_face.fill(false);
+//            // visit each face
+//            for (size_t i = 0; i < 4; ++i) {
+//                key3 = {tet[face_verts[i][0]], tet[face_verts[i][1]], tet[face_verts[i][2]]};
+//                std::sort(key3.begin(), key3.end());
+//                auto iter = mesh_vId_posBary_of_face.find(key3);
+//                if (iter == mesh_vId_posBary_of_face.end()) {
+//                    // face not inserted before
+//                    // check if we need to create face vertex
+//                    count = 0;
+//                    xyz.fill(0);
+//                    for (size_t j = 0; j < 3; ++j) {
+//                        if (vId_of_edge[face_edges[i][j]] != none) {
+//                            // this edge of the face contains a mesh vertex
+//                            const auto& p = mesh_verts[vId_of_edge[face_edges[i][j]]];
+//                            ++count;
+//                            xyz[0] += p[0];
+//                            xyz[1] += p[1];
+//                            xyz[2] += p[2];
+//                        }
+//                    }
+//                    //
+//                    if (count > 0) {
+//                        // create a new face vertex
+//                        if (count == 3) {
+//                            // compute barycentric coordinates of face vertex
+//                            v1 = tet[face_verts[i][0]];
+//                            v2 = tet[face_verts[i][1]];
+//                            v3 = tet[face_verts[i][2]];
+//                            fId1 = highest_func[v1];
+//                            fId2 = highest_func[v2];
+//                            fId3 = highest_func[v3];
+//                            // f1 - f2
+//                            f1s3[0] = funcVals(v1,fId1) - funcVals(v1,fId2);
+//                            f1s3[1] = funcVals(v2,fId1) - funcVals(v2,fId2);
+//                            f1s3[2] = funcVals(v3,fId1) - funcVals(v3,fId2);
+//                            // f2 - f3
+//                            f2s3[0] = funcVals(v1,fId2) - funcVals(v1,fId3);
+//                            f2s3[1] = funcVals(v2,fId2) - funcVals(v2,fId3);
+//                            f2s3[2] = funcVals(v3,fId2) - funcVals(v3,fId3);
+//                            //
+//                            compute_barycentric_coords(f1s3, f2s3, b3);
+//                            // snap and normalize
+//                            all_positive_barycentric = true;
+//                            barycentric_sum = 0;
+//                            for (int j = 0; j < 3; ++j) {
+//                                if (b3[j] > 0) {
+//                                    barycentric_sum += b3[j];
+//                                } else {
+//                                    b3[j] = 0;
+//                                    all_positive_barycentric = false;
+//                                }
+//                            }
+//                            is_positive_barycentric_face[i] = all_positive_barycentric;
+//                            if (!all_positive_barycentric) {
+//                                b3[0] /= barycentric_sum;
+//                                b3[1] /= barycentric_sum;
+//                                b3[2] /= barycentric_sum;
+//                            }
+//                            //
+//                            xyz[0] = b3[0] * pts[v1][0] + b3[1] * pts[v2][0] + b3[2] * pts[v3][0];
+//                            xyz[1] = b3[0] * pts[v1][1] + b3[1] * pts[v2][1] + b3[2] * pts[v3][1];
+//                            xyz[2] = b3[0] * pts[v1][2] + b3[1] * pts[v2][2] + b3[2] * pts[v3][2];
+//                        } else { // count < 3
+//                            xyz[0] /= count;
+//                            xyz[1] /= count;
+//                            xyz[2] /= count;
+//                        }
+//                        vId_of_face[i] = mesh_verts.size();
+//                        mesh_vId_posBary_of_face.try_emplace(key3,
+//                            std::make_pair(vId_of_face[i], is_positive_barycentric_face[i]));
+//                        mesh_verts.emplace_back(xyz);
+//                    }
+//                } else { // face inserted before
+//                    vId_of_face[i] = iter->second.first;
+//                    is_positive_barycentric_face[i] = iter->second.second;
+//                }
+//            }
+//            // create vertex in tet
+//            count = 0;
+//            pos_barycentric_face_count = 0;
+//            xyz.fill(0);
+//            xyz2.fill(0);
+//            materials.clear();
+//            for (size_t i = 0; i < 4; ++i) {
+//                materials.insert(highest_func[tet[i]]);
+//                if (vId_of_face[i] != none) {
+//                    ++count;
+//                    const auto& p = mesh_verts[vId_of_face[i]];
+//                    xyz[0] += p[0];
+//                    xyz[1] += p[1];
+//                    xyz[2] += p[2];
+//                    if (is_positive_barycentric_face[i]) {
+//                        ++pos_barycentric_face_count;
+//                        xyz2[0] += p[0];
+//                        xyz2[1] += p[1];
+//                        xyz2[2] += p[2];
+//                    }
+//                }
+//            }
+//            //
+//            if (pos_barycentric_face_count == 2) {
+//                xyz[0] = xyz2[0] / pos_barycentric_face_count;
+//                xyz[1] = xyz2[1] / pos_barycentric_face_count;
+//                xyz[2] = xyz2[2] / pos_barycentric_face_count;
+//            } else if (materials.size() == 4) {
+//                // 4 different materials, compute barycentric coordinates
+//                v1 = tet[0];
+//                v2 = tet[1];
+//                v3 = tet[2];
+//                v4 = tet[3];
+//                fId1 = highest_func[v1];
+//                fId2 = highest_func[v2];
+//                fId3 = highest_func[v3];
+//                fId4 = highest_func[v4];
+//                // f1 - f2
+//                f1s4[0] = funcVals(v1,fId1) - funcVals(v1,fId2);
+//                f1s4[1] = funcVals(v2,fId1) - funcVals(v2,fId2);
+//                f1s4[2] = funcVals(v3,fId1) - funcVals(v3,fId2);
+//                f1s4[3] = funcVals(v4,fId1) - funcVals(v4,fId2);
+//                // f2 - f3
+//                f2s4[0] = funcVals(v1,fId2) - funcVals(v1,fId3);
+//                f2s4[1] = funcVals(v2,fId2) - funcVals(v2,fId3);
+//                f2s4[2] = funcVals(v3,fId2) - funcVals(v3,fId3);
+//                f2s4[3] = funcVals(v4,fId2) - funcVals(v4,fId3);
+//                // f3 - f4
+//                f3s4[0] = funcVals(v1,fId3) - funcVals(v1,fId4);
+//                f3s4[1] = funcVals(v2,fId3) - funcVals(v2,fId4);
+//                f3s4[2] = funcVals(v3,fId3) - funcVals(v3,fId4);
+//                f3s4[3] = funcVals(v4,fId3) - funcVals(v4,fId4);
+//                //
+//                compute_barycentric_coords(f1s4, f2s4, f3s4, b4);
+//                // snap and normalize
+//                all_positive_barycentric = true;
+//                barycentric_sum = 0;
+//                for (int j = 0; j < 4; ++j) {
+//                    if (b4[j] > 0) {
+//                        barycentric_sum += b4[j];
+//                    } else {
+//                        b4[j] = 0;
+//                        all_positive_barycentric = false;
+//                    }
+//                }
+//                if (!all_positive_barycentric) {
+//                    b4[0] /= barycentric_sum;
+//                    b4[1] /= barycentric_sum;
+//                    b4[2] /= barycentric_sum;
+//                    b4[3] /= barycentric_sum;
+//                }
+//                xyz[0] = b4[0] * pts[v1][0] + b4[1] * pts[v2][0] + b4[2] * pts[v3][0] +
+//                               b4[3] * pts[v4][0];
+//                xyz[1] = b4[0] * pts[v1][1] + b4[1] * pts[v2][1] + b4[2] * pts[v3][1] +
+//                               b4[3] * pts[v4][1];
+//                xyz[2] = b4[0] * pts[v1][2] + b4[1] * pts[v2][2] + b4[2] * pts[v3][2] +
+//                               b4[3] * pts[v4][2];
+//
+//            } else { // averaging
+//                xyz[0] /= count;
+//                xyz[1] /= count;
+//                xyz[2] /= count;
+//            }
+//            vId_of_tet = mesh_verts.size();
+//            mesh_verts.emplace_back(xyz);
+//            // create a pair of triangles for each edge vertex
+//            for (size_t i = 0; i < 6; ++i) {
+//                if (vId_of_edge[i] != none) {
+//                    if (orient_of_edge[i]) {
+//                        mesh_tris.emplace_back(std::array<size_t, 3>{
+//                            vId_of_edge[i], vId_of_face[edge_faces[i][0]], vId_of_tet});
+//                        mesh_tris.emplace_back(std::array<size_t, 3>{
+//                            vId_of_edge[i], vId_of_tet, vId_of_face[edge_faces[i][1]]});
+//                    } else {
+//                        mesh_tris.emplace_back(std::array<size_t, 3>{
+//                            vId_of_face[edge_faces[i][0]], vId_of_edge[i], vId_of_tet});
+//                        mesh_tris.emplace_back(std::array<size_t, 3>{
+//                            vId_of_tet, vId_of_edge[i], vId_of_face[edge_faces[i][1]]});
+//                    }
+//                }
+//            }
+//        }
+//    }
+//}
+
 void tet_dual_contouring_MI(size_t num_2func,
     size_t num_3func,
     size_t num_more_func,
@@ -3691,6 +4348,7 @@ void tet_dual_contouring_MI(size_t num_2func,
         }
     }
 }
+
 bool save_result_msh_DC(const std::string& filename,
     const std::vector<std::array<double, 3>>& iso_pts,
     const std::vector<PolygonFace>& iso_faces,
@@ -3845,4 +4503,355 @@ bool load_tet_mesh_func(const std::string& filename,
         }
     }
     return true;
+}
+
+void extract_MI_mesh(size_t num_2_func,
+    size_t num_3_func,
+    size_t num_more_func,
+    const std::vector<MaterialInterface<3>>& cut_results,
+    const std::vector<size_t>& cut_result_index,
+    const std::vector<size_t>& material_in_tet,
+    const std::vector<size_t>& start_index_of_tet,
+    const std::vector<std::array<size_t, 4>>& tets,
+    std::vector<MI_Vert>& MI_verts,
+    std::vector<PolygonFace>& MI_faces,
+    std::vector<long long int>& global_vId_of_tet_vert,
+    std::vector<size_t>& global_vId_start_index_of_tet,
+    std::vector<size_t>& MI_fId_of_tet_face,
+    std::vector<size_t>& MI_fId_start_index_of_tet)
+{
+    size_t n_tets = tets.size();
+    // get total number of verts and faces
+    size_t total_num_vert = 0;
+    size_t total_num_face = 0;
+    for (const auto& result : cut_results) {
+        total_num_vert += result.vertices.size();
+        total_num_face += result.faces.size();
+    }
+    global_vId_of_tet_vert.reserve(total_num_vert);
+    global_vId_start_index_of_tet.reserve(n_tets + 1);
+    global_vId_start_index_of_tet.push_back(0);
+    MI_fId_of_tet_face.reserve(total_num_face);
+    MI_fId_start_index_of_tet.reserve(n_tets + 1);
+    MI_fId_start_index_of_tet.push_back(0);
+    // estimate number of MI-verts and MI-faces
+    // C(2,2) = 1, C(3,2) = 3, C(4,2) = 6
+    size_t max_num_face = num_2_func + 3 * num_3_func + 6 * num_more_func;
+    // for triangle mesh, 3|F| is about 2|F|, |V|-|E|+|F| is about 0, so |V| is about 0.5|F|.
+    // Since most non-empty tets has 2 functions (i.e. 1 material interface),
+    // most polygon's in the mesh are triangle or quad.
+    // so number of triangles is roughly between |P| and 2|P| (|P| = number of polygons)
+    // so, 0.5 * 2|P| = |P| is an estimate of |V|'s upper-bound
+    size_t max_num_vert = max_num_face;
+    MI_verts.reserve(max_num_vert);
+    MI_faces.reserve(max_num_face);
+    // hash table for vertices on the boundary of tetrahedron
+    absl::flat_hash_map<size_t, size_t> vert_on_tetVert;
+    // key is (edge v1, edge v2, material 1, material 2)
+    absl::flat_hash_map<std::array<size_t, 4>, size_t> vert_on_tetEdge;
+    vert_on_tetEdge.reserve(num_2_func + 2 * num_3_func + 4 * num_more_func);
+    // key is (tri v1, tri v2, tri v3, material 1, material 2, material 3)
+    absl::flat_hash_map<std::array<size_t, 6>, size_t> vert_on_tetFace;
+    // 2func: 0 face vert, 3func: 2 face vert, 4func: 4 face vert
+    // num face vert estimate = (2 * n_3func + 4 * n_moreFunc) /2
+    vert_on_tetFace.reserve(num_3_func + 2 * num_more_func);
+    // map: face on tet boundary -> (material label, tetId, faceId in tet)
+//    absl::flat_hash_map<std::array<long long, 3>, size_t> material_of_bndry_face;
+    absl::flat_hash_map<std::array<long long, 3>, std::array<size_t,3>> mat_tet_face_of_bndry_face;
+    //
+    std::vector<bool> is_MI_vert;
+    is_MI_vert.reserve(8);
+    std::vector<bool> is_MI_face;
+    is_MI_face.reserve(9);
+    std::vector<long long> MI_vId_of_vert;
+    MI_vId_of_vert.reserve(8);
+    std::vector<size_t> face_verts;
+    face_verts.reserve(4);
+    std::vector<long long> bndry_face_verts;
+    bndry_face_verts.reserve(4);
+    std::array<long long, 3> key3;
+    std::array<size_t, 4> key4;
+    std::array<size_t, 6> key6;
+    std::array<bool, 4> used_mId;
+    std::array<size_t, 2> vIds2;
+    std::array<size_t, 3> vIds3;
+    std::array<size_t, 4> func_mIds;
+    std::array<size_t, 3> bndry_mIds;
+    //
+    for (size_t i = 0; i < n_tets; i++) {
+        if (cut_result_index[i] == MaterialInterface<3>::None) {
+            global_vId_start_index_of_tet.push_back(global_vId_of_tet_vert.size());
+            MI_fId_start_index_of_tet.push_back(MI_fId_of_tet_face.size());
+        } else {
+            const auto& mInterface = cut_results[cut_result_index[i]];
+            const auto& vertices = mInterface.vertices;
+            const auto& faces = mInterface.faces;
+            auto start_index = start_index_of_tet[i];
+            auto num_func = start_index_of_tet[i + 1] - start_index;
+            // find vertices and faces on material interface
+            is_MI_vert.clear();
+            for (int j = 0; j < vertices.size(); ++j) {
+                is_MI_vert.push_back(false);
+            }
+            is_MI_face.clear();
+            for (const auto& face : faces) {
+                // material label 0,1,2,3 represents tet boundary
+                if (face.positive_material_label > 3) {
+                    is_MI_face.push_back(true);
+                    for (auto vId : face.vertices) {
+                        is_MI_vert[vId] = true;
+                    }
+                } else {
+                    is_MI_face.push_back(false);
+                }
+            }
+            // map: local vert index --> MI-vert index
+            MI_vId_of_vert.clear();
+            // create MI-vertices
+            for (size_t j = 0; j < vertices.size(); j++) {
+                size_t num_bndry_materials = 0;
+                size_t num_func_materials = 0;
+                const auto& vertex = vertices[j];
+                // vertex.size() == 4
+                for (size_t k = 0; k < 4; k++) {
+                    if (vertex[k] > 3) { // material 0,1,2,3 are tet boundaries
+                        func_mIds[num_func_materials] =
+                            material_in_tet[vertex[k] - 4 + start_index];
+                        ++num_func_materials;
+                    } else {
+                        bndry_mIds[num_bndry_materials] = vertex[k];
+                        ++num_bndry_materials;
+                    }
+                }
+                if (!is_MI_vert[j]) {
+                    // vert not on any interior face, therefore must be a tet vertex
+                    used_mId[0] = false;
+                    used_mId[1] = false;
+                    used_mId[2] = false;
+                    used_mId[3] = false;
+                    for (const auto& mId : bndry_mIds) {
+                        used_mId[mId] = true;
+                    }
+                    size_t vId;
+                    for (size_t k = 0; k < 4; k++) {
+                        if (!used_mId[k]) {
+                            vId = k;
+                            break;
+                        }
+                    }
+                    // tet vert i is mapped to (-i-1)
+                    MI_vId_of_vert.push_back(-tets[i][vId] - 1);
+                    global_vId_of_tet_vert.push_back(-tets[i][vId] - 1);
+                } else { // vert on an interior face
+                    switch (num_bndry_materials) {
+                    case 2: // on tet edge
+                    {
+                        used_mId[0] = false;
+                        used_mId[1] = false;
+                        used_mId[2] = false;
+                        used_mId[3] = false;
+                        used_mId[bndry_mIds[0]] = true;
+                        used_mId[bndry_mIds[1]] = true;
+                        size_t num_vIds = 0;
+                        for (size_t k = 0; k < 4; k++) {
+                            if (!used_mId[k]) {
+                                vIds2[num_vIds] = tets[i][k];
+                                ++num_vIds;
+                            }
+                        }
+                        // sort {vId1, vId2}
+                        size_t vId1 = vIds2[0];
+                        size_t vId2 = vIds2[1];
+                        if (vId1 > vId2) {
+                            size_t tmp = vId1;
+                            vId1 = vId2;
+                            vId2 = tmp;
+                        }
+                        // sort {mId1, mId2}
+                        size_t mId1 = func_mIds[0];
+                        size_t mId2 = func_mIds[1];
+                        if (mId1 > mId2) {
+                            size_t tmp = mId1;
+                            mId1 = mId2;
+                            mId2 = tmp;
+                        }
+                        key4[0] = vId1;
+                        key4[1] = vId2;
+                        key4[2] = mId1;
+                        key4[3] = mId2;
+                        auto iter_inserted = vert_on_tetEdge.try_emplace(key4, MI_verts.size());
+                        if (iter_inserted.second) {
+                            MI_verts.emplace_back();
+                            auto& MI_vert = MI_verts.back();
+                            MI_vert.tet_index = i;
+                            MI_vert.tet_vert_index = j;
+                            MI_vert.simplex_size = 2;
+                            MI_vert.simplex_vert_indices[0] = vId1;
+                            MI_vert.simplex_vert_indices[1] = vId2;
+                            MI_vert.material_indices[0] = mId1;
+                            MI_vert.material_indices[1] = mId2;
+                        }
+                        global_vId_of_tet_vert.push_back(iter_inserted.first->second);
+                        MI_vId_of_vert.push_back(iter_inserted.first->second);
+                        break;
+                    }
+                    case 1: // on tet face
+                    {
+                        size_t mId = bndry_mIds[0];
+                        size_t num_vIds = 0;
+                        for (size_t k = 0; k < 4; k++) {
+                            if (k != mId) {
+                                vIds3[num_vIds] = tets[i][k];
+                                ++num_vIds;
+                            }
+                        }
+                        std::sort(vIds3.begin(), vIds3.end());
+                        std::sort(func_mIds.begin(), func_mIds.begin() + 3);
+                        key6[0] = vIds3[0];
+                        key6[1] = vIds3[1];
+                        key6[2] = vIds3[2];
+                        key6[3] = func_mIds[0];
+                        key6[4] = func_mIds[1];
+                        key6[5] = func_mIds[2];
+                        auto iter_inserted = vert_on_tetFace.try_emplace(key6, MI_verts.size());
+                        if (iter_inserted.second) {
+                            MI_verts.emplace_back();
+                            auto& MI_vert = MI_verts.back();
+                            MI_vert.tet_index = i;
+                            MI_vert.tet_vert_index = j;
+                            MI_vert.simplex_size = 3;
+                            MI_vert.simplex_vert_indices[0] = vIds3[0];
+                            MI_vert.simplex_vert_indices[1] = vIds3[1];
+                            MI_vert.simplex_vert_indices[2] = vIds3[2];
+                            MI_vert.material_indices[0] = func_mIds[0];
+                            MI_vert.material_indices[1] = func_mIds[1];
+                            MI_vert.material_indices[2] = func_mIds[2];
+                        }
+                        global_vId_of_tet_vert.push_back(iter_inserted.first->second);
+                        MI_vId_of_vert.push_back(iter_inserted.first->second);
+                        break;
+                    }
+                    case 0: // in tet cell
+                    {
+                        global_vId_of_tet_vert.push_back(MI_verts.size());
+                        MI_vId_of_vert.push_back(MI_verts.size());
+                        MI_verts.emplace_back();
+                        auto& MI_vert = MI_verts.back();
+                        MI_vert.tet_index = i;
+                        MI_vert.tet_vert_index = j;
+                        MI_vert.simplex_size = 4;
+                        MI_vert.simplex_vert_indices = tets[i];
+                        MI_vert.material_indices = func_mIds;
+                        break;
+                    }
+                    case 3: // on tet vertex
+                    {
+                        used_mId[0] = false;
+                        used_mId[1] = false;
+                        used_mId[2] = false;
+                        used_mId[3] = false;
+                        for (const auto& mId : bndry_mIds) {
+                            used_mId[mId] = true;
+                        }
+                        size_t vId;
+                        for (size_t k = 0; k < 4; k++) {
+                            if (!used_mId[k]) {
+                                vId = k;
+                                break;
+                            }
+                        }
+                        auto key = tets[i][vId];
+                        auto iter_inserted = vert_on_tetVert.try_emplace(key, MI_verts.size());
+                        if (iter_inserted.second) {
+                            MI_verts.emplace_back();
+                            auto& MI_vert = MI_verts.back();
+                            MI_vert.tet_index = i;
+                            MI_vert.tet_vert_index = j;
+                            MI_vert.simplex_size = 1;
+                            MI_vert.simplex_vert_indices[0] = tets[i][vId];
+                        }
+                        global_vId_of_tet_vert.push_back(-key - 1);
+                        MI_vId_of_vert.push_back(iter_inserted.first->second);
+                        break;
+                    }
+                    default: break;
+                    }
+                }
+            }
+            global_vId_start_index_of_tet.push_back(global_vId_of_tet_vert.size());
+            // create MI-faces
+            for (size_t j = 0; j < faces.size(); j++) {
+                MI_fId_of_tet_face.push_back(MaterialInterface<3>::None);
+                const auto& face = faces[j];
+                if (is_MI_face[j]) { // face j is in tet interior
+                    face_verts.clear();
+                    for (unsigned long vId : face.vertices) {
+                        face_verts.push_back(MI_vId_of_vert[vId]);
+                    }
+                    MI_fId_of_tet_face.back() = MI_faces.size();
+                    MI_faces.emplace_back();
+                    MI_faces.back().vert_indices = face_verts;
+                    MI_faces.back().tet_face_indices.emplace_back(i, j);
+                } else { // face j is on tet boundary
+                    bndry_face_verts.clear();
+                    for (unsigned long vId : face.vertices) {
+                        if (MI_vId_of_vert[vId] >= 0 &&
+                            MI_verts[MI_vId_of_vert[vId]].simplex_size == 1) {
+                            // intersection on tet vertex
+                            bndry_face_verts.push_back(
+                                -MI_verts[MI_vId_of_vert[vId]].simplex_vert_indices[0] - 1);
+                        } else {
+                            bndry_face_verts.push_back(MI_vId_of_vert[vId]);
+                        }
+                    }
+                    compute_iso_face_key(bndry_face_verts, key3);
+                    auto m = material_in_tet[face.negative_material_label - 4 + start_index];
+//                    auto iter_inserted = material_of_bndry_face.try_emplace(key3, m);
+                    auto iter_inserted = mat_tet_face_of_bndry_face.try_emplace(key3, std::array<size_t,3> {m,i,j});
+                    if (!iter_inserted.second) { // inserted before
+                        auto opposite_material = iter_inserted.first->second[0];
+                        auto opposite_tetId = iter_inserted.first->second[1];
+                        auto opposite_faceId = iter_inserted.first->second[2];
+                        if (opposite_material == m) {
+                            // material labels on both sides of the face are the same
+                            // the face is not on material interface
+                            mat_tet_face_of_bndry_face.erase(iter_inserted.first);
+                        } else {
+                            // different material labels on different sides
+                            // the face is on material interface
+                            face_verts.clear();
+                            for (size_t k = 0; k < face.vertices.size(); ++k) {
+                                if (bndry_face_verts[k] < 0) {
+                                    // try to create new vert on tet vertex
+                                    size_t key = -bndry_face_verts[k] - 1;
+                                    auto iterInserted =
+                                        vert_on_tetVert.try_emplace(key, MI_verts.size());
+                                    if (iterInserted.second) {
+                                        MI_verts.emplace_back();
+                                        auto& MI_vert = MI_verts.back();
+                                        MI_vert.tet_index = i;
+//                                        MI_vert.tet_vert_index = j;
+                                        MI_vert.tet_vert_index = face.vertices[k];
+                                        MI_vert.simplex_size = 1;
+                                        MI_vert.simplex_vert_indices[0] = key;
+                                    }
+                                    //MI_vId_of_vert.push_back(iterInserted.first->second);
+                                    face_verts.push_back(iterInserted.first->second);
+                                } else {
+                                    face_verts.push_back(MI_vId_of_vert[face.vertices[k]]);
+                                }
+                            }
+                            // insert the face to MI_faces
+                            MI_fId_of_tet_face.back() = MI_faces.size();
+                            MI_fId_of_tet_face[MI_fId_start_index_of_tet[opposite_tetId] + opposite_faceId] = MI_faces.size();
+                            MI_faces.emplace_back();
+                            MI_faces.back().vert_indices = face_verts;
+                            MI_faces.back().tet_face_indices.emplace_back(i, j);
+                        }
+                    }
+                }
+            }
+            MI_fId_start_index_of_tet.push_back(MI_fId_of_tet_face.size());
+        }
+    }
 }
