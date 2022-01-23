@@ -306,7 +306,7 @@ int main(int argc, const char* argv[])
         compute_mesh_edges(iso_faces, edges_of_iso_face, iso_edges);
         timings.push_back(timer.toc());
     }
-    // std::cout << "num iso-edges = " << iso_edges.size() << std::endl;
+    std::cout << "num iso-edges = " << iso_edges.size() << std::endl;
 
 
     // group iso-faces into patches
@@ -317,7 +317,7 @@ int main(int argc, const char* argv[])
         compute_patches(edges_of_iso_face, iso_edges, patches);
         timings.push_back(timer.toc());
     }
-    // std::cout << "num patches = " << patches.size() << std::endl;
+    std::cout << "num patches = " << patches.size() << std::endl;
 
     // compute map: iso-face Id --> patch Id
     std::vector<size_t> patch_of_face;
@@ -355,7 +355,7 @@ int main(int argc, const char* argv[])
         compute_chains(iso_edges, non_manifold_edges_of_vert, chains);
         timings.push_back(timer.toc());
     }
-    //     std::cout << "num chains = " << chains.size() << std::endl;
+    std::cout << "num chains = " << chains.size() << std::endl;
 
 
     absl::flat_hash_map<size_t, std::vector<size_t>> incident_tets;
@@ -430,8 +430,8 @@ int main(int argc, const char* argv[])
             component_of_patch);
         timings.push_back(timer.toc());
     }
-    //    std::cout << "num shells = " << shells.size() << std::endl;
-    //    std::cout << "num components = " << components.size() << std::endl;
+    std::cout << "num shells = " << shells.size() << std::endl;
+    std::cout << "num components = " << components.size() << std::endl;
 
     // resolve nesting order, compute arrangement cells
     // an arrangement cell is represented by a list of bounding shells
