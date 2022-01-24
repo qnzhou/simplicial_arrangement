@@ -208,7 +208,7 @@ bool save_result_msh(const std::string& filename,
 {
     constexpr size_t INVALID = std::numeric_limits<size_t>::max();
     std::vector<size_t> vertex_map(iso_pts.size(), INVALID);
-    wmtk::MshData msh, msh2;
+    wmtk::MshData msh, msh2, msh3;
 
     // Save chains.
     auto extract_chain = [&](size_t i) {
@@ -243,6 +243,7 @@ bool save_result_msh(const std::string& filename,
     for (size_t i = 0; i < chains.size(); i++) {
         extract_chain(i);
     }
+    msh.save(filename + "_chains.msh");
 
     // Save patches
     auto extract_patch = [&](size_t i) -> std::tuple<std::vector<std::array<double, 3>>,
@@ -299,15 +300,17 @@ bool save_result_msh(const std::string& filename,
         const auto& vertices = std::get<0>(r);
         const auto& triangles = std::get<1>(r);
         const auto& local_polygon_ids = std::get<2>(r);
-        msh.add_face_vertices(vertices.size(), [&](size_t j) { return vertices[j]; });
-        msh.add_faces(triangles.size(), [&](size_t j) { return triangles[j]; });
+        msh2.add_face_vertices(vertices.size(), [&](size_t j) { return vertices[j]; });
+        msh2.add_faces(triangles.size(), [&](size_t j) { return triangles[j]; });
         patch_ids.insert(patch_ids.end(), triangles.size(), i);
         polygon_ids.insert(polygon_ids.end(), local_polygon_ids.begin(), local_polygon_ids.end());
     }
 
-    msh.add_face_attribute<1>("patch_id", [&](size_t i) { return patch_ids[i]; });
-    msh.add_face_attribute<1>("polygon_id", [&](size_t i) { return polygon_ids[i]; });
-    msh.save(filename + "_patches.msh");
+    if (patches.size() > 0) {
+        msh2.add_face_attribute<1>("patch_id", [&](size_t i) { return patch_ids[i]; });
+        msh2.add_face_attribute<1>("polygon_id", [&](size_t i) { return polygon_ids[i]; });
+    }
+    msh2.save(filename + "_patches.msh");
 
     auto extract_cell = [&](size_t i) {
         const auto& cell = arrangement_cells[i];
@@ -356,8 +359,8 @@ bool save_result_msh(const std::string& filename,
             t[2] = vertex_map[t[2]];
         }
 
-        msh2.add_face_vertices(num_vertices, [&](size_t j) { return vertices[j]; });
-        msh2.add_faces(triangles.size(), [&](size_t j) { return triangles[j]; });
+        msh3.add_face_vertices(num_vertices, [&](size_t j) { return vertices[j]; });
+        msh3.add_faces(triangles.size(), [&](size_t j) { return triangles[j]; });
         return triangles.size();
     };
 
@@ -366,8 +369,8 @@ bool save_result_msh(const std::string& filename,
         size_t num_faces = extract_cell(i);
         cell_ids.insert(cell_ids.end(), num_faces, i);
     }
-    msh2.add_face_attribute<1>("cell_id", [&](size_t i) { return cell_ids[i]; });
-    msh2.save(filename + "_cells.msh");
+    msh3.add_face_attribute<1>("cell_id", [&](size_t i) { return cell_ids[i]; });
+    msh3.save(filename + "_cells.msh");
     return true;
 }
 
@@ -4394,6 +4397,7 @@ bool save_result_msh_DC(const std::string& filename,
     for (size_t i = 0; i < chains.size(); i++) {
         extract_chain(i);
     }
+    msh.save(filename + "_chains.msh");
 
     // Save patches
     auto extract_patch = [&](size_t i) -> std::tuple<std::vector<std::array<double, 3>>,
@@ -4450,18 +4454,17 @@ bool save_result_msh_DC(const std::string& filename,
         const auto& vertices = std::get<0>(r);
         const auto& triangles = std::get<1>(r);
         const auto& local_polygon_ids = std::get<2>(r);
-        msh.add_face_vertices(vertices.size(), [&](size_t j) { return vertices[j]; });
-        msh.add_faces(triangles.size(), [&](size_t j) { return triangles[j]; });
+        msh2.add_face_vertices(vertices.size(), [&](size_t j) { return vertices[j]; });
+        msh2.add_faces(triangles.size(), [&](size_t j) { return triangles[j]; });
         patch_ids.insert(patch_ids.end(), triangles.size(), i);
         polygon_ids.insert(polygon_ids.end(), local_polygon_ids.begin(), local_polygon_ids.end());
     }
 
-    msh.add_face_attribute<1>("patch_id", [&](size_t i) { return patch_ids[i]; });
-    msh.add_face_attribute<1>("polygon_id", [&](size_t i) { return polygon_ids[i]; });
-    msh.save(filename + "_patches.msh");
+    msh2.add_face_attribute<1>("patch_id", [&](size_t i) { return patch_ids[i]; });
+    msh2.add_face_attribute<1>("polygon_id", [&](size_t i) { return polygon_ids[i]; });
+    msh2.save(filename + "_patches.msh");
 
 
-    msh2.save(filename + "_cells.msh");
     return true;
 }
 
