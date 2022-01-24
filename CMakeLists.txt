@@ -174,3 +174,9 @@ target_link_libraries(generate_material_interface_lookup_table PRIVATE
     simplicial_arrangement::simplicial_arrangement nlohmann_json::nlohmann_json
     spdlog::spdlog)
 target_compile_features(generate_material_interface_lookup_table PRIVATE cxx_std_17)
+
+add_executable(simplex_case_study "app/simplex_case_study.cpp")
+target_link_libraries(simplex_case_study PRIVATE
+    simplicial_arrangement::simplicial_arrangement mshio::mshio CLI11::CLI11
+    nlohmann_json::nlohmann_json spdlog::spdlog)
+target_compile_features(simplex_case_study PRIVATE cxx_std_17)
