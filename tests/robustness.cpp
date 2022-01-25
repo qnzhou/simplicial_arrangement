@@ -344,7 +344,6 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
 
     SECTION("Material interface - flat")
     {
-        std::cout << std::numeric_limits<Scalar>::epsilon() << std::endl;
         size_t success = 0;
         size_t type2_failure = 0; // Failure due to invalid state.
         for (size_t i = 0; i < N; i++) {
@@ -366,8 +365,6 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
                 // A necessary condition for success.
                 if (r1.cells.size() == r2.cells.size() && r1.faces.size() == r2.faces.size() &&
                     r1.vertices.size() == r2.vertices.size()) {
-                    std::cout << r1.cells.size() << " " << r1.faces.size() << " "
-                              << r1.vertices.size() << std::endl;
                     success++;
                 }
             } catch (const std::runtime_error&) {
