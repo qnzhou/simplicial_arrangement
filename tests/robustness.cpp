@@ -5,6 +5,7 @@
 #include <implicit_predicates/implicit_predicates.h>
 
 #include <catch2/catch.hpp>
+#include <iomanip>
 #include <iostream>
 #include <random>
 #include <vector>
@@ -61,48 +62,6 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
         INFO("Type 2 failure: " << type2_failure);
         REQUIRE(success == N);
     }
-
-    //SECTION("Simplicial arrangement - near point intersection")
-    //{
-    //    size_t success = 0;
-    //    size_t type2_failure = 0; // Failure due to invalid state.
-    //    for (size_t i = 0; i < N; i++) {
-    //        planes.clear();
-    //        for (size_t j = 0; j < M; j++) {
-    //            Scalar v0 = distrib(gen);
-    //            Scalar v1 = distrib(gen);
-    //            Scalar v2 = distrib(gen);
-    //            Scalar v3 = distrib(gen);
-
-    //            // The following operations produce floating point error.
-    //            Scalar s = (v0 + v1 + v2 + v3) / 4;
-    //            v0 -= s;
-    //            v1 -= s;
-    //            v2 -= s;
-    //            v3 -= s;
-
-    //            planes.push_back({v0, v1, v2, v3});
-    //        }
-    //        try {
-    //            const auto r1 = compute_arrangement(planes);
-
-    //            std::reverse(planes.begin(), planes.end());
-    //            const auto r2 = compute_arrangement(planes);
-
-    //            // A necessary condition for success.
-    //            if (r1.cells.size() == r2.cells.size() && r1.faces.size() == r2.faces.size() &&
-    //                r1.vertices.size() == r2.vertices.size()) {
-    //                success++;
-    //            }
-    //        } catch (const std::runtime_error&) {
-    //            type2_failure++;
-    //        }
-    //    }
-
-    //    INFO("Type 1 failure: " << N - success - type2_failure);
-    //    INFO("Type 2 failure: " << type2_failure);
-    //    REQUIRE(success == N);
-    //}
 
     SECTION("Simplicial arrangement - segment intersection")
     {
@@ -208,6 +167,41 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
         REQUIRE(success == N);
     }
 
+    SECTION("Simplicial arrangement - flat")
+    {
+        size_t success = 0;
+        size_t type2_failure = 0; // Failure due to invalid state.
+        for (size_t i = 0; i < N; i++) {
+            planes.clear();
+            for (size_t j = 0; j < M; j++) {
+                // Tiny values at the tet vertices.
+                Scalar t0 = distrib(gen) / (1 << 30);
+                Scalar t1 = distrib(gen) / (1 << 30);
+                Scalar t2 = distrib(gen) / (1 << 30);
+                Scalar t3 = distrib(gen) / (1 << 30);
+                planes.push_back({t0, t1, t2, t3});
+            }
+            try {
+                const auto r1 = compute_arrangement(planes);
+
+                std::reverse(planes.begin(), planes.end());
+                const auto r2 = compute_arrangement(planes);
+
+                // A necessary condition for success.
+                if (r1.cells.size() == r2.cells.size() && r1.faces.size() == r2.faces.size() &&
+                    r1.vertices.size() == r2.vertices.size()) {
+                    success++;
+                }
+            } catch (const std::runtime_error&) {
+                type2_failure++;
+            }
+        }
+
+        INFO("Type 1 failure: " << N - success - type2_failure);
+        INFO("Type 2 failure: " << type2_failure);
+        REQUIRE(success == N);
+    }
+
     std::vector<Material<Scalar, 3>> materials;
     materials.reserve(M + 1);
     SECTION("Material interface - point intersection")
@@ -282,8 +276,8 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
         size_t type2_failure = 0; // Failure due to invalid state.
         for (size_t i = 0; i < N; i++) {
             materials.clear();
-            for (size_t j = 0; j < M; j++) {
-                Scalar a = distrib(gen) * (j % 2 == 0 ? 1:-1);
+            for (size_t j = 0; j <= M; j++) {
+                Scalar a = distrib(gen) * (j % 2 == 0 ? 1 : -1);
                 // Small perturbations per vertex.
                 Scalar t0 = distrib(gen) / (1 << 30);
                 Scalar t1 = distrib(gen) / (1 << 30);
@@ -318,8 +312,8 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
         size_t type2_failure = 0; // Failure due to invalid state.
         for (size_t i = 0; i < N; i++) {
             materials.clear();
-            for (size_t j = 0; j < M; j++) {
-                Scalar a = distrib(gen) * (j % 2 == 0 ? 1:-1);
+            for (size_t j = 0; j <= M; j++) {
+                Scalar a = distrib(gen) * (j % 2 == 0 ? 1 : -1);
                 // Small perturbations per vertex.
                 Scalar t0 = distrib(gen) / (1 << 30);
                 Scalar t1 = distrib(gen) / (1 << 30);
@@ -336,6 +330,44 @@ TEST_CASE("robustness", "[ar][mi][.robustness]")
                 // A necessary condition for success.
                 if (r1.cells.size() == r2.cells.size() && r1.faces.size() == r2.faces.size() &&
                     r1.vertices.size() == r2.vertices.size()) {
+                    success++;
+                }
+            } catch (const std::runtime_error&) {
+                type2_failure++;
+            }
+        }
+
+        INFO("Type 1 failure: " << N - success - type2_failure);
+        INFO("Type 2 failure: " << type2_failure);
+        REQUIRE(success == N);
+    }
+
+    SECTION("Material interface - flat")
+    {
+        std::cout << std::numeric_limits<Scalar>::epsilon() << std::endl;
+        size_t success = 0;
+        size_t type2_failure = 0; // Failure due to invalid state.
+        for (size_t i = 0; i < N; i++) {
+            materials.clear();
+            for (size_t j = 0; j <= M; j++) {
+                // Tiny values at the tet vertices.
+                Scalar t0 = distrib(gen) * std::numeric_limits<Scalar>::epsilon();
+                Scalar t1 = distrib(gen) * std::numeric_limits<Scalar>::epsilon();
+                Scalar t2 = distrib(gen) * std::numeric_limits<Scalar>::epsilon();
+                Scalar t3 = distrib(gen) * std::numeric_limits<Scalar>::epsilon();
+                materials.push_back({t0, t1, t2, t3});
+            }
+            try {
+                const auto r1 = compute_material_interface(materials);
+
+                std::reverse(materials.begin(), materials.end());
+                const auto r2 = compute_material_interface(materials);
+
+                // A necessary condition for success.
+                if (r1.cells.size() == r2.cells.size() && r1.faces.size() == r2.faces.size() &&
+                    r1.vertices.size() == r2.vertices.size()) {
+                    std::cout << r1.cells.size() << " " << r1.faces.size() << " "
+                              << r1.vertices.size() << std::endl;
                     success++;
                 }
             } catch (const std::runtime_error&) {
