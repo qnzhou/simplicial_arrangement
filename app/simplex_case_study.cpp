@@ -84,6 +84,8 @@ auto extract_triangles(const std::vector<simplicial_arrangement::MaterialInterfa
 {
     std::vector<std::array<size_t, 3>> triangles;
     std::vector<size_t> face_id;
+    std::vector<size_t> positive_material_label;
+    std::vector<size_t> negative_material_label;
     triangles.reserve(faces.size() * 2);
     face_id.reserve(faces.size() * 2);
     size_t fid = 0;
@@ -93,12 +95,14 @@ auto extract_triangles(const std::vector<simplicial_arrangement::MaterialInterfa
             for (size_t i = 1; i < s - 1; i++) {
                 triangles.push_back({f.vertices[0], f.vertices[i], f.vertices[i + 1]});
                 face_id.push_back(fid);
+                positive_material_label.push_back(f.positive_material_label);
+                negative_material_label.push_back(f.negative_material_label);
             }
         }
         fid++;
     }
 
-    return std::make_tuple(triangles, face_id);
+    return std::make_tuple(triangles, face_id, positive_material_label, negative_material_label);
 }
 
 template <typename F>
@@ -142,9 +146,15 @@ void save_faces(const std::string& filename,
     auto r = extract_triangles(faces);
     const auto& triangles = std::get<0>(r);
     const auto& face_id = std::get<1>(r);
+    const auto& positive_material_label = std::get<2>(r);
+    const auto& negative_material_label = std::get<3>(r);
 
     data.add_faces(triangles.size(), [&](size_t i) { return triangles[i]; });
     data.add_face_attribute<1>("id", [&](size_t i) { return face_id[i]; });
+    data.add_face_attribute<1>(
+        "positive_material_label", [&](size_t i) { return positive_material_label[i]; });
+    data.add_face_attribute<1>(
+        "negative_material_label", [&](size_t i) { return negative_material_label[i]; });
     data.save(filename);
 }
 
