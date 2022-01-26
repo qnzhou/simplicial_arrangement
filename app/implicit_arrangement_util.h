@@ -70,7 +70,7 @@ typedef std::pair<std::array<double,3>, double> Sphere;
 
 bool parse_config_file(const std::string &filename,
     std::string& tet_mesh_file,
-    std::string& sphere_file,
+    std::string& func_file,
     std::string& output_dir,
     bool& use_lookup,
     bool& use_2func_lookup,
@@ -97,6 +97,15 @@ bool load_spheres(const std::string &filename,
 bool load_seeds(const std::string& filename,
     std::vector<std::array<double,3>> &seeds);
 
+bool load_functions(const std::string& filename,
+    const std::vector<std::array<double,3>> &pts,
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &funcVals);
+
+// load functions for mesh arrangement
+bool load_functions(const std::string& filename,
+    const std::vector<std::array<double,3>> &pts,
+    std::vector<Eigen::VectorXd> &funcVals);
+
 bool load_tet_mesh_func(const std::string &filename,
     std::vector<std::array<double, 3>> &pts,
     std::vector<std::array<size_t, 4>> &tets,
@@ -105,6 +114,24 @@ bool load_tet_mesh_func(const std::string &filename,
 inline double compute_Euclidean_distance(const std::array<double,3> &p, const std::array<double,3>& q)
 {
     return sqrt((p[0]-q[0])*(p[0]-q[0]) + (p[1]-q[1])*(p[1]-q[1]) + (p[2]-q[2])*(p[2]-q[2]));
+}
+
+inline double compute_squared_distance(const std::array<double,3> &p, const std::array<double,3>& q)
+{
+    return (p[0]-q[0])*(p[0]-q[0]) + (p[1]-q[1])*(p[1]-q[1]) + (p[2]-q[2])*(p[2]-q[2]);
+}
+
+inline double compute_norm(const std::array<double,3> &v)
+{
+    return sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+}
+
+inline void normalize_vector(std::array<double,3> &v)
+{
+    double norm = compute_norm(v);
+    v[0] /= norm;
+    v[1] /= norm;
+    v[2] /= norm;
 }
 
 inline double compute_signed_sphere_distance(const std::array<double, 3>& center, double r, const std::array<double, 3>& p)
@@ -123,6 +150,57 @@ inline double compute_sphere_distance(const std::array<double, 3>& center, doubl
         return compute_signed_sphere_distance(center, r, p);
     } else {
         return compute_unsigned_sphere_distance(center, -r, p);
+    }
+}
+
+inline double compute_dot(const std::array<double,3> &a, const std::array<double,3> &b)
+{
+    return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+}
+
+inline double compute_cone_distance(const std::array<double,3>& apex,
+    const std::array<double,3>& axis_unit_vector, double apex_angle,
+    const std::array<double,3>& p)
+{
+    return compute_dot(axis_unit_vector, {p[0]-apex[0], p[1]-apex[1], p[2]-apex[2]})
+        - cos(apex_angle) * compute_Euclidean_distance(p,apex);
+}
+
+inline double compute_cylinder_distance(const std::array<double,3>& axis_point,
+    const std::array<double,3>& axis_unit_vector, double radius,
+    const std::array<double,3>& p)
+{
+    std::array<double,3> vec {p[0]-axis_point[0], p[1]-axis_point[1], p[2]-axis_point[2]};
+    double d = compute_dot(axis_unit_vector, vec);
+    vec[0] = vec[0] - d * axis_unit_vector[0];
+    vec[1] = vec[1] - d * axis_unit_vector[1];
+    vec[2] = vec[2] - d * axis_unit_vector[2];
+    return radius - compute_norm(vec);
+}
+
+inline double compute_plane_distance(const std::array<double,3> &point,
+    const std::array<double,3> &normal,
+    const std::array<double,3> &p)
+{
+    return compute_dot(normal, {p[0]-point[0], p[1]-point[1], p[2]-point[2]});
+}
+
+inline double compute_torus_distance(const std::array<double,3>& center,
+    const std::array<double,3>& axis_unit_vector,
+    double major_radius, double minor_radius,
+    const std::array<double,3>& p)
+{
+    std::array<double,3> vec {p[0] - center[0], p[1]-center[1], p[2]-center[2]};
+    double d = compute_dot(vec, axis_unit_vector);
+    std::array<double,3> vec_para = {d * axis_unit_vector[0],
+        d*axis_unit_vector[1], d*axis_unit_vector[2]};
+    std::array<double,3> vec_perp = {vec[0]-vec_para[0], vec[1]-vec_para[1], vec[2]-vec_para[2]};
+    double vec_perp_norm = compute_norm(vec_perp);
+    if (vec_perp_norm == 0) { // point p lies on torus axis
+        return minor_radius - sqrt(compute_dot(vec_para, vec_para) + major_radius * major_radius);
+    } else {
+        return minor_radius - sqrt(major_radius * (major_radius - 2 * vec_perp_norm)
+                                  + compute_dot(vec, vec));
     }
 }
 
@@ -353,12 +431,26 @@ void compute_iso_vert_xyz(
     const std::vector<std::array<double, 3>> &pts,
     std::vector<std::array<double, 3>>& iso_pts);
 
+// compute xyz coordinates of iso-vertices (using long double)
+void compute_iso_vert_xyz(
+    const std::vector<IsoVert> &iso_verts,
+    const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &funcVals,
+    const std::vector<std::array<double, 3>> &pts,
+    std::vector<std::array<long double, 3>>& iso_pts);
+
 // compute xyz coordinates of material interface vertices
 void compute_MI_vert_xyz(
     const std::vector<MI_Vert> &MI_verts,
     const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &funcVals,
     const std::vector<std::array<double,3>> &pts,
     std::vector<std::array<double,3>>& MI_pts);
+
+// compute xyz coordinates of material interface vertices
+void compute_MI_vert_xyz(
+    const std::vector<MI_Vert> &MI_verts,
+    const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &funcVals,
+    const std::vector<std::array<double,3>> &pts,
+    std::vector<std::array<long double,3>>& MI_pts);
 
 // compute xyz coordinates of iso-vertices from marching tet
 void compute_iso_vert_xyz_marching_tet(const std::vector<IsoVert>& iso_verts,
@@ -466,25 +558,25 @@ void compute_shells_and_components(size_t num_patch,
 
 // compute barycentric coordinate of Point (intersection of three planes)
 // Point in tet cell
-// template <typename Scalar>
-inline void compute_barycentric_coords(const std::array<double, 4>& plane1,
-    const std::array<double, 4>& plane2,
-    const std::array<double, 4>& plane3,
-    std::array<double, 4>& bary_coords)
+template <typename Scalar>
+inline void compute_barycentric_coords(const std::array<Scalar, 4>& plane1,
+    const std::array<Scalar, 4>& plane2,
+    const std::array<Scalar, 4>& plane3,
+    std::array<Scalar, 4>& bary_coords)
 {
-    double n1 = plane1[3] * (plane2[2] * plane3[1] - plane2[1] * plane3[2]) +
+    Scalar n1 = plane1[3] * (plane2[2] * plane3[1] - plane2[1] * plane3[2]) +
                 plane1[2] * (plane2[1] * plane3[3] - plane2[3] * plane3[1]) +
                 plane1[1] * (plane2[3] * plane3[2] - plane2[2] * plane3[3]);
-    double n2 = plane1[3] * (plane2[0] * plane3[2] - plane2[2] * plane3[0]) +
+    Scalar n2 = plane1[3] * (plane2[0] * plane3[2] - plane2[2] * plane3[0]) +
                 plane1[2] * (plane2[3] * plane3[0] - plane2[0] * plane3[3]) +
                 plane1[0] * (plane2[2] * plane3[3] - plane2[3] * plane3[2]);
-    double n3 = plane1[3] * (plane2[1] * plane3[0] - plane2[0] * plane3[1]) +
+    Scalar n3 = plane1[3] * (plane2[1] * plane3[0] - plane2[0] * plane3[1]) +
                 plane1[1] * (plane2[0] * plane3[3] - plane2[3] * plane3[0]) +
                 plane1[0] * (plane2[3] * plane3[1] - plane2[1] * plane3[3]);
-    double n4 = plane1[2] * (plane2[0] * plane3[1] - plane2[1] * plane3[0]) +
+    Scalar n4 = plane1[2] * (plane2[0] * plane3[1] - plane2[1] * plane3[0]) +
                 plane1[1] * (plane2[2] * plane3[0] - plane2[0] * plane3[2]) +
                 plane1[0] * (plane2[1] * plane3[2] - plane2[2] * plane3[1]);
-    double d = n1 + n2 + n3 + n4;
+    Scalar d = n1 + n2 + n3 + n4;
     //
     bary_coords[0] = n1 / d;
     bary_coords[1] = n2 / d;
@@ -493,14 +585,15 @@ inline void compute_barycentric_coords(const std::array<double, 4>& plane1,
 }
 
 // Point on tet face
-inline void compute_barycentric_coords(const std::array<double, 3>& plane1,
-    const std::array<double, 3>& plane2,
-    std::array<double, 3>& bary_coords)
+template <typename Scalar>
+inline void compute_barycentric_coords(const std::array<Scalar, 3>& plane1,
+    const std::array<Scalar, 3>& plane2,
+    std::array<Scalar, 3>& bary_coords)
 {
-    double n1 = plane1[2] * plane2[1] - plane1[1] * plane2[2];
-    double n2 = plane1[0] * plane2[2] - plane1[2] * plane2[0];
-    double n3 = plane1[1] * plane2[0] - plane1[0] * plane2[1];
-    double d = n1 + n2 + n3;
+    Scalar n1 = plane1[2] * plane2[1] - plane1[1] * plane2[2];
+    Scalar n2 = plane1[0] * plane2[2] - plane1[2] * plane2[0];
+    Scalar n3 = plane1[1] * plane2[0] - plane1[0] * plane2[1];
+    Scalar d = n1 + n2 + n3;
     //
     bary_coords[0] = n1 / d;
     bary_coords[1] = n2 / d;
@@ -508,7 +601,8 @@ inline void compute_barycentric_coords(const std::array<double, 3>& plane1,
 }
 
 // Point on tet edge
-inline void compute_barycentric_coords(double f1, double f2, std::array<double, 2>& bary_coords)
+template <typename Scalar>
+inline void compute_barycentric_coords(Scalar f1, Scalar f2, std::array<Scalar, 2>& bary_coords)
 {
     bary_coords[0] = f2 / (f2 - f1);
     bary_coords[1] = 1 - bary_coords[0];
@@ -516,12 +610,6 @@ inline void compute_barycentric_coords(double f1, double f2, std::array<double, 
 
 
 // implicit functions
-inline double sphere_function(
-    const std::array<double, 3>& center, double r, const std::array<double, 3>& p)
-{
-    return (p[0] - center[0]) * (p[0] - center[0]) + (p[1] - center[1]) * (p[1] - center[1]) +
-           (p[2] - center[2]) * (p[2] - center[2]) - r * r;
-}
 
 inline int sign(double x)
 {

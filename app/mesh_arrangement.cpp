@@ -95,12 +95,13 @@ int main(int argc, const char* argv[]) {
 
     // parse configure file
     std::string tet_mesh_file;
-    std::string sphere_file;
+//    std::string sphere_file;
+    std::string func_file;
     std::string output_dir;
     std::array<double,3> bbox_min, bbox_max;
     bool use_bbox = true;
     bool b_place_holder;
-    parse_config_file(args.config_file, tet_mesh_file, sphere_file, output_dir,
+    parse_config_file(args.config_file, tet_mesh_file, func_file, output_dir,
         b_place_holder, b_place_holder,
         b_place_holder,
         use_bbox, bbox_min, bbox_max);
@@ -115,23 +116,33 @@ int main(int argc, const char* argv[]) {
 
 
     // load implicit function values, or evaluate
-    std::vector<Sphere> spheres;
-    load_spheres(sphere_file, spheres);
-    size_t n_func = spheres.size();
+//    std::vector<Sphere> spheres;
+//    load_spheres(sphere_file, spheres);
+//    size_t n_func = spheres.size();
+//
+//    std::vector<Eigen::VectorXd> funcVals;
+//    {
+//        timing_labels.emplace_back("func values");
+//        ScopedTimer<> timer("func values");
+//        funcVals.resize(n_func);
+//        for (size_t i = 0; i < n_func; i++) {
+//            funcVals[i].resize(pts.size());
+//            for (size_t j = 0; j < pts.size(); j++) {
+//                funcVals[i][j] = sphere_function(spheres[i].first, spheres[i].second, pts[j]);
+//            }
+//        }
+//        timings.push_back(timer.toc());
+//    }
 
     std::vector<Eigen::VectorXd> funcVals;
-    {
-        timing_labels.emplace_back("func values");
-        ScopedTimer<> timer("func values");
-        funcVals.resize(n_func);
-        for (size_t i = 0; i < n_func; i++) {
-            funcVals[i].resize(pts.size());
-            for (size_t j = 0; j < pts.size(); j++) {
-                funcVals[i][j] = sphere_function(spheres[i].first, spheres[i].second, pts[j]);
-            }
-        }
-        timings.push_back(timer.toc());
+    if (load_functions(func_file, pts, funcVals)) {
+        std::cout << "function loading finished." << std::endl;
+    } else {
+        std::cout << "function loading failed." << std::endl;
+        return -2;
     }
+    size_t n_func = funcVals.size();
+
 
 
     // convert tet mesh and function values to Eigen matrix

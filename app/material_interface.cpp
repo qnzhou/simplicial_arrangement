@@ -30,10 +30,12 @@ int main(int argc, const char* argv[])
     {
         std::string config_file;
         bool timing_only = false;
+        bool robust_test = false;
     } args;
     CLI::App app{"Material Interface Command Line"};
     app.add_option("config_file", args.config_file, "Configuration file")->required();
     app.add_option("-T,--timing-only", args.timing_only, "Record timing without output result");
+    app.add_option("-R,--robust-test",args.robust_test, "Perform robustness test");
     CLI11_PARSE(app, argc, argv);
 
     // parse configure file
@@ -77,23 +79,339 @@ int main(int argc, const char* argv[])
 
 
     // load material function values, or evaluate
-    std::vector<Sphere> spheres;
-    load_spheres(material_file, spheres);
-    size_t n_func = spheres.size();
+//    std::vector<Sphere> spheres;
+//    load_spheres(material_file, spheres);
+//    size_t n_func = spheres.size();
+//
+//    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals;
+//    {
+//        timing_labels.emplace_back("func values");
+//        ScopedTimer<> timer("func values");
+//        funcVals.resize(n_pts, n_func);
+//        for (Eigen::Index i = 0; i < n_pts; ++i) {
+//            const auto& p = pts[i];
+//            for (Eigen::Index j = 0; j < n_func; j++) {
+//                funcVals(i, j) = compute_sphere_distance(spheres[j].first, spheres[j].second, p);
+//            }
+//        }
+//        timings.push_back(timer.toc());
+//    }
 
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals;
-    {
-        timing_labels.emplace_back("func values");
-        ScopedTimer<> timer("func values");
-        funcVals.resize(n_pts, n_func);
-        for (Eigen::Index i = 0; i < n_pts; ++i) {
-            const auto& p = pts[i];
-            for (Eigen::Index j = 0; j < n_func; j++) {
-                funcVals(i, j) = compute_sphere_distance(spheres[j].first, spheres[j].second, p);
+    // robustness test
+    if (args.robust_test) {
+        // load robustness test spheres
+        std::vector<Sphere> spheres;
+        load_spheres(material_file, spheres);
+        size_t n_shift_sphere = 4;
+        size_t n_test = spheres.size() / n_shift_sphere;
+        // the last function is 0
+        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals;
+        size_t n_func = n_shift_sphere + 1;
+        funcVals.setZero(n_pts, n_func);
+        //
+        std::vector<size_t> highest_material_at_vert;
+        highest_material_at_vert.reserve(n_pts);
+        std::vector<bool> is_degenerate_vertex;
+        is_degenerate_vertex.reserve(n_pts);
+        bool found_degenerate_vertex = false;
+        absl::flat_hash_map<size_t, std::vector<size_t>> highest_materials_at_vert;
+        //
+        size_t num_intersecting_tet = 0;
+        std::vector<size_t> material_in_tet;
+        std::vector<size_t> start_index_of_tet;
+        material_in_tet.reserve(n_tets);
+        start_index_of_tet.reserve(n_tets + 1);
+        //
+        MaterialInterface<3> cut_result, cut_result2;
+        std::vector<Material<double, 3>> materials;
+        std::vector<Material<double, 3>> materials_reverse; // materials in reverse order
+        materials.reserve(3);
+        materials_reverse.reserve(3);
+        //
+        size_t type3_count = 0; // normal order run, reverse order crash
+        size_t type2_count = 0; // normal order crash
+        size_t type1_count = 0; // normal and reverse order don't crash, but are different
+        //
+        for (size_t iter = 0; iter < n_test; ++iter) {
+            std::cout << "-------- test " << iter << " -----------" << std::endl;
+            // load implicit functions
+            for (Eigen::Index i = 0; i < n_pts; ++i) {
+                const auto& p = pts[i];
+                for (Eigen::Index j = 0; j < n_shift_sphere; j++) {
+                    funcVals(i, j) = compute_sphere_distance(
+                        spheres[iter * n_shift_sphere + j].first,
+                        spheres[iter * n_shift_sphere + j].second, p);
+                }
             }
+            // highest material at vertices
+            {
+                timing_labels.emplace_back("highest func");
+                ScopedTimer<> timer("highest func");
+                is_degenerate_vertex.clear();
+                is_degenerate_vertex.resize(n_pts, false);
+                highest_material_at_vert.clear();
+                highest_materials_at_vert.clear();
+                found_degenerate_vertex = false;
+                for (Eigen::Index i = 0; i < n_pts; i++) {
+                    double max = funcVals(i, 0);
+                    size_t max_id = 0;
+                    size_t max_count = 1;
+                    for (Eigen::Index j = 1; j < n_func; j++) {
+                        if (funcVals(i, j) > max) {
+                            max = funcVals(i, j);
+                            max_id = j;
+                            max_count = 1;
+                        } else if (funcVals(i, j) == max) {
+                            ++max_count;
+                        }
+                    }
+                    highest_material_at_vert.push_back(max_id);
+                    //
+                    if (max_count > 1) {
+                        is_degenerate_vertex[i] = true;
+                        found_degenerate_vertex = true;
+                        auto& materials = highest_materials_at_vert[i];
+                        materials.reserve(max_count);
+                        for (Eigen::Index j = 0; j < n_func; j++) {
+                            if (funcVals(i, j) == max) {
+                                materials.push_back(j);
+                            }
+                        }
+                    }
+                }
+                timings.push_back(timer.toc());
+            }
+            // filter
+            {
+                timing_labels.emplace_back("filter");
+                ScopedTimer<> timer("filter(CRS vector)");
+                material_in_tet.clear();
+                start_index_of_tet.clear();
+                start_index_of_tet.push_back(0);
+                std::set<size_t> materials;
+                std::array<double, 4> min_h;
+                for (size_t i = 0; i < n_tets; ++i) {
+                    const auto& tet = tets[i];
+                    // find high materials
+                    materials.clear();
+                    for (size_t j = 0; j < 4; ++j) {
+                        if (is_degenerate_vertex[tet[j]]) {
+                            const auto& ms = highest_materials_at_vert[tet[j]];
+                            materials.insert(ms.begin(), ms.end());
+                        } else {
+                            materials.insert(highest_material_at_vert[tet[j]]);
+                        }
+                    }
+                    // if only one high material, there is no material interface
+                    if (materials.size() < 2) { // no material interface
+                        start_index_of_tet.push_back(material_in_tet.size());
+                        continue;
+                    }
+                    // find min of high materials
+                    min_h.fill(std::numeric_limits<double>::max());
+                    for (auto it = materials.begin(); it != materials.end(); it++) {
+                        for (size_t j = 0; j < 4; ++j) {
+                            if (funcVals(tet[j], *it) < min_h[j]) {
+                                min_h[j] = funcVals(tet[j], *it);
+                            }
+                        }
+                    }
+                    // find materials greater than at least two mins of high materials
+                    size_t greater_count;
+                    for (size_t j = 0; j < n_func; ++j) {
+                        greater_count = 0;
+                        for (size_t k = 0; k < 4; ++k) {
+                            if (funcVals(tet[k], j) > min_h[k]) {
+                                ++greater_count;
+                            }
+                        }
+                        if (greater_count > 1) {
+                            materials.insert(j);
+                        }
+                    }
+                    //
+                    ++num_intersecting_tet;
+                    material_in_tet.insert(
+                        material_in_tet.end(), materials.begin(), materials.end());
+                    start_index_of_tet.push_back(material_in_tet.size());
+                }
+                timings.push_back(timer.toc());
+            }
+            std::cout << "num_intersecting_tet = " << num_intersecting_tet << std::endl;
+            // compute material interface in each tet
+            //            std::vector<MaterialInterface<3>> cut_results;
+            //            std::vector<size_t> cut_result_index;
+            //
+            Time_duration time_2_func = Time_duration::zero();
+            Time_duration time_3_func = Time_duration::zero();
+            Time_duration time_more_func = Time_duration::zero();
+            size_t num_2_func = 0;
+            size_t num_3_func = 0;
+            size_t num_more_func = 0;
+            //
+            bool is_type3 = false;
+            bool is_type2 = false;
+            bool is_type1 = false;
+            //
+            {
+                timing_labels.emplace_back("MI(other)");
+                ScopedTimer<> timer("material interface in tets");
+                if (args.robust_test) {
+                    size_t start_index;
+                    size_t num_func;
+                    for (size_t i = 0; i < tets.size(); i++) {
+                        start_index = start_index_of_tet[i];
+                        num_func = start_index_of_tet[i + 1] - start_index;
+                        if (num_func == 0) {
+                            continue;
+                        }
+                        std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+                        //
+                        size_t v1 = tets[i][0];
+                        size_t v2 = tets[i][1];
+                        size_t v3 = tets[i][2];
+                        size_t v4 = tets[i][3];
+                        materials.clear();
+                        for (size_t j = 0; j < num_func; j++) {
+                            size_t f_id = material_in_tet[start_index + j];
+                            materials.emplace_back();
+                            auto& material = materials.back();
+                            material[0] = funcVals(v1, f_id);
+                            material[1] = funcVals(v2, f_id);
+                            material[2] = funcVals(v3, f_id);
+                            material[3] = funcVals(v4, f_id);
+                        }
+                        // reverse material order
+                        materials_reverse.clear();
+                        for (size_t j = 0; j < num_func; ++j) {
+                            materials_reverse.emplace_back(materials[num_func - 1 - j]);
+                        }
+                        //
+                        bool crashed = false;
+                        if (!use_3func_lookup && num_func == 3) {
+                            disable_lookup_table();
+                            try {
+                                cut_result = compute_material_interface(materials);
+                            } catch (std::runtime_error& e) {
+                                crashed = true;
+                                is_type2 = true;
+                                break;
+                            }
+                            if (!crashed) {
+                                try {
+                                    cut_result2 = compute_material_interface(materials_reverse);
+                                } catch (std::runtime_error& e) {
+                                    crashed = true;
+//                                    is_type2 = true;
+                                    is_type3 = true;
+//                                    break;
+                                }
+                                if (!crashed) {
+                                    if (cut_result.vertices.size() !=
+                                            cut_result2.vertices.size() ||
+                                        cut_result.faces.size() !=
+                                            cut_result2.faces.size() ||
+                                        cut_result.cells.size() !=
+                                            cut_result2.cells.size()) {
+                                        // inconsistent results
+                                        is_type1 = true;
+//                                        break;
+                                    }
+                                }
+                            }
+                            enable_lookup_table();
+                        } else {
+                            try {
+                                cut_result = compute_material_interface(materials);
+                            } catch (std::runtime_error& e) {
+                                crashed = true;
+                                is_type2 = true;
+                                break;
+                            }
+                            if (!crashed) {
+                                try {
+                                    cut_result2 = compute_material_interface(materials_reverse);
+                                } catch (std::runtime_error& e) {
+                                    crashed = true;
+//                                    is_type2 = true;
+                                    is_type3 = true;
+//                                    break;
+                                }
+                                if (!crashed) {
+                                    if (cut_result.vertices.size() !=
+                                            cut_result2.vertices.size() ||
+                                        cut_result.faces.size() !=
+                                            cut_result2.faces.size() ||
+                                        cut_result.cells.size() !=
+                                            cut_result2.cells.size()) {
+                                        // inconsistent results
+                                        is_type1 = true;
+                                    }
+                                }
+                            }
+                        }
+                        //
+                        std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+                        switch (num_func) {
+                        case 2:
+                            time_2_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                            ++num_2_func;
+                            break;
+                        case 3:
+                            time_3_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                            ++num_3_func;
+                            break;
+                        default:
+                            time_more_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                            ++num_more_func;
+                            break;
+                        }
+                    }
+                }
+                timings.push_back(timer.toc() - time_2_func.count() - time_3_func.count() -
+                                  time_more_func.count());
+            }
+            timing_labels.emplace_back("MI(2 func)");
+            timings.push_back(time_2_func.count());
+            timing_labels.emplace_back("MI(3 func)");
+            timings.push_back(time_3_func.count());
+            timing_labels.emplace_back("MI(>=4 func)");
+            timings.push_back(time_more_func.count());
+            std::cout << " -- [MI(2 func)]: " << time_2_func.count() << " s" << std::endl;
+            std::cout << " -- [MI(3 func)]: " << time_3_func.count() << " s" << std::endl;
+            std::cout << " -- [MI(>=4 func)]: " << time_more_func.count() << " s" << std::endl;
+
+            if (is_type2) {
+                std::cout << "type 2 failure." << std::endl;
+                ++type2_count;
+            } else if (is_type3) {
+                std::cout << "type 3 failure." << std::endl;
+                ++type3_count;
+            } else if (is_type1) {
+                std::cout << "type 1 failure." << std::endl;
+                ++type1_count;
+            }
+
+            std::cout << "=======================" << std::endl;
+            std::cout << "total: " << iter + 1 << std::endl;
+            std::cout << "type 1: " << type1_count << std::endl;
+            std::cout << "type 2: " << type2_count << std::endl;
+            std::cout << "type 3: " << type3_count << std::endl;
         }
-        timings.push_back(timer.toc());
+        return 0;
+
     }
+
+
+    // load implicit functions and compute function values at vertices
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals;
+    if (load_functions(material_file, pts, funcVals)) {
+        std::cout << "function loading finished." << std::endl;
+    } else {
+        std::cout << "function loading failed." << std::endl;
+        return -2;
+    }
+    size_t n_func = funcVals.cols();
 
 
     // highest material at vertices
@@ -210,64 +528,186 @@ int main(int argc, const char* argv[])
     size_t num_3_func = 0;
     size_t num_more_func = 0;
     //
+    size_t type2_count = 0;
+    size_t type1_count = 0;
+    //
     {
         timing_labels.emplace_back("MI(other)");
         ScopedTimer<> timer("material interface in tets");
-        cut_results.reserve(num_intersecting_tet);
-        cut_result_index.reserve(n_tets);
-        size_t start_index;
-        size_t num_func;
-        std::vector<Material<double, 3>> materials;
-        materials.reserve(3);
-        for (size_t i = 0; i < tets.size(); i++) {
-            start_index = start_index_of_tet[i];
-            num_func = start_index_of_tet[i + 1] - start_index;
-            if (num_func == 0) {
-                cut_result_index.push_back(MaterialInterface<3>::None);
-                continue;
+        if (args.robust_test) {
+            cut_results.reserve(num_intersecting_tet);
+            cut_result_index.reserve(n_tets);
+            std::vector<MaterialInterface<3>> cut_results2; // cut_results when reverse function order
+            size_t start_index;
+            size_t num_func;
+            std::vector<Material<double, 3>> materials;
+            std::vector<Material<double, 3>> materials_reverse; // materials in reverse order
+            materials.reserve(3);
+            materials_reverse.reserve(3);
+            for (size_t i = 0; i < tets.size(); i++) {
+                start_index = start_index_of_tet[i];
+                num_func = start_index_of_tet[i + 1] - start_index;
+                if (num_func == 0) {
+                    cut_result_index.push_back(MaterialInterface<3>::None);
+                    continue;
+                }
+                std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+                //
+                size_t v1 = tets[i][0];
+                size_t v2 = tets[i][1];
+                size_t v3 = tets[i][2];
+                size_t v4 = tets[i][3];
+                materials.clear();
+                for (size_t j = 0; j < num_func; j++) {
+                    size_t f_id = material_in_tet[start_index + j];
+                    materials.emplace_back();
+                    auto& material = materials.back();
+                    material[0] = funcVals(v1, f_id);
+                    material[1] = funcVals(v2, f_id);
+                    material[2] = funcVals(v3, f_id);
+                    material[3] = funcVals(v4, f_id);
+                }
+                // reverse material order
+                materials_reverse.clear();
+                for (size_t j = 0; j < num_func; ++j) {
+                    materials_reverse.emplace_back(materials[num_func -1 -j]);
+                }
+                //
+                bool crashed = false;
+                if (!use_3func_lookup && num_func == 3) {
+                    cut_result_index.push_back(cut_results.size());
+                    disable_lookup_table();
+                    try {
+                        cut_results.emplace_back(std::move(compute_material_interface(materials)));
+                    } catch (std::runtime_error& e) {
+                        crashed = true;
+                        type2_count++;
+                    }
+                    if (!crashed) {
+                        try {
+                            cut_results2.emplace_back(std::move(compute_material_interface(materials_reverse)));
+                        } catch (std::runtime_error& e) {
+                            crashed = true;
+                            type2_count++;
+                        }
+                        if (!crashed) {
+                            const auto& last_cut_result = cut_results.back();
+                            const auto& last_cut_result2 = cut_results2.back();
+                            if (last_cut_result.vertices.size() != last_cut_result2.vertices.size() ||
+                                last_cut_result.faces.size() != last_cut_result2.faces.size() ||
+                                last_cut_result.cells.size() != last_cut_result2.cells.size()) {
+                                // inconsistent results
+                                type1_count++;
+                            }
+                        }
+                    }
+                    enable_lookup_table();
+                } else {
+                    cut_result_index.push_back(cut_results.size());
+                    try {
+                        cut_results.emplace_back(std::move(compute_material_interface(materials)));
+                    } catch (std::runtime_error& e) {
+                        crashed = true;
+                        type2_count++;
+                    }
+                    if (!crashed) {
+                        try {
+                            cut_results2.emplace_back(std::move(compute_material_interface(materials_reverse)));
+                        } catch (std::runtime_error& e) {
+                            crashed = true;
+                            type2_count++;
+                        }
+                        if (!crashed) {
+                            const auto& last_cut_result = cut_results.back();
+                            const auto& last_cut_result2 = cut_results2.back();
+                            if (last_cut_result.vertices.size() != last_cut_result2.vertices.size() ||
+                                last_cut_result.faces.size() != last_cut_result2.faces.size() ||
+                                last_cut_result.cells.size() != last_cut_result2.cells.size()) {
+                                // inconsistent results
+                                type1_count++;
+                            }
+                        }
+                    }
+                }
+                //
+                std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+                switch (num_func) {
+                case 2:
+                    time_2_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                    ++num_2_func;
+                    break;
+                case 3:
+                    time_3_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                    ++num_3_func;
+                    break;
+                default:
+                    time_more_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                    ++num_more_func;
+                    break;
+                }
             }
-            std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
-            //
-            size_t v1 = tets[i][0];
-            size_t v2 = tets[i][1];
-            size_t v3 = tets[i][2];
-            size_t v4 = tets[i][3];
-            materials.clear();
-            for (size_t j = 0; j < num_func; j++) {
-                size_t f_id = material_in_tet[start_index + j];
-                materials.emplace_back();
-                auto& material = materials.back();
-                material[0] = funcVals(v1, f_id);
-                material[1] = funcVals(v2, f_id);
-                material[2] = funcVals(v3, f_id);
-                material[3] = funcVals(v4, f_id);
-            }
-            //
-            if (!use_3func_lookup && num_func == 3) {
-                cut_result_index.push_back(cut_results.size());
-                disable_lookup_table();
-                cut_results.emplace_back(std::move(compute_material_interface(materials)));
-                enable_lookup_table();
-            } else {
-                cut_result_index.push_back(cut_results.size());
-                cut_results.emplace_back(std::move(compute_material_interface(materials)));
-            }
+        } else {  // not performing robustness test
+            cut_results.reserve(num_intersecting_tet);
+            cut_result_index.reserve(n_tets);
+            size_t start_index;
+            size_t num_func;
+            std::vector<Material<double, 3>> materials;
+            materials.reserve(3);
+            try {
+                for (size_t i = 0; i < tets.size(); i++) {
+                    start_index = start_index_of_tet[i];
+                    num_func = start_index_of_tet[i + 1] - start_index;
+                    if (num_func == 0) {
+                        cut_result_index.push_back(MaterialInterface<3>::None);
+                        continue;
+                    }
+                    std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+                    //
+                    size_t v1 = tets[i][0];
+                    size_t v2 = tets[i][1];
+                    size_t v3 = tets[i][2];
+                    size_t v4 = tets[i][3];
+                    materials.clear();
+                    for (size_t j = 0; j < num_func; j++) {
+                        size_t f_id = material_in_tet[start_index + j];
+                        materials.emplace_back();
+                        auto& material = materials.back();
+                        material[0] = funcVals(v1, f_id);
+                        material[1] = funcVals(v2, f_id);
+                        material[2] = funcVals(v3, f_id);
+                        material[3] = funcVals(v4, f_id);
+                    }
+                    //
+                    if (!use_3func_lookup && num_func == 3) {
+                        cut_result_index.push_back(cut_results.size());
+                        disable_lookup_table();
+                        cut_results.emplace_back(std::move(compute_material_interface(materials)));
+                        enable_lookup_table();
+                    } else {
+                        cut_result_index.push_back(cut_results.size());
+                        cut_results.emplace_back(std::move(compute_material_interface(materials)));
+                    }
 
-            //
-            std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
-            switch (num_func) {
-            case 2:
-                time_2_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
-                ++num_2_func;
-                break;
-            case 3:
-                time_3_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
-                ++num_3_func;
-                break;
-            default:
-                time_more_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
-                ++num_more_func;
-                break;
+                    //
+                    std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+                    switch (num_func) {
+                    case 2:
+                        time_2_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                        ++num_2_func;
+                        break;
+                    case 3:
+                        time_3_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                        ++num_3_func;
+                        break;
+                    default:
+                        time_more_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                        ++num_more_func;
+                        break;
+                    }
+                }
+            } catch (std::runtime_error& e) {
+                std::cout << e.what() << std::endl;
+                return -1;
             }
         }
         timings.push_back(
@@ -283,6 +723,12 @@ int main(int argc, const char* argv[])
     std::cout << " -- [MI(3 func)]: " << time_3_func.count() << " s" << std::endl;
     std::cout << " -- [MI(>=4 func)]: " << time_more_func.count() << " s" << std::endl;
 
+    if (args.robust_test) {
+        std::cout << "total: " << num_intersecting_tet << std::endl;
+        std::cout << "type 1: " << type1_count << std::endl;
+        std::cout << "type 2: " << type2_count << std::endl;
+        return 0;
+    }
 
     // extract material interface mesh
     std::vector<MI_Vert> MI_verts;
@@ -348,7 +794,6 @@ int main(int argc, const char* argv[])
         timings.push_back(timer.toc());
     }
     // std::cout << "num iso-edges = " << iso_edges.size() << std::endl;
-
 
     // group iso-faces into patches
     std::vector<std::vector<size_t>> patches;

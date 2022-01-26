@@ -15,7 +15,7 @@
 
 bool parse_config_file(const std::string& filename,
     std::string& tet_mesh_file,
-    std::string& sphere_file,
+    std::string& func_file,
     std::string& output_dir,
     bool& use_lookup,
     bool& use_2func_lookup,
@@ -35,7 +35,7 @@ bool parse_config_file(const std::string& filename,
     fin.close();
     //
     tet_mesh_file = data["tetMeshFile"];
-    sphere_file = data["sphereFile"];
+    func_file = data["funcFile"];
     output_dir = data["outputDir"];
     use_lookup = data["useLookup"];
     use_2func_lookup = data["use2funcLookup"];
@@ -102,7 +102,7 @@ bool load_spheres(const std::string& filename, std::vector<Sphere>& spheres)
             spheres[i].first[j] = data[i][0][j].get<double>();
         }
         // radius
-        spheres[i].second = data[i][1];
+        spheres[i].second = data[i][1].get<double>();
     }
     return true;
 }
@@ -4855,6 +4855,421 @@ void extract_MI_mesh(size_t num_2_func,
                 }
             }
             MI_fId_start_index_of_tet.push_back(MI_fId_of_tet_face.size());
+        }
+    }
+}
+
+bool load_functions(const std::string& filename,
+    const std::vector<std::array<double, 3>>& pts,
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& funcVals)
+{
+    using json = nlohmann::json;
+    std::ifstream fin(filename.c_str());
+    if (!fin) {
+        std::cout << "function file not exist!" << std::endl;
+        return false;
+    }
+    json data;
+    fin >> data;
+    fin.close();
+    //
+    size_t n_pts = pts.size();
+    size_t n_func = data.size();
+    funcVals.resize(n_pts, n_func);
+    for (int j = 0; j < n_func; ++j) {
+        std::string type = data[j]["type"].get<std::string>();
+        if (type == "plane") {
+            std::array<double,3> point;
+            for (int i = 0; i < 3; ++i) {
+                point[i] = data[j]["point"][i].get<double>();
+            }
+            std::array<double,3> normal;
+            for (int i = 0; i < 3; ++i) {
+                normal[i] = data[j]["normal"][i].get<double>();
+            }
+            //
+            for (int i = 0; i < n_pts; i++) {
+                funcVals(i,j) = compute_plane_distance(point, normal, pts[i]);
+            }
+        } else if (type == "cylinder") {
+            std::array<double,3> axis_point;
+            for (int i = 0; i < 3; ++i) {
+                axis_point[i] = data[j]["axis_point"][i].get<double>();
+            }
+            std::array<double,3> axis_unit_vector;
+            for (int i = 0; i < 3; ++i) {
+                axis_unit_vector[i] = data[j]["axis_vector"][i].get<double>();
+            }
+            double radius = data[j]["radius"].get<double>();
+            //
+            for (int i = 0; i < n_pts; i++) {
+                funcVals(i,j) = compute_cylinder_distance(axis_point,
+                    axis_unit_vector, radius,
+                    pts[i]);
+            }
+        } else if (type == "sphere") {
+            std::array<double,3> center;
+            for (int i = 0; i < 3; ++i) {
+                center[i] = data[j]["center"][i].get<double>();
+            }
+            double radius = data[j]["radius"].get<double>();
+            //
+            for (int i = 0; i < n_pts; i++) {
+                funcVals(i,j) = compute_sphere_distance(center,
+                    radius,pts[i]);
+            }
+        } else if (type == "torus") {
+            std::array<double,3> center;
+            for (int i = 0; i < 3; ++i) {
+                center[i] = data[j]["center"][i].get<double>();
+            }
+            std::array<double,3> axis_unit_vector;
+            for (int i = 0; i < 3; ++i) {
+                axis_unit_vector[i] = data[j]["axis_vector"][i].get<double>();
+            }
+            double major_radius = data[j]["major_radius"].get<double>();
+            double minor_radius = data[j]["minor_radius"].get<double>();
+            //
+            for (int i = 0; i < n_pts; i++) {
+                funcVals(i,j) = compute_torus_distance(center, axis_unit_vector,
+                    major_radius, minor_radius, pts[i]);
+            }
+        } else if (type == "cone") {
+            std::array<double, 3> apex;
+            for (int i = 0; i < 3; ++i) {
+                apex[i] = data[j]["apex"][i].get<double>();
+            }
+            std::array<double, 3> axis_unit_vector;
+            for (int i = 0; i < 3; ++i) {
+                axis_unit_vector[i] = data[j]["axis_vector"][i].get<double>();
+            }
+            double apex_angle = data[j]["apex_angle"].get<double>();
+            //
+            for (int i = 0; i < n_pts; i++) {
+                funcVals(i, j) = compute_cone_distance(apex, axis_unit_vector, apex_angle, pts[i]);
+            }
+        } else if (type == "zero") {
+            for (int i = 0; i < n_pts; i++) {
+                funcVals(i, j) = 0;
+            }
+        } else {
+            std::cout << "undefined type: " << type << std::endl;
+            return false;
+        }
+    }
+    return true;
+}
+
+bool load_functions(const std::string& filename,
+    const std::vector<std::array<double, 3>>& pts,
+    std::vector<Eigen::VectorXd>& funcVals)
+{
+    using json = nlohmann::json;
+    std::ifstream fin(filename.c_str());
+    if (!fin) {
+        std::cout << "function file not exist!" << std::endl;
+        return false;
+    }
+    json data;
+    fin >> data;
+    fin.close();
+    //
+    size_t n_pts = pts.size();
+    size_t n_func = data.size();
+    funcVals.resize(n_func);
+    for (int j = 0; j < n_func; ++j) {
+        std::string type = data[j]["type"].get<std::string>();
+        if (type == "plane") {
+            std::array<double,3> point;
+            for (int i = 0; i < 3; ++i) {
+                point[i] = data[j]["point"][i].get<double>();
+            }
+            std::array<double,3> normal;
+            for (int i = 0; i < 3; ++i) {
+                normal[i] = data[j]["normal"][i].get<double>();
+            }
+            //
+            funcVals[j].resize(n_pts);
+            for (size_t i = 0; i < n_pts; i++) {
+                funcVals[j][i] = compute_plane_distance(point, normal, pts[i]);
+            }
+        } else if (type == "cylinder") {
+            std::array<double,3> axis_point;
+            for (int i = 0; i < 3; ++i) {
+                axis_point[i] = data[j]["axis_point"][i].get<double>();
+            }
+            std::array<double,3> axis_unit_vector;
+            for (int i = 0; i < 3; ++i) {
+                axis_unit_vector[i] = data[j]["axis_vector"][i].get<double>();
+            }
+            double radius = data[j]["radius"].get<double>();
+            //
+            funcVals[j].resize(n_pts);
+            for (size_t i = 0; i < n_pts; i++) {
+                funcVals[j][i] = compute_cylinder_distance(axis_point,
+                    axis_unit_vector, radius,
+                    pts[i]);
+            }
+        } else if (type == "sphere") {
+            std::array<double,3> center;
+            for (int i = 0; i < 3; ++i) {
+                center[i] = data[j]["center"][i].get<double>();
+            }
+            double radius = data[j]["radius"].get<double>();
+            //
+            funcVals[j].resize(n_pts);
+            for (size_t i = 0; i < n_pts; i++) {
+                funcVals[j][i] = compute_sphere_distance(center,
+                    radius,pts[i]);
+            }
+        } else if (type == "torus") {
+            std::array<double,3> center;
+            for (int i = 0; i < 3; ++i) {
+                center[i] = data[j]["center"][i].get<double>();
+            }
+            std::array<double,3> axis_unit_vector;
+            for (int i = 0; i < 3; ++i) {
+                axis_unit_vector[i] = data[j]["axis_vector"][i].get<double>();
+            }
+            double major_radius = data[j]["major_radius"].get<double>();
+            double minor_radius = data[j]["minor_radius"].get<double>();
+            //
+            funcVals[j].resize(n_pts);
+            for (size_t i = 0; i < n_pts; i++) {
+                funcVals[j][i] = compute_torus_distance(center, axis_unit_vector,
+                    major_radius, minor_radius, pts[i]);
+            }
+        } else if (type == "cone") {
+            std::array<double, 3> apex;
+            for (int i = 0; i < 3; ++i) {
+                apex[i] = data[j]["apex"][i].get<double>();
+            }
+            std::array<double, 3> axis_unit_vector;
+            for (int i = 0; i < 3; ++i) {
+                axis_unit_vector[i] = data[j]["axis_vector"][i].get<double>();
+            }
+            double apex_angle = data[j]["apex_angle"].get<double>();
+            //
+            funcVals[j].resize(n_pts);
+            for (size_t i = 0; i < n_pts; i++) {
+                funcVals[j][i] = compute_cone_distance(apex, axis_unit_vector, apex_angle, pts[i]);
+            }
+        } else if (type == "zero") {
+            funcVals[j].setZero(n_pts);
+        } else {
+            std::cout << "undefined type: " << type << std::endl;
+            return false;
+        }
+    }
+    return true;
+}
+void compute_iso_vert_xyz(const std::vector<IsoVert>& iso_verts,
+    const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& funcVals,
+    const std::vector<std::array<double, 3>>& pts,
+    std::vector<std::array<long double, 3>>& iso_pts)
+{
+    iso_pts.resize(iso_verts.size());
+    std::array<long double, 2> b2;
+    std::array<long double, 3> f1s3;
+    std::array<long double, 3> f2s3;
+    std::array<long double, 3> b3;
+    std::array<long double, 4> f1s4;
+    std::array<long double, 4> f2s4;
+    std::array<long double, 4> f3s4;
+    std::array<long double, 4> b4;
+    for (size_t i = 0; i < iso_verts.size(); i++) {
+        const auto& iso_vert = iso_verts[i];
+        switch (iso_vert.simplex_size) {
+        case 2: // on tet edge
+        {
+            auto vId1 = iso_vert.simplex_vert_indices[0];
+            auto vId2 = iso_vert.simplex_vert_indices[1];
+            auto fId = iso_vert.func_indices[0];
+            long double f1 = funcVals(vId1, fId);
+            long double f2 = funcVals(vId2, fId);
+            //
+            compute_barycentric_coords(f1, f2, b2);
+            iso_pts[i][0] = b2[0] * pts[vId1][0] + b2[1] * pts[vId2][0];
+            iso_pts[i][1] = b2[0] * pts[vId1][1] + b2[1] * pts[vId2][1];
+            iso_pts[i][2] = b2[0] * pts[vId1][2] + b2[1] * pts[vId2][2];
+            break;
+        }
+        case 3: // on tet face
+        {
+            auto vId1 = iso_vert.simplex_vert_indices[0];
+            auto vId2 = iso_vert.simplex_vert_indices[1];
+            auto vId3 = iso_vert.simplex_vert_indices[2];
+            auto fId1 = iso_vert.func_indices[0];
+            auto fId2 = iso_vert.func_indices[1];
+            //
+            f1s3[0] = funcVals(vId1, fId1);
+            f1s3[1] = funcVals(vId2, fId1);
+            f1s3[2] = funcVals(vId3, fId1);
+            //
+            f2s3[0] = funcVals(vId1, fId2);
+            f2s3[1] = funcVals(vId2, fId2);
+            f2s3[2] = funcVals(vId3, fId2);
+            //
+            compute_barycentric_coords(f1s3, f2s3, b3);
+            iso_pts[i][0] = b3[0] * pts[vId1][0] + b3[1] * pts[vId2][0] + b3[2] * pts[vId3][0];
+            iso_pts[i][1] = b3[0] * pts[vId1][1] + b3[1] * pts[vId2][1] + b3[2] * pts[vId3][1];
+            iso_pts[i][2] = b3[0] * pts[vId1][2] + b3[1] * pts[vId2][2] + b3[2] * pts[vId3][2];
+            break;
+        }
+        case 4: // in tet cell
+        {
+            auto vId1 = iso_vert.simplex_vert_indices[0];
+            auto vId2 = iso_vert.simplex_vert_indices[1];
+            auto vId3 = iso_vert.simplex_vert_indices[2];
+            auto vId4 = iso_vert.simplex_vert_indices[3];
+            auto fId1 = iso_vert.func_indices[0];
+            auto fId2 = iso_vert.func_indices[1];
+            auto fId3 = iso_vert.func_indices[2];
+            f1s4[0] = funcVals(vId1, fId1);
+            f1s4[1] = funcVals(vId2, fId1);
+            f1s4[2] = funcVals(vId3, fId1);
+            f1s4[3] = funcVals(vId4, fId1);
+            //
+            f2s4[0] = funcVals(vId1, fId2);
+            f2s4[1] = funcVals(vId2, fId2);
+            f2s4[2] = funcVals(vId3, fId2);
+            f2s4[3] = funcVals(vId4, fId2);
+            //
+            f3s4[0] = funcVals(vId1, fId3);
+            f3s4[1] = funcVals(vId2, fId3);
+            f3s4[2] = funcVals(vId3, fId3);
+            f3s4[3] = funcVals(vId4, fId3);
+            //
+            compute_barycentric_coords(f1s4, f2s4, f3s4, b4);
+            iso_pts[i][0] = b4[0] * pts[vId1][0] + b4[1] * pts[vId2][0] + b4[2] * pts[vId3][0] +
+                            b4[3] * pts[vId4][0];
+            iso_pts[i][1] = b4[0] * pts[vId1][1] + b4[1] * pts[vId2][1] + b4[2] * pts[vId3][1] +
+                            b4[3] * pts[vId4][1];
+            iso_pts[i][2] = b4[0] * pts[vId1][2] + b4[1] * pts[vId2][2] + b4[2] * pts[vId3][2] +
+                            b4[3] * pts[vId4][2];
+            break;
+        }
+        case 1: // on tet vertex
+            iso_pts[i][0] = pts[iso_vert.simplex_vert_indices[0]][0];
+            iso_pts[i][1] = pts[iso_vert.simplex_vert_indices[0]][1];
+            iso_pts[i][2] = pts[iso_vert.simplex_vert_indices[0]][2];
+            break;
+        default: break;
+        }
+    }
+}
+void compute_MI_vert_xyz(const std::vector<MI_Vert>& MI_verts,
+    const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& funcVals,
+    const std::vector<std::array<double, 3>>& pts,
+    std::vector<std::array<long double, 3>>& MI_pts)
+{
+    MI_pts.resize(MI_verts.size());
+    std::array<long double, 2> b2;
+    std::array<long double, 3> f1s3;
+    std::array<long double, 3> f2s3;
+    std::array<long double, 3> b3;
+    std::array<long double, 4> f1s4;
+    std::array<long double, 4> f2s4;
+    std::array<long double, 4> f3s4;
+    std::array<long double, 4> b4;
+    for (size_t i = 0; i < MI_verts.size(); i++) {
+        const auto& MI_vert = MI_verts[i];
+        switch (MI_vert.simplex_size) {
+        case 2: // on tet edge
+        {
+            auto vId1 = MI_vert.simplex_vert_indices[0];
+            auto vId2 = MI_vert.simplex_vert_indices[1];
+            auto fId1 = MI_vert.material_indices[0];
+            auto fId2 = MI_vert.material_indices[1];
+            long double f1 = funcVals(vId1,fId1);
+            f1 -=  funcVals(vId1,fId2);
+            long double f2 = funcVals(vId2,fId1);
+            f2 -= funcVals(vId2,fId2);
+            //
+            compute_barycentric_coords(f1, f2, b2);
+            MI_pts[i][0] = b2[0] * pts[vId1][0] + b2[1] * pts[vId2][0];
+            MI_pts[i][1] = b2[0] * pts[vId1][1] + b2[1] * pts[vId2][1];
+            MI_pts[i][2] = b2[0] * pts[vId1][2] + b2[1] * pts[vId2][2];
+            break;
+        }
+        case 3: // on tet face
+        {
+            auto vId1 = MI_vert.simplex_vert_indices[0];
+            auto vId2 = MI_vert.simplex_vert_indices[1];
+            auto vId3 = MI_vert.simplex_vert_indices[2];
+            auto fId1 = MI_vert.material_indices[0];
+            auto fId2 = MI_vert.material_indices[1];
+            auto fId3 = MI_vert.material_indices[2];
+            // f1 - f2
+            f1s3[0] = funcVals(vId1,fId1);
+            f1s3[0] -= funcVals(vId1,fId2);
+            f1s3[1] = funcVals(vId2,fId1);
+            f1s3[1] -= funcVals(vId2,fId2);
+            f1s3[2] = funcVals(vId3,fId1);
+            f1s3[2] -= funcVals(vId3,fId2);
+            // f2 - f3
+            f2s3[0] = funcVals(vId1,fId2);
+            f2s3[0] -= funcVals(vId1,fId3);
+            f2s3[1] = funcVals(vId2,fId2);
+            f2s3[1] -= funcVals(vId2,fId3);
+            f2s3[2] = funcVals(vId3,fId2);
+            f2s3[2] -= funcVals(vId3,fId3);
+            //
+            compute_barycentric_coords(f1s3, f2s3, b3);
+            MI_pts[i][0] = b3[0] * pts[vId1][0] + b3[1] * pts[vId2][0] + b3[2] * pts[vId3][0];
+            MI_pts[i][1] = b3[0] * pts[vId1][1] + b3[1] * pts[vId2][1] + b3[2] * pts[vId3][1];
+            MI_pts[i][2] = b3[0] * pts[vId1][2] + b3[1] * pts[vId2][2] + b3[2] * pts[vId3][2];
+            break;
+        }
+        case 4: // in tet cell
+        {
+            auto vId1 = MI_vert.simplex_vert_indices[0];
+            auto vId2 = MI_vert.simplex_vert_indices[1];
+            auto vId3 = MI_vert.simplex_vert_indices[2];
+            auto vId4 = MI_vert.simplex_vert_indices[3];
+            auto fId1 = MI_vert.material_indices[0];
+            auto fId2 = MI_vert.material_indices[1];
+            auto fId3 = MI_vert.material_indices[2];
+            auto fId4 = MI_vert.material_indices[3];
+            // f1 - f2
+            f1s4[0] = funcVals(vId1,fId1);
+            f1s4[0] -= funcVals(vId1,fId2);
+            f1s4[1] = funcVals(vId2,fId1);
+            f1s4[1] -= funcVals(vId2,fId2);
+            f1s4[2] = funcVals(vId3,fId1);
+            f1s4[2] -= funcVals(vId3,fId2);
+            f1s4[3] = funcVals(vId4,fId1);
+            f1s4[3] -= funcVals(vId4,fId2);
+            // f2 - f3
+            f2s4[0] = funcVals(vId1,fId2);
+            f2s4[0] -= funcVals(vId1,fId3);
+            f2s4[1] = funcVals(vId2,fId2);
+            f2s4[1] -= funcVals(vId2,fId3);
+            f2s4[2] = funcVals(vId3,fId2);
+            f2s4[2] -= funcVals(vId3,fId3);
+            f2s4[3] = funcVals(vId4,fId2);
+            f2s4[3] -= funcVals(vId4,fId3);
+            // f3 - f4
+            f3s4[0] = funcVals(vId1,fId3) - funcVals(vId1,fId4);
+            f3s4[1] = funcVals(vId2,fId3) - funcVals(vId2,fId4);
+            f3s4[2] = funcVals(vId3,fId3) - funcVals(vId3,fId4);
+            f3s4[3] = funcVals(vId4,fId3) - funcVals(vId4,fId4);
+            //
+            compute_barycentric_coords(f1s4, f2s4, f3s4, b4);
+            MI_pts[i][0] = b4[0] * pts[vId1][0] + b4[1] * pts[vId2][0] + b4[2] * pts[vId3][0] +
+                           b4[3] * pts[vId4][0];
+            MI_pts[i][1] = b4[0] * pts[vId1][1] + b4[1] * pts[vId2][1] + b4[2] * pts[vId3][1] +
+                           b4[3] * pts[vId4][1];
+            MI_pts[i][2] = b4[0] * pts[vId1][2] + b4[1] * pts[vId2][2] + b4[2] * pts[vId3][2] +
+                           b4[3] * pts[vId4][2];
+            break;
+        }
+        case 1: // on tet vertex
+            MI_pts[i][0] = pts[MI_vert.simplex_vert_indices[0]][0];
+            MI_pts[i][1] = pts[MI_vert.simplex_vert_indices[0]][1];
+            MI_pts[i][2] = pts[MI_vert.simplex_vert_indices[0]][2];
+            break;
+        default: break;
         }
     }
 }
