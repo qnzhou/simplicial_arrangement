@@ -26,7 +26,7 @@ int main(int argc, const char* argv[])
     std::string output_dir;
     bool b_place_holder;
     parse_config_file_MI(args.config_file, tet_mesh_file, material_file, output_dir,
-        b_place_holder, b_place_holder);
+        b_place_holder, b_place_holder, b_place_holder);
 
     // record timings
     std::vector<std::string> timing_labels;
@@ -42,23 +42,34 @@ int main(int argc, const char* argv[])
 
 
     // load material function values, or evaluate
-    std::vector<Sphere> spheres;
-    load_spheres(material_file, spheres);
-    size_t n_func = spheres.size();
+//    std::vector<Sphere> spheres;
+//    load_spheres(material_file, spheres);
+//    size_t n_func = spheres.size();
+//
+//    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals;
+//    {
+//        timing_labels.emplace_back("func values");
+//        ScopedTimer<> timer("func values");
+//        funcVals.resize(n_pts, n_func);
+//        for (Eigen::Index i = 0; i < n_pts; i++) {
+//            const auto& p = pts[i];
+//            for (Eigen::Index j = 0; j < n_func; j++) {
+//                funcVals(i, j) = compute_sphere_distance(spheres[j].first, spheres[j].second, p);
+//            }
+//        }
+//        timings.push_back(timer.toc());
+//    }
 
+    // load implicit functions and compute function values at vertices
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals;
-    {
-        timing_labels.emplace_back("func values");
-        ScopedTimer<> timer("func values");
-        funcVals.resize(n_pts, n_func);
-        for (Eigen::Index i = 0; i < n_pts; i++) {
-            const auto& p = pts[i];
-            for (Eigen::Index j = 0; j < n_func; j++) {
-                funcVals(i, j) = compute_sphere_distance(spheres[j].first, spheres[j].second, p);
-            }
-        }
-        timings.push_back(timer.toc());
+    if (load_functions(material_file, pts, funcVals)) {
+        std::cout << "function loading finished." << std::endl;
+    } else {
+        std::cout << "function loading failed." << std::endl;
+        return -2;
     }
+
+    size_t n_func = funcVals.cols();
 
     // highest material at vertices
     std::vector<size_t> highest_material_at_vert;
@@ -232,7 +243,6 @@ int main(int argc, const char* argv[])
             non_manifold_edges_of_vert);
     }
     save_timings(output_dir + "/timings.json", timing_labels, timings);
-
 
     return 0;
 }

@@ -21,14 +21,14 @@ int main(int argc, const char* argv[])
 
     // parse configure file
     std::string tet_mesh_file;
-    std::string sphere_file;
+    std::string func_file;
     std::string output_dir;
     bool b_place_holder;
     bool use_topo_ray_shooting = true;
     std::array<double, 3> bbox_min, bbox_max;
     parse_config_file(args.config_file,
         tet_mesh_file,
-        sphere_file,
+        func_file,
         output_dir,
         b_place_holder,
         b_place_holder,
@@ -36,6 +36,7 @@ int main(int argc, const char* argv[])
         b_place_holder,
         bbox_min,
         bbox_max);
+
 
     // record timings
     std::vector<std::string> timing_labels;
@@ -51,23 +52,34 @@ int main(int argc, const char* argv[])
 
 
     // load implicit function values, or evaluate
-    std::vector<Sphere> spheres;
-    load_spheres(sphere_file, spheres);
-    size_t n_func = spheres.size();
+//    std::vector<Sphere> spheres;
+//    load_spheres(sphere_file, spheres);
+//    size_t n_func = spheres.size();
+//
+//    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals;
+//    {
+//        timing_labels.emplace_back("func values");
+//        ScopedTimer<> timer("func values");
+//        funcVals.resize(n_pts, n_func);
+//        for (Eigen::Index i = 0; i < n_pts; i++) {
+//            const auto& p = pts[i];
+//            for (Eigen::Index j = 0; j < n_func; j++) {
+//                funcVals(i, j) = sphere_function(spheres[j].first, spheres[j].second, p);
+//            }
+//        }
+//        timings.push_back(timer.toc());
+//    }
 
+    // load implicit functions and compute function values at vertices
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals;
-    {
-        timing_labels.emplace_back("func values");
-        ScopedTimer<> timer("func values");
-        funcVals.resize(n_pts, n_func);
-        for (Eigen::Index i = 0; i < n_pts; i++) {
-            const auto& p = pts[i];
-            for (Eigen::Index j = 0; j < n_func; j++) {
-                funcVals(i, j) = sphere_function(spheres[j].first, spheres[j].second, p);
-            }
-        }
-        timings.push_back(timer.toc());
+    if (load_functions(func_file, pts, funcVals)) {
+        std::cout << "function loading finished." << std::endl;
+    } else {
+        std::cout << "function loading failed." << std::endl;
+        return -2;
     }
+    size_t n_func = funcVals.cols();
+
 
     // function signs at vertices
     Eigen::Matrix<bool, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcSigns;
