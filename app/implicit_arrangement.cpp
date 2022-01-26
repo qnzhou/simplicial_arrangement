@@ -25,15 +25,18 @@ int main(int argc, const char* argv[])
     {
         std::string config_file;
         bool timing_only = false;
+        bool robust_test = false;
     } args;
     CLI::App app{"Implicit Arrangement Command Line"};
     app.add_option("config_file", args.config_file, "Configuration file")->required();
     app.add_option("-T,--timing-only", args.timing_only, "Record timing without output result");
+    app.add_option("-R,--robust-test",args.robust_test, "Perform robustness test");
     CLI11_PARSE(app, argc, argv);
 
     // parse configure file
     std::string tet_mesh_file;
-    std::string sphere_file;
+//    std::string sphere_file;
+    std::string func_file;
     std::string output_dir;
     bool use_lookup = true;
     bool use_2func_lookup = true;
@@ -42,7 +45,7 @@ int main(int argc, const char* argv[])
     std::array<double, 3> bbox_min, bbox_max;
     parse_config_file(args.config_file,
         tet_mesh_file,
-        sphere_file,
+        func_file,
         output_dir,
         use_lookup,
         use_2func_lookup,
@@ -82,30 +85,292 @@ int main(int argc, const char* argv[])
 
 
     // load implicit function values, or evaluate
-    std::vector<Sphere> spheres;
-    load_spheres(sphere_file, spheres);
-    size_t n_func = spheres.size();
+//    std::vector<Sphere> spheres;
+//    load_spheres(sphere_file, spheres);
+//    size_t n_func = spheres.size();
+//
+//
+//
+//    {
+//        timing_labels.emplace_back("func values");
+//        ScopedTimer<> timer("func values");
+//        funcVals.resize(n_pts, n_func);
+//        for (Eigen::Index i = 0; i < n_pts; ++i) {
+//            const auto& p = pts[i];
+//            for (Eigen::Index j = 0; j < n_func; ++j) {
+//                funcVals(i,j) = sphere_function(spheres[j].first, spheres[j].second, p);
+//            }
+//        }
+//        timings.push_back(timer.toc());
+//    }
 
+    if (args.robust_test) {
+        // load robustness test spheres
+        std::vector<Sphere> spheres;
+        load_spheres(func_file, spheres);
 
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals;
-    {
-        timing_labels.emplace_back("func values");
-        ScopedTimer<> timer("func values");
-        funcVals.resize(n_pts, n_func);
-        for (Eigen::Index i = 0; i < n_pts; ++i) {
-            const auto& p = pts[i];
-            for (Eigen::Index j = 0; j < n_func; ++j) {
-                funcVals(i,j) = sphere_function(spheres[j].first, spheres[j].second, p);
+        size_t n_func = 4;
+        size_t n_test = spheres.size() / n_func;
+//        size_t n_test = 1;
+        //
+        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals(n_pts, n_func);
+        Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcSigns(n_pts, n_func);
+        std::vector<bool> is_degenerate_vertex;
+        is_degenerate_vertex.reserve(n_pts);
+        //
+        std::vector<size_t> func_in_tet;
+        func_in_tet.reserve(n_tets);
+        std::vector<size_t> start_index_of_tet;
+        start_index_of_tet.reserve(n_tets+1);
+        //
+        Arrangement<3> cut_result, cut_result2;
+        std::vector<Plane<double, 3>> planes;
+        std::vector<Plane<double, 3>> planes_reverse; // planes in reverse order
+        planes.reserve(3);
+        planes_reverse.reserve(3);
+        //
+        size_t type1_count = 0;  // normal and reverse order run, but are different
+        size_t type2_count = 0;  // normal order crash
+        size_t type3_count = 0;  // normal order run, but reverse order crash
+        //
+        for (size_t iter = 0; iter < n_test; ++iter) {
+            std::cout << "-------- test " << iter << " -----------" << std::endl;
+
+            // load implicit functions
+            for (Eigen::Index i = 0; i < n_pts; ++i) {
+                const auto& p = pts[i];
+                for (Eigen::Index j = 0; j < n_func; ++j) {
+                    funcVals(i, j) = compute_sphere_distance(spheres[iter* n_func + j].first,
+                        spheres[iter* n_func + j].second, p);
+                }
             }
+//            load_functions(func_file, pts, funcVals);
+            std::cout << "funcVals(0,0) = " << funcVals(0,0) << std::endl;
+            // function signs at vertices
+            bool found_degenerate_vertex = false;
+            size_t num_degenerate_vertex = 0;
+            {
+                timing_labels.emplace_back("func signs");
+                ScopedTimer<> timer("func signs");
+                is_degenerate_vertex.clear();
+                is_degenerate_vertex.resize(n_pts, false);
+                for (Eigen::Index i = 0; i < n_pts; i++) {
+                    for (Eigen::Index j = 0; j < n_func; j++) {
+                        funcSigns(i, j) = sign(funcVals(i, j));
+                        if (funcSigns(i, j) == 0) {
+                            is_degenerate_vertex[i] = true;
+                            found_degenerate_vertex = true;
+                            num_degenerate_vertex++;
+                        }
+                    }
+                }
+                timings.push_back(timer.toc());
+            }
+            std::cout << "num_degenerate_vertex = " << num_degenerate_vertex << std::endl;
+            // filter
+            size_t num_intersecting_tet = 0;
+            {
+                timing_labels.emplace_back("filter");
+                ScopedTimer<> timer("filter(CRS vector)");
+//                func_in_tet.reserve(n_tets);
+//                start_index_of_tet.reserve(n_tets + 1);
+                func_in_tet.clear();
+                start_index_of_tet.clear();
+                start_index_of_tet.push_back(0);
+                int pos_count;
+                int neg_count;
+                for (Eigen::Index i = 0; i < n_tets; i++) {
+                    for (Eigen::Index j = 0; j < n_func; j++) {
+                        pos_count = 0;
+                        neg_count = 0;
+                        for (size_t& vId : tets[i]) {
+                            if (funcSigns( vId,j) == 1) {
+                                pos_count += 1;
+                            } else if (funcSigns( vId,j) == -1) {
+                                neg_count += 1;
+                            }
+                        }
+                        // tets[i].size() == 4
+                        if (pos_count < 4 && neg_count < 4) {
+                            func_in_tet.push_back(j);
+                        }
+                    }
+                    if (func_in_tet.size() > start_index_of_tet.back()) {
+                        ++num_intersecting_tet;
+                    }
+                    start_index_of_tet.push_back(func_in_tet.size());
+                }
+                timings.push_back(timer.toc());
+            }
+            std::cout << "num_intersecting_tet = " << num_intersecting_tet << std::endl;
+            // compute arrangement in each tet (iterative plane cut)
+            Time_duration time_1_func = Time_duration::zero();
+            Time_duration time_2_func = Time_duration::zero();
+            Time_duration time_more_func = Time_duration::zero();
+            size_t num_1_func = 0;
+            size_t num_2_func = 0;
+            size_t num_more_func = 0;
+            //
+            bool is_type2 = false;
+            bool is_type1 = false;
+            bool is_type3 = false;
+            //
+            {
+                timing_labels.emplace_back("simp_arr(other)");
+                ScopedTimer<> timer("simp_arr");
+                size_t start_index;
+                size_t num_func;
+                for (size_t i = 0; i < tets.size(); i++) {
+                    start_index = start_index_of_tet[i];
+                    num_func = start_index_of_tet[i + 1] - start_index;
+                    std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+                    //
+                    size_t v1 = tets[i][0];
+                    size_t v2 = tets[i][1];
+                    size_t v3 = tets[i][2];
+                    size_t v4 = tets[i][3];
+                    planes.clear();
+                    for (size_t j = 0; j < num_func; j++) {
+                        size_t f_id = func_in_tet[start_index + j];
+                        planes.emplace_back();
+                        auto& plane = planes.back();
+                        plane[0] = funcVals(v1, f_id);
+                        plane[1] = funcVals(v2, f_id);
+                        plane[2] = funcVals(v3, f_id);
+                        plane[3] = funcVals(v4, f_id);
+                    }
+                    // reverse plane order
+                    planes_reverse.clear();
+                    for (size_t j = 0; j < num_func; ++j) {
+                        planes_reverse.emplace_back(planes[num_func - 1 - j]);
+                    }
+                    //
+                    bool crashed = false;
+                    if (!use_2func_lookup && num_func == 2) {
+                        disable_lookup_table();
+                        try {
+                            cut_result = compute_arrangement(planes);
+                        } catch (std::runtime_error& e) {
+                            crashed = true;
+                            is_type2 = true;
+                            break;
+                        }
+                        if (!crashed) {
+                            try {
+                                cut_result2 = compute_arrangement(planes_reverse);
+                            } catch (std::runtime_error& e) {
+                                crashed = true;
+//                                is_type2 = true;
+                                is_type3 = true;
+//                                break;
+                            }
+                            if (!crashed) {
+                                if (cut_result.vertices.size() !=
+                                        cut_result2.vertices.size() ||
+                                    cut_result.faces.size() != cut_result2.faces.size() ||
+                                    cut_result.cells.size() != cut_result2.cells.size()) {
+                                    // inconsistent results
+                                    is_type1 = true;
+//                                    break;
+                                }
+                            }
+                        }
+                        enable_lookup_table();
+                    } else {
+                        try {
+                            cut_result =compute_arrangement(planes);
+                        } catch (std::runtime_error& e) {
+                            crashed = true;
+                            is_type2 = true;
+                            break;
+                        }
+                        if (!crashed) {
+                            try {
+                                cut_result2 = compute_arrangement(planes_reverse);
+                            } catch (std::runtime_error& e) {
+                                crashed = true;
+//                                is_type2 = true;
+                                is_type3 = true;
+//                                break;
+                            }
+                            if (!crashed) {
+                                if (cut_result.vertices.size() !=
+                                        cut_result2.vertices.size() ||
+                                    cut_result.faces.size() != cut_result2.faces.size() ||
+                                    cut_result.cells.size() != cut_result2.cells.size()) {
+                                    // inconsistent results
+                                    is_type1 = true;
+                                }
+                            }
+                        }
+                    }
+                    //
+                    std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+                    switch (num_func) {
+                    case 1:
+                        time_1_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                        ++num_1_func;
+                        break;
+                    case 2:
+                        time_2_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                        ++num_2_func;
+                        break;
+                    default:
+                        time_more_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                        ++num_more_func;
+                        break;
+                    }
+                }
+                timings.push_back(timer.toc() - time_1_func.count() - time_2_func.count() -
+                                  time_more_func.count());
+            }
+            timing_labels.emplace_back("simp_arr(1 func)");
+            timings.push_back(time_1_func.count());
+            timing_labels.emplace_back("simp_arr(2 func)");
+            timings.push_back(time_2_func.count());
+            timing_labels.emplace_back("simp_arr(>=3 func)");
+            timings.push_back(time_more_func.count());
+            std::cout << " -- [simp_arr(1 func)]: " << time_1_func.count() << " s" << std::endl;
+            std::cout << " -- [simp_arr(2 func)]: " << time_2_func.count() << " s" << std::endl;
+            std::cout << " -- [simp_arr(>=3 func)]: " << time_more_func.count() << " s" << std::endl;
+
+            if (is_type2) {
+                std::cout << "type 2 failure." << std::endl;
+                ++type2_count;
+            } else if (is_type3) {
+                std::cout << "type 3 failure." << std::endl;
+                ++type3_count;
+            } else if (is_type1) {
+                std::cout << "type 1 failure." << std::endl;
+                ++type1_count;
+            }
+
+            std::cout << "=======================" << std::endl;
+            std::cout << "total: " << iter + 1 << std::endl;
+            std::cout << "type 1: " << type1_count << std::endl;
+            std::cout << "type 2: " << type2_count << std::endl;
+            std::cout << "type 3: " << type3_count << std::endl;
         }
-        timings.push_back(timer.toc());
+        return 0;
+
     }
+
+    // load implicit functions and compute function values at vertices
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals;
+    if (load_functions(func_file, pts, funcVals)) {
+        std::cout << "function loading finished." << std::endl;
+    } else {
+        std::cout << "function loading failed." << std::endl;
+        return -2;
+    }
+    size_t n_func = funcVals.cols();
 
 
     // function signs at vertices
     Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcSigns;
     std::vector<bool> is_degenerate_vertex;
     bool found_degenerate_vertex = false;
+    size_t num_degenerate_vertex = 0;
     {
         timing_labels.emplace_back("func signs");
         ScopedTimer<> timer("func signs");
@@ -117,12 +382,15 @@ int main(int argc, const char* argv[])
                 if (funcSigns(i, j) == 0) {
                     is_degenerate_vertex[i] = true;
                     found_degenerate_vertex = true;
+                    num_degenerate_vertex++;
                 }
             }
         }
         timings.push_back(timer.toc());
     }
+    std::cout << "num_degenerate_vertex = " << num_degenerate_vertex << std::endl;
 
+    // filter
     size_t num_intersecting_tet = 0;
     std::vector<size_t> func_in_tet;
     std::vector<size_t> start_index_of_tet;
@@ -171,16 +439,23 @@ int main(int argc, const char* argv[])
     size_t num_2_func = 0;
     size_t num_more_func = 0;
     //
+    size_t type2_count = 0;
+    size_t type1_count = 0;
+    //
     {
         timing_labels.emplace_back("simp_arr(other)");
         ScopedTimer<> timer("simp_arr");
-        cut_results.reserve(num_intersecting_tet);
-        cut_result_index.reserve(n_tets);
-        size_t start_index;
-        size_t num_func;
-        std::vector<Plane<double, 3>> planes;
-        planes.reserve(3);
-        try {
+        if (args.robust_test) {
+            cut_results.reserve(num_intersecting_tet);
+            cut_result_index.reserve(n_tets);
+            std::vector<Arrangement<3>> cut_results2; // cut_results when reverse function order
+            cut_results2.reserve(num_intersecting_tet);
+            size_t start_index;
+            size_t num_func;
+            std::vector<Plane<double, 3>> planes;
+            std::vector<Plane<double, 3>> planes_reverse; // planes in reverse order
+            planes.reserve(3);
+            planes_reverse.reserve(3);
             for (size_t i = 0; i < tets.size(); i++) {
                 start_index = start_index_of_tet[i];
                 num_func = start_index_of_tet[i + 1] - start_index;
@@ -204,15 +479,67 @@ int main(int argc, const char* argv[])
                     plane[2] = funcVals(v3, f_id);
                     plane[3] = funcVals(v4, f_id);
                 }
+                // reverse plane order
+                planes_reverse.clear();
+                for (size_t j = 0; j < num_func; ++j) {
+                    planes_reverse.emplace_back(planes[num_func -1 -j]);
+                }
                 //
+                bool crashed = false;
                 if (!use_2func_lookup && num_func == 2) {
                     cut_result_index.push_back(cut_results.size());
                     disable_lookup_table();
-                    cut_results.emplace_back(std::move(compute_arrangement(planes)));
+                    try {
+                        cut_results.emplace_back(std::move(compute_arrangement(planes)));
+                    } catch (std::runtime_error& e) {
+                        crashed = true;
+                        type2_count++;
+                    }
+                    if (!crashed) {
+                        try {
+                            cut_results2.emplace_back(std::move(compute_arrangement(planes_reverse)));
+                        } catch (std::runtime_error& e) {
+                            crashed = true;
+                            type2_count++;
+                        }
+                        if (!crashed) {
+                            const auto& last_cut_result = cut_results.back();
+                            const auto& last_cut_result2 = cut_results2.back();
+                            if (last_cut_result.vertices.size() != last_cut_result2.vertices.size() ||
+                                last_cut_result.faces.size() != last_cut_result2.faces.size() ||
+                                last_cut_result.cells.size() != last_cut_result2.cells.size()) {
+                                // inconsistent results
+                                type1_count++;
+                            }
+                        }
+                    }
                     enable_lookup_table();
                 } else {
                     cut_result_index.push_back(cut_results.size());
-                    cut_results.emplace_back(std::move(compute_arrangement(planes)));
+                    try {
+                        cut_results.emplace_back(std::move(compute_arrangement(planes)));
+                    } catch (std::runtime_error& e) {
+                        crashed = true;
+                        type2_count++;
+                    }
+                    if (!crashed) {
+                        try {
+                            cut_results2.emplace_back(std::move(compute_arrangement(planes_reverse)));
+                        } catch (std::runtime_error& e) {
+                            crashed = true;
+                            type2_count++;
+                        }
+                        if (!crashed) {
+                            const auto& last_cut_result = cut_results.back();
+                            const auto& last_cut_result2 = cut_results2.back();
+                            if (last_cut_result.vertices.size() != last_cut_result2.vertices.size() ||
+                                last_cut_result.faces.size() != last_cut_result2.faces.size() ||
+                                last_cut_result.cells.size() != last_cut_result2.cells.size()) {
+                                // inconsistent results
+                                type1_count++;
+                            }
+                        }
+                    }
                 }
                 //
                 std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
@@ -231,10 +558,69 @@ int main(int argc, const char* argv[])
                     break;
                 }
             }
-    } catch (std::runtime_error& e) {
-        std::cout << "simplicial arrangement: " << e.what() << std::endl;
-        return -1;
-    }
+        } else { // not performing robustness test
+            cut_results.reserve(num_intersecting_tet);
+            cut_result_index.reserve(n_tets);
+            size_t start_index;
+            size_t num_func;
+            std::vector<Plane<double, 3>> planes;
+            planes.reserve(3);
+            try {
+                for (size_t i = 0; i < tets.size(); i++) {
+                    start_index = start_index_of_tet[i];
+                    num_func = start_index_of_tet[i + 1] - start_index;
+                    if (num_func == 0) {
+                        cut_result_index.push_back(Arrangement<3>::None);
+                        continue;
+                    }
+                    std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+                    //
+                    size_t v1 = tets[i][0];
+                    size_t v2 = tets[i][1];
+                    size_t v3 = tets[i][2];
+                    size_t v4 = tets[i][3];
+                    planes.clear();
+                    for (size_t j = 0; j < num_func; j++) {
+                        size_t f_id = func_in_tet[start_index + j];
+                        planes.emplace_back();
+                        auto& plane = planes.back();
+                        plane[0] = funcVals(v1, f_id);
+                        plane[1] = funcVals(v2, f_id);
+                        plane[2] = funcVals(v3, f_id);
+                        plane[3] = funcVals(v4, f_id);
+                    }
+                    //
+                    if (!use_2func_lookup && num_func == 2) {
+                        cut_result_index.push_back(cut_results.size());
+                        disable_lookup_table();
+                        cut_results.emplace_back(std::move(compute_arrangement(planes)));
+                        enable_lookup_table();
+                    } else {
+                        cut_result_index.push_back(cut_results.size());
+                        cut_results.emplace_back(std::move(compute_arrangement(planes)));
+                    }
+                    //
+                    std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+                    switch (num_func) {
+                    case 1:
+                        time_1_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                        ++num_1_func;
+                        break;
+                    case 2:
+                        time_2_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                        ++num_2_func;
+                        break;
+                    default:
+                        time_more_func += std::chrono::duration_cast<Time_duration>(t2 - t1);
+                        ++num_more_func;
+                        break;
+                    }
+                }
+            } catch (std::runtime_error& e) {
+                std::cout << e.what() << std::endl;
+                return -1;
+            }
+        }
         timings.push_back(
             timer.toc() - time_1_func.count() - time_2_func.count() - time_more_func.count());
     }
@@ -247,6 +633,13 @@ int main(int argc, const char* argv[])
     std::cout << " -- [simp_arr(1 func)]: " << time_1_func.count() << " s" << std::endl;
     std::cout << " -- [simp_arr(2 func)]: " << time_2_func.count() << " s" << std::endl;
     std::cout << " -- [simp_arr(>=3 func)]: " << time_more_func.count() << " s" << std::endl;
+
+    if (args.robust_test) {
+        std::cout << "total: " << num_intersecting_tet << std::endl;
+        std::cout << "type 1: " << type1_count << std::endl;
+        std::cout << "type 2: " << type2_count << std::endl;
+        return 0;
+    }
 
     // extract arrangement mesh
     std::vector<IsoVert> iso_verts;
@@ -295,12 +688,19 @@ int main(int argc, const char* argv[])
 
     // compute xyz of iso-vertices
     std::vector<std::array<double, 3>> iso_pts;
+//    std::vector<std::array<long double, 3>> iso_pts_ldouble;
     {
         timing_labels.emplace_back("compute xyz");
         ScopedTimer<> timer("compute xyz");
         compute_iso_vert_xyz(iso_verts, funcVals, pts, iso_pts);
         timings.push_back(timer.toc());
     }
+//    iso_pts.resize(iso_pts_ldouble.size());
+//    for (size_t i = 0; i < iso_pts.size(); ++i) {
+//        iso_pts[i][0] = iso_pts_ldouble[i][0];
+//        iso_pts[i][1] = iso_pts_ldouble[i][1];
+//        iso_pts[i][2] = iso_pts_ldouble[i][2];
+//    }
 
     //  compute iso-edges and edge-face connectivity
     std::vector<Edge> iso_edges;
