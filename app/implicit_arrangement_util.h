@@ -84,7 +84,8 @@ bool parse_config_file_MI(const std::string &filename,
     std::string& material_file,
     std::string& output_dir,
     bool& use_lookup,
-    bool& use_3func_lookup);
+    bool& use_3func_lookup,
+    bool& use_topo_rayshooting);
 
 bool load_tet_mesh(const std::string &filename,
     std::vector<std::array<double, 3>> &pts,
@@ -95,6 +96,11 @@ bool load_spheres(const std::string &filename,
 
 bool load_seeds(const std::string& filename,
     std::vector<std::array<double,3>> &seeds);
+
+bool load_tet_mesh_func(const std::string &filename,
+    std::vector<std::array<double, 3>> &pts,
+    std::vector<std::array<size_t, 4>> &tets,
+    Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor> &funcVals);
 
 inline double compute_Euclidean_distance(const std::array<double,3> &p, const std::array<double,3>& q)
 {
@@ -318,6 +324,21 @@ void extract_MI_mesh_pure(
     std::vector<MI_Vert>& MI_verts,
     std::vector<PolygonFace>& MI_faces);
 
+void extract_MI_mesh(
+    size_t num_2_func, size_t num_3_func, size_t num_more_func,
+    const std::vector<MaterialInterface<3>>& cut_results,
+    const std::vector<size_t>& cut_result_index,
+    const std::vector<size_t>& material_in_tet,
+    const std::vector<size_t>& start_index_of_tet,
+    const std::vector<std::array<size_t, 4>>& tets,
+    std::vector<MI_Vert>& MI_verts,
+    std::vector<PolygonFace>& MI_faces,
+    std::vector<long long>& global_vId_of_tet_vert,
+    std::vector<size_t>& global_vId_start_index_of_tet,
+    std::vector<size_t>& MI_fId_of_tet_face,
+    std::vector<size_t>& MI_fId_start_index_of_tet);
+
+
 // extract iso-mesh from marching tet (topology only)
 void extract_iso_mesh_marching_tet(const std::vector<bool>& has_isosurface,
     const std::vector<Arrangement<3>>& cut_results,
@@ -328,14 +349,14 @@ void extract_iso_mesh_marching_tet(const std::vector<bool>& has_isosurface,
 // compute xyz coordinates of iso-vertices
 void compute_iso_vert_xyz(
     const std::vector<IsoVert> &iso_verts, 
-    const Eigen::MatrixXd &funcVals,
+    const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &funcVals,
     const std::vector<std::array<double, 3>> &pts,
     std::vector<std::array<double, 3>>& iso_pts);
 
 // compute xyz coordinates of material interface vertices
 void compute_MI_vert_xyz(
     const std::vector<MI_Vert> &MI_verts,
-    const Eigen::MatrixXd &funcVals,
+    const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> &funcVals,
     const std::vector<std::array<double,3>> &pts,
     std::vector<std::array<double,3>>& MI_pts);
 
