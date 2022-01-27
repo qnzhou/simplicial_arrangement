@@ -4913,9 +4913,10 @@ bool load_functions(const std::string& filename,
                 center[i] = data[j]["center"][i].get<double>();
             }
             double radius = data[j]["radius"].get<double>();
+            double sign = data[j].value("negate", false) ? -1:1;
             //
             for (int i = 0; i < n_pts; i++) {
-                funcVals(i,j) = compute_sphere_distance(center,
+                funcVals(i,j) = sign * compute_sphere_distance(center,
                     radius,pts[i]);
             }
         } else if (type == "torus") {
@@ -5016,10 +5017,11 @@ bool load_functions(const std::string& filename,
                 center[i] = data[j]["center"][i].get<double>();
             }
             double radius = data[j]["radius"].get<double>();
+            double sign = data[j].value("negate", false) ? -1:1;
             //
             funcVals[j].resize(n_pts);
             for (size_t i = 0; i < n_pts; i++) {
-                funcVals[j][i] = compute_sphere_distance(center,
+                funcVals[j][i] = sign * compute_sphere_distance(center,
                     radius,pts[i]);
             }
         } else if (type == "torus") {
