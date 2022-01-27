@@ -77,25 +77,15 @@ int main(int argc, const char* argv[])
     size_t n_pts = pts.size();
     std::cout << "tet mesh: " << pts.size() << " verts, " << tets.size() << " tets." << std::endl;
 
-
-    // load material function values, or evaluate
-//    std::vector<Sphere> spheres;
-//    load_spheres(material_file, spheres);
-//    size_t n_func = spheres.size();
-//
+    // load tet mesh and function values
 //    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals;
-//    {
-//        timing_labels.emplace_back("func values");
-//        ScopedTimer<> timer("func values");
-//        funcVals.resize(n_pts, n_func);
-//        for (Eigen::Index i = 0; i < n_pts; ++i) {
-//            const auto& p = pts[i];
-//            for (Eigen::Index j = 0; j < n_func; j++) {
-//                funcVals(i, j) = compute_sphere_distance(spheres[j].first, spheres[j].second, p);
-//            }
-//        }
-//        timings.push_back(timer.toc());
-//    }
+//    load_tet_mesh_func(tet_mesh_file, pts, tets, funcVals);
+//    size_t n_tets = tets.size();
+//    size_t n_pts = pts.size();
+//    std::cout << "tet mesh: " << pts.size() << " verts, " << tets.size() << " tets." << std::endl;
+//    std::cout << "pts[100] = (" << pts[100][0] << "," << pts[100][1] << "," << pts[100][2] << ")" << std::endl;
+//    std::cout << "tets[100] = (" << tets[100][0] << "," << tets[100][1] << "," << tets[100][2] << "," <<
+//        tets[100][3] << ")" << std::endl;
 
     // robustness test
     if (args.robust_test) {
@@ -402,7 +392,6 @@ int main(int argc, const char* argv[])
 
     }
 
-
     // load implicit functions and compute function values at vertices
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals;
     if (load_functions(material_file, pts, funcVals)) {
@@ -412,6 +401,7 @@ int main(int argc, const char* argv[])
         return -2;
     }
     size_t n_func = funcVals.cols();
+    std::cout << "n_func = " << n_func << std::endl;
 
 
     // highest material at vertices
