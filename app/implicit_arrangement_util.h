@@ -153,6 +153,8 @@ inline double compute_sphere_distance(const std::array<double, 3>& center, doubl
     }
 }
 
+
+
 inline double compute_dot(const std::array<double,3> &a, const std::array<double,3> &b)
 {
     return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
@@ -201,6 +203,34 @@ inline double compute_torus_distance(const std::array<double,3>& center,
     } else {
         return minor_radius - sqrt(major_radius * (major_radius - 2 * vec_perp_norm)
                                   + compute_dot(vec, vec));
+    }
+}
+
+//
+inline double compute_line_distance(const std::array<double,3>& point, const std::array<double,3>& unit_vector,
+    const std::array<double,3> &p)
+{
+    std::array<double,3> vec {p[0] - point[0], p[1] - point[1], p[2] - point[2]};
+    double d = compute_dot(unit_vector, vec);
+    std::array<double,3> vec_para {d * unit_vector[0], d * unit_vector[1], d * unit_vector[2]};
+    std::array<double,3> vec_perp {vec[0] - vec_para[0], vec[1] - vec_para[1], vec[2] - vec_para[2]};
+    return -compute_norm(vec_perp);
+}
+
+inline double compute_circle_distance(const std::array<double,3>& center,
+    const std::array<double,3> &axis_unit_vector, double radius,
+    const std::array<double,3> &p)
+{
+    std::array<double,3> vec {p[0] - center[0], p[1]-center[1], p[2]-center[2]};
+    double d = compute_dot(vec, axis_unit_vector);
+    std::array<double,3> vec_para = {d * axis_unit_vector[0],
+        d*axis_unit_vector[1], d*axis_unit_vector[2]};
+    std::array<double,3> vec_perp = {vec[0]-vec_para[0], vec[1]-vec_para[1], vec[2]-vec_para[2]};
+    double vec_perp_norm = compute_norm(vec_perp);
+    if (vec_perp_norm == 0) { // point p lies on torus axis
+        return -sqrt(compute_dot(vec_para, vec_para) + radius * radius);
+    } else {
+        return -sqrt(radius * (radius - 2 * vec_perp_norm) + compute_dot(vec, vec));
     }
 }
 
@@ -298,6 +328,10 @@ bool save_tri_mesh_list(const std::string& filename,
 bool save_timings(const std::string& filename,
     const std::vector<std::string> &timing_labels,
     const std::vector<double> &timings);
+
+bool save_statistics(const std::string& filename,
+    const std::vector<std::string> &stats_labels,
+    const std::vector<size_t> &stats);
 
 // point (x,y,z): dictionary order
 inline bool point_xyz_less(const std::array<double, 3>& p, const std::array<double, 3>& q)

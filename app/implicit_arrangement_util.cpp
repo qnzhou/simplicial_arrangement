@@ -4891,7 +4891,22 @@ bool load_functions(const std::string& filename,
             for (int i = 0; i < n_pts; i++) {
                 funcVals(i,j) = compute_plane_distance(point, normal, pts[i]);
             }
-        } else if (type == "cylinder") {
+        }
+        else if (type == "line") {
+            std::array<double,3> point;
+            for (int i = 0; i < 3; ++i) {
+                point[i] = data[j]["point"][i].get<double>();
+            }
+            std::array<double,3> unit_vector;
+            for (int i = 0; i < 3; ++i) {
+                unit_vector[i] = data[j]["unit_vector"][i].get<double>();
+            }
+            //
+            for (int i = 0; i < n_pts; i++) {
+                funcVals(i,j) = compute_line_distance(point, unit_vector, pts[i]);
+            }
+        }
+        else if (type == "cylinder") {
             std::array<double,3> axis_point;
             for (int i = 0; i < 3; ++i) {
                 axis_point[i] = data[j]["axis_point"][i].get<double>();
@@ -4907,7 +4922,8 @@ bool load_functions(const std::string& filename,
                     axis_unit_vector, radius,
                     pts[i]);
             }
-        } else if (type == "sphere") {
+        }
+        else if (type == "sphere") {
             std::array<double,3> center;
             for (int i = 0; i < 3; ++i) {
                 center[i] = data[j]["center"][i].get<double>();
@@ -4918,7 +4934,8 @@ bool load_functions(const std::string& filename,
                 funcVals(i,j) = compute_sphere_distance(center,
                     radius,pts[i]);
             }
-        } else if (type == "torus") {
+        }
+        else if (type == "torus") {
             std::array<double,3> center;
             for (int i = 0; i < 3; ++i) {
                 center[i] = data[j]["center"][i].get<double>();
@@ -4934,7 +4951,24 @@ bool load_functions(const std::string& filename,
                 funcVals(i,j) = compute_torus_distance(center, axis_unit_vector,
                     major_radius, minor_radius, pts[i]);
             }
-        } else if (type == "cone") {
+        }
+        else if (type == "circle") {
+            std::array<double,3> center;
+            for (int i = 0; i < 3; ++i) {
+                center[i] = data[j]["center"][i].get<double>();
+            }
+            std::array<double,3> axis_unit_vector;
+            for (int i = 0; i < 3; ++i) {
+                axis_unit_vector[i] = data[j]["axis_vector"][i].get<double>();
+            }
+            double radius = data[j]["radius"].get<double>();
+            //
+            for (int i = 0; i < n_pts; i++) {
+                funcVals(i,j) = compute_circle_distance(center, axis_unit_vector,
+                    radius, pts[i]);
+            }
+        }
+        else if (type == "cone") {
             std::array<double, 3> apex;
             for (int i = 0; i < 3; ++i) {
                 apex[i] = data[j]["apex"][i].get<double>();
@@ -4948,11 +4982,13 @@ bool load_functions(const std::string& filename,
             for (int i = 0; i < n_pts; i++) {
                 funcVals(i, j) = compute_cone_distance(apex, axis_unit_vector, apex_angle, pts[i]);
             }
-        } else if (type == "zero") {
+        }
+        else if (type == "zero") {
             for (int i = 0; i < n_pts; i++) {
                 funcVals(i, j) = 0;
             }
-        } else {
+        }
+        else {
             std::cout << "undefined type: " << type << std::endl;
             return false;
         }
@@ -4993,7 +5029,23 @@ bool load_functions(const std::string& filename,
             for (size_t i = 0; i < n_pts; i++) {
                 funcVals[j][i] = compute_plane_distance(point, normal, pts[i]);
             }
-        } else if (type == "cylinder") {
+        }
+        else if (type == "line") {
+            std::array<double,3> point;
+            for (int i = 0; i < 3; ++i) {
+                point[i] = data[j]["point"][i].get<double>();
+            }
+            std::array<double,3> unit_vector;
+            for (int i = 0; i < 3; ++i) {
+                unit_vector[i] = data[j]["unit_vector"][i].get<double>();
+            }
+            //
+            funcVals[j].resize(n_pts);
+            for (int i = 0; i < n_pts; i++) {
+                funcVals[j][i] = compute_line_distance(point, unit_vector, pts[i]);
+            }
+        }
+        else if (type == "cylinder") {
             std::array<double,3> axis_point;
             for (int i = 0; i < 3; ++i) {
                 axis_point[i] = data[j]["axis_point"][i].get<double>();
@@ -5039,7 +5091,25 @@ bool load_functions(const std::string& filename,
                 funcVals[j][i] = compute_torus_distance(center, axis_unit_vector,
                     major_radius, minor_radius, pts[i]);
             }
-        } else if (type == "cone") {
+        }
+        else if (type == "circle") {
+            std::array<double,3> center;
+            for (int i = 0; i < 3; ++i) {
+                center[i] = data[j]["center"][i].get<double>();
+            }
+            std::array<double,3> axis_unit_vector;
+            for (int i = 0; i < 3; ++i) {
+                axis_unit_vector[i] = data[j]["axis_vector"][i].get<double>();
+            }
+            double radius = data[j]["radius"].get<double>();
+            //
+            funcVals[j].resize(n_pts);
+            for (int i = 0; i < n_pts; i++) {
+                funcVals[j][i] = compute_circle_distance(center, axis_unit_vector,
+                    radius, pts[i]);
+            }
+        }
+        else if (type == "cone") {
             std::array<double, 3> apex;
             for (int i = 0; i < 3; ++i) {
                 apex[i] = data[j]["apex"][i].get<double>();
@@ -5272,4 +5342,22 @@ void compute_MI_vert_xyz(const std::vector<MI_Vert>& MI_verts,
         default: break;
         }
     }
+}
+
+bool save_statistics(const std::string& filename,
+    const std::vector<std::string>& stats_labels,
+    const std::vector<size_t>& stats)
+{
+    // assert stats_labels.size() == stats.size()
+    using json = nlohmann::json;
+    std::ofstream fout(filename.c_str());
+    //
+    json jOut;
+    for (size_t i = 0; i < stats.size(); ++i) {
+        jOut[stats_labels[i]] = stats[i];
+    }
+    //
+    fout << jOut << std::endl;
+    fout.close();
+    return true;
 }
