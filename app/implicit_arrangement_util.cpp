@@ -2003,6 +2003,10 @@ void extract_MI_mesh_pure(size_t num_2_func,
     vert_on_tetFace.reserve(num_3_func + 2 * num_more_func);
     // map: face on tet boundary -> material label
     absl::flat_hash_map<std::array<long long, 3>, size_t> material_of_bndry_face;
+    // map: face on tet boundary -> material labels
+    absl::flat_hash_map<std::array<long long, 3>, std::vector<size_t>> materials_of_bndry_face;
+    std::vector<size_t> materials;
+    materials.reserve(2);
     //
     std::vector<bool> is_MI_vert;
     is_MI_vert.reserve(8);
@@ -2239,43 +2243,139 @@ void extract_MI_mesh_pure(size_t num_2_func,
                         }
                     }
                     compute_iso_face_key(bndry_face_verts, key3);
-                    auto m = material_in_tet[face.negative_material_label - 4 + start_index];
-                    auto iter_inserted = material_of_bndry_face.try_emplace(key3, m);
-                    if (!iter_inserted.second) { // inserted before
-                        if (iter_inserted.first->second == m) {
-                            // material labels on both sides of the face are the same
-                            // the face is not on material interface
-                            material_of_bndry_face.erase(iter_inserted.first);
+                    // get material label(s) of the cell incident to the face in the current tet
+                    size_t m = MaterialInterface<3>::None;
+                    if (mInterface.unique_materials.empty()) {
+                        // no duplicate materials
+                        m = material_in_tet[face.negative_material_label - 4 + start_index];
+                    }
+                    else {
+                        size_t uId = mInterface.unique_material_indices[face.negative_material_label];
+                        if (mInterface.unique_materials[uId].size() == 1) {
+                            // face's incident cell has a unique material label
+                            m = material_in_tet[face.negative_material_label - 4 + start_index];
                         } else {
-                            // different material labels on different sides
-                            // the face is on material interface
-                            face_verts.clear();
-                            for (size_t k = 0; k < face.vertices.size(); ++k) {
-                                if (bndry_face_verts[k] < 0) {
-                                    // try to create new vert on tet vertex
-                                    size_t key = -bndry_face_verts[k] - 1;
-                                    auto iterInserted =
-                                        vert_on_tetVert.try_emplace(key, MI_verts.size());
-                                    if (iterInserted.second) {
-                                        MI_verts.emplace_back();
-                                        auto& MI_vert = MI_verts.back();
-                                        MI_vert.tet_index = i;
-//                                        MI_vert.tet_vert_index = j;
-                                        MI_vert.tet_vert_index = face.vertices[k];
-                                        MI_vert.simplex_size = 1;
-                                        MI_vert.simplex_vert_indices[0] = key;
+                            // face's incident cell has multiple material labels
+                            materials.clear();
+                            for (auto mId : mInterface.unique_materials[uId]) {
+                                materials.push_back(material_in_tet[mId - 4 + start_index]);
+                            }
+                        }
+                    }
+                    //
+                    bool is_material_interface = false;
+                    if (m != MaterialInterface<3>::None) {
+                        // face's incident cell has unique material label
+                        auto iter_inserted = material_of_bndry_face.try_emplace(key3, m);
+                        if (!iter_inserted.second) { // inserted before
+                            if (iter_inserted.first->second == m) {
+                                // material labels on both sides of the face are the same
+                                // the face is not on material interface
+                                material_of_bndry_face.erase(iter_inserted.first);
+                            } else {
+                                // different material labels on different sides
+                                // the face is on material interface
+                                is_material_interface = true;
+                            }
+                        }
+                        else {
+                            auto iter = materials_of_bndry_face.find(key3);
+                            if (iter != materials_of_bndry_face.end()) {
+                                // the cell on the other side has multiple material labels
+                                bool has_m = false;
+                                for (auto mId : iter->second) {
+                                    if (mId == m) {
+                                        has_m = true;
+                                        break;
                                     }
-                                    //                                    MI_vId_of_vert.push_back(iterInserted.first->second);
-                                    face_verts.push_back(iterInserted.first->second);
+                                }
+                                if (has_m) {
+                                    // cells on two sides have a common material label
+                                    // the face is not on material interface
+                                    material_of_bndry_face.erase(iter_inserted.first);
+                                    materials_of_bndry_face.erase(iter);
                                 } else {
-                                    face_verts.push_back(MI_vId_of_vert[face.vertices[k]]);
+                                    // cells on two sides have no material label in common
+                                    // the face is on material interface
+                                    is_material_interface = true;
                                 }
                             }
-                            // insert the face to MI_faces
-                            MI_faces.emplace_back();
-                            MI_faces.back().vert_indices = face_verts;
-                            MI_faces.back().tet_face_indices.emplace_back(i, j);
                         }
+                    }
+                    else {
+                        // face's incident cell has multiple material labels
+                        auto iter_inserted = materials_of_bndry_face.try_emplace(key3, materials);
+                        if (!iter_inserted.second) { // inserted before
+                            bool has_common_material_label = false;
+                            for (auto mi : iter_inserted.first->second) {
+                                for (auto mj : materials) {
+                                    if (mi == mj) {
+                                        has_common_material_label = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (has_common_material_label) {
+                                materials_of_bndry_face.erase(iter_inserted.first);
+                            } else {
+                                // different material labels on different sides
+                                // the face is on material interface
+                                is_material_interface = true;
+                            }
+                        }
+                        else {
+                            auto iter = material_of_bndry_face.find(key3);
+                            if (iter != material_of_bndry_face.end()) {
+                                // the cell on the other side has a unique material label
+                                m = iter->second;
+                                bool has_m = false;
+                                for (auto mId : materials) {
+                                    if (mId == m) {
+                                        has_m = true;
+                                        break;
+                                    }
+                                }
+                                if (has_m) {
+                                    // cells on two sides have a common material label
+                                    // the face is not on material interface
+                                    material_of_bndry_face.erase(iter);
+                                    materials_of_bndry_face.erase(iter_inserted.first);
+                                } else {
+                                    // cells on two sides have no material label in common
+                                    // the face is on material interface
+                                    is_material_interface = true;
+                                }
+                            }
+                        }
+                    }
+                    //
+                    if (is_material_interface) {
+                        face_verts.clear();
+                        for (size_t k = 0; k < face.vertices.size(); ++k) {
+                            if (bndry_face_verts[k] < 0) {
+                                // try to create new vert on tet vertex
+                                size_t key = -bndry_face_verts[k] - 1;
+                                auto iterInserted =
+                                    vert_on_tetVert.try_emplace(key, MI_verts.size());
+                                if (iterInserted.second) {
+                                    MI_verts.emplace_back();
+                                    auto& MI_vert = MI_verts.back();
+                                    MI_vert.tet_index = i;
+                                    //                                        MI_vert.tet_vert_index = j;
+                                    MI_vert.tet_vert_index = face.vertices[k];
+                                    MI_vert.simplex_size = 1;
+                                    MI_vert.simplex_vert_indices[0] = key;
+                                }
+                                //                                    MI_vId_of_vert.push_back(iterInserted.first->second);
+                                face_verts.push_back(iterInserted.first->second);
+                            } else {
+                                face_verts.push_back(MI_vId_of_vert[face.vertices[k]]);
+                            }
+                        }
+                        // insert the face to MI_faces
+                        MI_faces.emplace_back();
+                        MI_faces.back().vert_indices = face_verts;
+                        MI_faces.back().tet_face_indices.emplace_back(i, j);
                     }
                 }
             }
@@ -4558,9 +4658,15 @@ void extract_MI_mesh(size_t num_2_func,
     // 2func: 0 face vert, 3func: 2 face vert, 4func: 4 face vert
     // num face vert estimate = (2 * n_3func + 4 * n_moreFunc) /2
     vert_on_tetFace.reserve(num_3_func + 2 * num_more_func);
-    // map: face on tet boundary -> (material label, tetId, faceId in tet)
-//    absl::flat_hash_map<std::array<long long, 3>, size_t> material_of_bndry_face;
-    absl::flat_hash_map<std::array<long long, 3>, std::array<size_t,3>> mat_tet_face_of_bndry_face;
+    // map: face on tet boundary -> material label
+    absl::flat_hash_map<std::array<long long, 3>, size_t> material_of_bndry_face;
+    // map: face on tet boundary -> material labels
+    absl::flat_hash_map<std::array<long long, 3>, std::vector<size_t>> materials_of_bndry_face;
+    std::vector<size_t> materials;
+    materials.reserve(2);
+//    absl::flat_hash_map<std::array<long long, 3>, std::array<size_t,3>> mat_tet_face_of_bndry_face;
+    // map: face on tet boundary -> (tetId, faceId in tet)
+    absl::flat_hash_map<std::array<long long, 3>, std::pair<size_t, size_t>> tet_face_of_bndry_face;
     //
     std::vector<bool> is_MI_vert;
     is_MI_vert.reserve(8);
@@ -4808,49 +4914,145 @@ void extract_MI_mesh(size_t num_2_func,
                         }
                     }
                     compute_iso_face_key(bndry_face_verts, key3);
-                    auto m = material_in_tet[face.negative_material_label - 4 + start_index];
-//                    auto iter_inserted = material_of_bndry_face.try_emplace(key3, m);
-                    auto iter_inserted = mat_tet_face_of_bndry_face.try_emplace(key3, std::array<size_t,3> {m,i,j});
-                    if (!iter_inserted.second) { // inserted before
-                        auto opposite_material = iter_inserted.first->second[0];
-                        auto opposite_tetId = iter_inserted.first->second[1];
-                        auto opposite_faceId = iter_inserted.first->second[2];
-                        if (opposite_material == m) {
-                            // material labels on both sides of the face are the same
-                            // the face is not on material interface
-                            mat_tet_face_of_bndry_face.erase(iter_inserted.first);
+                    // get material label(s) of the cell incident to the face in the current tet
+                    size_t m = MaterialInterface<3>::None;
+                    if (mInterface.unique_materials.empty()) {
+                        // no duplicate materials
+                        m = material_in_tet[face.negative_material_label - 4 + start_index];
+                    }
+                    else {
+                        size_t uId = mInterface.unique_material_indices[face.negative_material_label];
+                        if (mInterface.unique_materials[uId].size() == 1) {
+                            // face's incident cell has a unique material label
+                            m = material_in_tet[face.negative_material_label - 4 + start_index];
                         } else {
-                            // different material labels on different sides
-                            // the face is on material interface
-                            face_verts.clear();
-                            for (size_t k = 0; k < face.vertices.size(); ++k) {
-                                if (bndry_face_verts[k] < 0) {
-                                    // try to create new vert on tet vertex
-                                    size_t key = -bndry_face_verts[k] - 1;
-                                    auto iterInserted =
-                                        vert_on_tetVert.try_emplace(key, MI_verts.size());
-                                    if (iterInserted.second) {
-                                        MI_verts.emplace_back();
-                                        auto& MI_vert = MI_verts.back();
-                                        MI_vert.tet_index = i;
-//                                        MI_vert.tet_vert_index = j;
-                                        MI_vert.tet_vert_index = face.vertices[k];
-                                        MI_vert.simplex_size = 1;
-                                        MI_vert.simplex_vert_indices[0] = key;
+                            // face's incident cell has multiple material labels
+                            materials.clear();
+                            for (auto mId : mInterface.unique_materials[uId]) {
+                                materials.push_back(material_in_tet[mId - 4 + start_index]);
+                            }
+                        }
+                    }
+                    //
+                    bool is_material_interface = false;
+                    if (m != MaterialInterface<3>::None) {
+                        // face's incident cell has unique material label
+                        auto iter_inserted = material_of_bndry_face.try_emplace(key3, m);
+                        if (!iter_inserted.second) { // inserted before
+                            if (iter_inserted.first->second == m) {
+                                // material labels on both sides of the face are the same
+                                // the face is not on material interface
+                                material_of_bndry_face.erase(iter_inserted.first);
+                            } else {
+                                // different material labels on different sides
+                                // the face is on material interface
+                                is_material_interface = true;
+                            }
+                        }
+                        else {
+                            auto iter = materials_of_bndry_face.find(key3);
+                            if (iter != materials_of_bndry_face.end()) {
+                                // the cell on the other side has multiple material labels
+                                bool has_m = false;
+                                for (auto mId : iter->second) {
+                                    if (mId == m) {
+                                        has_m = true;
+                                        break;
                                     }
-                                    //MI_vId_of_vert.push_back(iterInserted.first->second);
-                                    face_verts.push_back(iterInserted.first->second);
+                                }
+                                if (has_m) {
+                                    // cells on two sides have a common material label
+                                    // the face is not on material interface
+                                    material_of_bndry_face.erase(iter_inserted.first);
+                                    materials_of_bndry_face.erase(iter);
                                 } else {
-                                    face_verts.push_back(MI_vId_of_vert[face.vertices[k]]);
+                                    // cells on two sides have no material label in common
+                                    // the face is on material interface
+                                    is_material_interface = true;
                                 }
                             }
-                            // insert the face to MI_faces
-                            MI_fId_of_tet_face.back() = MI_faces.size();
-                            MI_fId_of_tet_face[MI_fId_start_index_of_tet[opposite_tetId] + opposite_faceId] = MI_faces.size();
-                            MI_faces.emplace_back();
-                            MI_faces.back().vert_indices = face_verts;
-                            MI_faces.back().tet_face_indices.emplace_back(i, j);
                         }
+                    }
+                    else {
+                        // face's incident cell has multiple material labels
+                        auto iter_inserted = materials_of_bndry_face.try_emplace(key3, materials);
+                        if (!iter_inserted.second) { // inserted before
+                            bool has_common_material_label = false;
+                            for (auto mi : iter_inserted.first->second) {
+                                for (auto mj : materials) {
+                                    if (mi == mj) {
+                                        has_common_material_label = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (has_common_material_label) {
+                                materials_of_bndry_face.erase(iter_inserted.first);
+                            } else {
+                                // different material labels on different sides
+                                // the face is on material interface
+                                is_material_interface = true;
+                            }
+                        }
+                        else {
+                            auto iter = material_of_bndry_face.find(key3);
+                            if (iter != material_of_bndry_face.end()) {
+                                // the cell on the other side has a unique material label
+                                m = iter->second;
+                                bool has_m = false;
+                                for (auto mId : materials) {
+                                    if (mId == m) {
+                                        has_m = true;
+                                        break;
+                                    }
+                                }
+                                if (has_m) {
+                                    // cells on two sides have a common material label
+                                    // the face is not on material interface
+                                    material_of_bndry_face.erase(iter);
+                                    materials_of_bndry_face.erase(iter_inserted.first);
+                                } else {
+                                    // cells on two sides have no material label in common
+                                    // the face is on material interface
+                                    is_material_interface = true;
+                                }
+                            }
+                        }
+                    }
+                    //
+                    auto iter_inserted = tet_face_of_bndry_face.try_emplace(key3, std::make_pair(i,j));
+                    if (is_material_interface) {
+                        // assert(!iter_inserted.second)
+                        auto opposite_tetId = iter_inserted.first->second.first;
+                        auto opposite_faceId = iter_inserted.first->second.second;
+                        face_verts.clear();
+                        for (size_t k = 0; k < face.vertices.size(); ++k) {
+                            if (bndry_face_verts[k] < 0) {
+                                // try to create new vert on tet vertex
+                                size_t key = -bndry_face_verts[k] - 1;
+                                auto iterInserted =
+                                    vert_on_tetVert.try_emplace(key, MI_verts.size());
+                                if (iterInserted.second) {
+                                    MI_verts.emplace_back();
+                                    auto& MI_vert = MI_verts.back();
+                                    MI_vert.tet_index = i;
+                                    //                                        MI_vert.tet_vert_index = j;
+                                    MI_vert.tet_vert_index = face.vertices[k];
+                                    MI_vert.simplex_size = 1;
+                                    MI_vert.simplex_vert_indices[0] = key;
+                                }
+                                //MI_vId_of_vert.push_back(iterInserted.first->second);
+                                face_verts.push_back(iterInserted.first->second);
+                            } else {
+                                face_verts.push_back(MI_vId_of_vert[face.vertices[k]]);
+                            }
+                        }
+                        // insert the face to MI_faces
+                        MI_fId_of_tet_face.back() = MI_faces.size();
+                        MI_fId_of_tet_face[MI_fId_start_index_of_tet[opposite_tetId] + opposite_faceId] = MI_faces.size();
+                        MI_faces.emplace_back();
+                        MI_faces.back().vert_indices = face_verts;
+                        MI_faces.back().tet_face_indices.emplace_back(i, j);
                     }
                 }
             }
