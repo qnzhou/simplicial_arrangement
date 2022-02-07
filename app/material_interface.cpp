@@ -69,13 +69,21 @@ int main(int argc, const char* argv[])
     std::vector<std::string> timing_labels;
     std::vector<double> timings;
 
+    // record stats
+    std::vector<std::string> stats_labels;
+    std::vector<size_t> stats;
+
     // load tet mesh
     std::vector<std::array<double, 3>> pts;
     std::vector<std::array<size_t, 4>> tets;
     load_tet_mesh(tet_mesh_file, pts, tets);
     size_t n_tets = tets.size();
     size_t n_pts = pts.size();
-    std::cout << "tet mesh: " << pts.size() << " verts, " << tets.size() << " tets." << std::endl;
+    std::cout << "tet mesh: " << n_pts << " verts, " << n_tets << " tets." << std::endl;
+    stats_labels.emplace_back("num_pts");
+    stats.push_back(n_pts);
+    stats_labels.emplace_back("num_tets");
+    stats.push_back(n_tets);
 
     // load tet mesh and function values
 //    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> funcVals;
@@ -83,9 +91,10 @@ int main(int argc, const char* argv[])
 //    size_t n_tets = tets.size();
 //    size_t n_pts = pts.size();
 //    std::cout << "tet mesh: " << pts.size() << " verts, " << tets.size() << " tets." << std::endl;
-//    std::cout << "pts[100] = (" << pts[100][0] << "," << pts[100][1] << "," << pts[100][2] << ")" << std::endl;
-//    std::cout << "tets[100] = (" << tets[100][0] << "," << tets[100][1] << "," << tets[100][2] << "," <<
-//        tets[100][3] << ")" << std::endl;
+//    stats_labels.emplace_back("num_pts");
+//    stats.push_back(n_pts);
+//    stats_labels.emplace_back("num_tets");
+//    stats.push_back(n_tets);
 
     // robustness test
     if (args.robust_test) {
@@ -505,6 +514,9 @@ int main(int argc, const char* argv[])
         timings.push_back(timer.toc());
     }
     std::cout << "num_intersecting_tet = " << num_intersecting_tet << std::endl;
+    stats_labels.emplace_back("num_intersecting_tet");
+    stats.push_back(num_intersecting_tet);
+
 
 
     // compute material interface in each tet
@@ -712,6 +724,13 @@ int main(int argc, const char* argv[])
     std::cout << " -- [MI(2 func)]: " << time_2_func.count() << " s" << std::endl;
     std::cout << " -- [MI(3 func)]: " << time_3_func.count() << " s" << std::endl;
     std::cout << " -- [MI(>=4 func)]: " << time_more_func.count() << " s" << std::endl;
+    //
+    stats_labels.emplace_back("num_2_func");
+    stats.push_back(num_2_func);
+    stats_labels.emplace_back("num_3_func");
+    stats.push_back(num_3_func);
+    stats_labels.emplace_back("num_more_func");
+    stats.push_back(num_more_func);
 
     if (args.robust_test) {
         std::cout << "total: " << num_intersecting_tet << std::endl;
@@ -744,7 +763,7 @@ int main(int argc, const char* argv[])
                 tets,
                 MI_verts,
                 MI_faces);
-        } else { // nesting algorithm: group simplicial cells into  material cells
+        } else { // nesting algorithm: group simplicial cells into material cells
             extract_MI_mesh(num_2_func,
                 num_3_func,
                 num_more_func,
@@ -764,6 +783,10 @@ int main(int argc, const char* argv[])
     }
     std::cout << "num MI-vertices = " << MI_verts.size() << std::endl;
     std::cout << "num MI-faces = " << MI_faces.size() << std::endl;
+    stats_labels.emplace_back("num_MI_verts");
+    stats.push_back(MI_verts.size());
+    stats_labels.emplace_back("num_MI_faces");
+    stats.push_back(MI_faces.size());
 
     // compute xyz of MI-vertices
     std::vector<std::array<double, 3>> MI_pts;
@@ -783,7 +806,9 @@ int main(int argc, const char* argv[])
         compute_mesh_edges(MI_faces, edges_of_MI_face, MI_edges);
         timings.push_back(timer.toc());
     }
-    // std::cout << "num iso-edges = " << iso_edges.size() << std::endl;
+    std::cout << "num MI-edges = " << MI_edges.size() << std::endl;
+    stats_labels.emplace_back("num_MI_edges");
+    stats.push_back(MI_edges.size());
 
     // group iso-faces into patches
     std::vector<std::vector<size_t>> patches;
@@ -794,6 +819,8 @@ int main(int argc, const char* argv[])
         timings.push_back(timer.toc());
     }
     std::cout << "num patches = " << patches.size() << std::endl;
+    stats_labels.emplace_back("num_patches");
+    stats.push_back(patches.size());
 
     // compute map: MI-face Id --> patch Id
     std::vector<size_t> patch_of_face;
@@ -833,6 +860,8 @@ int main(int argc, const char* argv[])
         timings.push_back(timer.toc());
     }
     std::cout << "num chains = " << chains.size() << std::endl;
+    stats_labels.emplace_back("num_chains");
+    stats.push_back(chains.size());
 
     // vert-tet connectivity
     absl::flat_hash_map<size_t, std::vector<size_t>> incident_tets;
@@ -907,8 +936,12 @@ int main(int argc, const char* argv[])
             component_of_patch);
         timings.push_back(timer.toc());
     }
-        std::cout << "num shells = " << shells.size() << std::endl;
-        std::cout << "num components = " << components.size() << std::endl;
+    std::cout << "num shells = " << shells.size() << std::endl;
+    std::cout << "num components = " << components.size() << std::endl;
+    stats_labels.emplace_back("num_shells");
+    stats.push_back(shells.size());
+    stats_labels.emplace_back("num_components");
+    stats.push_back(components.size());
 //
     // resolve nesting order, compute material cells
     // a material cell is represented by a list of bounding shells
@@ -1383,6 +1416,9 @@ int main(int argc, const char* argv[])
         timing_labels.emplace_back("material cells");
     }
     std::cout << "num_cells = " << material_cells.size() << std::endl;
+    stats_labels.emplace_back("num_cells");
+    stats.push_back(material_cells.size());
+
     if (components.size() > 1) {
         timing_labels.emplace_back("matCells(other)");
         size_t num_timings = timings.size();
@@ -1399,7 +1435,7 @@ int main(int argc, const char* argv[])
 
 
     // test: export mesh, patches, chains
-    if (!args.timing_only) {
+    if (!args.timing_only && material_cells.size() > 0) {
         save_result_MI(output_dir + "/MI_mesh.json",
             MI_pts,
             MI_faces,
@@ -1431,6 +1467,9 @@ int main(int argc, const char* argv[])
     }
     // test: export timings
     save_timings(output_dir + "/timings.json", timing_labels, timings);
+    // export statistics
+    save_statistics(output_dir + "/stats.json", stats_labels, stats);
+
 
     return 0;
 }
