@@ -75,13 +75,21 @@ int main(int argc, const char* argv[])
     std::vector<std::string> timing_labels;
     std::vector<double> timings;
 
+    // record stats
+    std::vector<std::string> stats_labels;
+    std::vector<size_t> stats;
+
     // load tet mesh
     std::vector<std::array<double, 3>> pts;
     std::vector<std::array<size_t, 4>> tets;
     load_tet_mesh(tet_mesh_file, pts, tets);
     size_t n_tets = tets.size();
     size_t n_pts = pts.size();
-    std::cout << "tet mesh: " << pts.size() << " verts, " << tets.size() << " tets." << std::endl;
+    std::cout << "tet mesh: " << n_pts << " verts, " << n_tets << " tets." << std::endl;
+    stats_labels.emplace_back("num_pts");
+    stats.push_back(n_pts);
+    stats_labels.emplace_back("num_tets");
+    stats.push_back(n_tets);
 
 
     // load implicit function values, or evaluate
@@ -104,7 +112,8 @@ int main(int argc, const char* argv[])
 //        timings.push_back(timer.toc());
 //    }
 
-    if (args.robust_test) {
+//    if (args.robust_test) {
+    if (false) {
         // load robustness test spheres
         std::vector<Sphere> spheres;
         load_spheres(func_file, spheres);
@@ -389,6 +398,8 @@ int main(int argc, const char* argv[])
         timings.push_back(timer.toc());
     }
     std::cout << "num_degenerate_vertex = " << num_degenerate_vertex << std::endl;
+    stats_labels.emplace_back("num_degenerate_vertex");
+    stats.push_back(num_degenerate_vertex);
 
     // filter
     size_t num_intersecting_tet = 0;
@@ -426,6 +437,8 @@ int main(int argc, const char* argv[])
         timings.push_back(timer.toc());
     }
     std::cout << "num_intersecting_tet = " << num_intersecting_tet << std::endl;
+    stats_labels.emplace_back("num_intersecting_tet");
+    stats.push_back(num_intersecting_tet);
 
 
     // compute arrangement in each tet (iterative plane cut)
@@ -439,17 +452,15 @@ int main(int argc, const char* argv[])
     size_t num_2_func = 0;
     size_t num_more_func = 0;
     //
-    size_t type2_count = 0;
-    size_t type1_count = 0;
+    bool is_type2 = false;
+    bool is_type3 = false;
+    bool is_type1 = false;
     //
     {
         timing_labels.emplace_back("simp_arr(other)");
         ScopedTimer<> timer("simp_arr");
         if (args.robust_test) {
-            cut_results.reserve(num_intersecting_tet);
-            cut_result_index.reserve(n_tets);
-            std::vector<Arrangement<3>> cut_results2; // cut_results when reverse function order
-            cut_results2.reserve(num_intersecting_tet);
+            Arrangement<3> cut_result, cut_result2;
             size_t start_index;
             size_t num_func;
             std::vector<Plane<double, 3>> planes;
@@ -460,7 +471,6 @@ int main(int argc, const char* argv[])
                 start_index = start_index_of_tet[i];
                 num_func = start_index_of_tet[i + 1] - start_index;
                 if (num_func == 0) {
-                    cut_result_index.push_back(Arrangement<3>::None);
                     continue;
                 }
                 std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
@@ -490,53 +500,50 @@ int main(int argc, const char* argv[])
                     cut_result_index.push_back(cut_results.size());
                     disable_lookup_table();
                     try {
-                        cut_results.emplace_back(std::move(compute_arrangement(planes)));
+                        cut_result = compute_arrangement(planes);
                     } catch (std::runtime_error& e) {
                         crashed = true;
-                        type2_count++;
+                        is_type2 = true;
+                        break;
                     }
                     if (!crashed) {
                         try {
-                            cut_results2.emplace_back(std::move(compute_arrangement(planes_reverse)));
+                            cut_result2 = compute_arrangement(planes_reverse);
                         } catch (std::runtime_error& e) {
                             crashed = true;
-                            type2_count++;
+                            is_type3 = true;
                         }
                         if (!crashed) {
-                            const auto& last_cut_result = cut_results.back();
-                            const auto& last_cut_result2 = cut_results2.back();
-                            if (last_cut_result.vertices.size() != last_cut_result2.vertices.size() ||
-                                last_cut_result.faces.size() != last_cut_result2.faces.size() ||
-                                last_cut_result.cells.size() != last_cut_result2.cells.size()) {
+                            if (cut_result.vertices.size() != cut_result2.vertices.size() ||
+                                cut_result.faces.size() != cut_result2.faces.size() ||
+                                cut_result.cells.size() != cut_result2.cells.size()) {
                                 // inconsistent results
-                                type1_count++;
+                                is_type1 = true;
                             }
                         }
                     }
                     enable_lookup_table();
                 } else {
-                    cut_result_index.push_back(cut_results.size());
                     try {
-                        cut_results.emplace_back(std::move(compute_arrangement(planes)));
+                        cut_result = compute_arrangement(planes);
                     } catch (std::runtime_error& e) {
                         crashed = true;
-                        type2_count++;
+                        is_type2 = true;
+                        break;
                     }
                     if (!crashed) {
                         try {
-                            cut_results2.emplace_back(std::move(compute_arrangement(planes_reverse)));
+                            cut_result2 = compute_arrangement(planes_reverse);
                         } catch (std::runtime_error& e) {
                             crashed = true;
-                            type2_count++;
+                            is_type3 = true;
                         }
                         if (!crashed) {
-                            const auto& last_cut_result = cut_results.back();
-                            const auto& last_cut_result2 = cut_results2.back();
-                            if (last_cut_result.vertices.size() != last_cut_result2.vertices.size() ||
-                                last_cut_result.faces.size() != last_cut_result2.faces.size() ||
-                                last_cut_result.cells.size() != last_cut_result2.cells.size()) {
+                            if (cut_result.vertices.size() != cut_result2.vertices.size() ||
+                                cut_result.faces.size() != cut_result2.faces.size() ||
+                                cut_result.cells.size() != cut_result2.cells.size()) {
                                 // inconsistent results
-                                type1_count++;
+                                is_type1 = true;
                             }
                         }
                     }
@@ -633,13 +640,27 @@ int main(int argc, const char* argv[])
     std::cout << " -- [simp_arr(1 func)]: " << time_1_func.count() << " s" << std::endl;
     std::cout << " -- [simp_arr(2 func)]: " << time_2_func.count() << " s" << std::endl;
     std::cout << " -- [simp_arr(>=3 func)]: " << time_more_func.count() << " s" << std::endl;
+    //
+    stats_labels.emplace_back("num_1_func");
+    stats.push_back(num_1_func);
+    stats_labels.emplace_back("num_2_func");
+    stats.push_back(num_2_func);
+    stats_labels.emplace_back("num_more_func");
+    stats.push_back(num_more_func);
 
     if (args.robust_test) {
-        std::cout << "total: " << num_intersecting_tet << std::endl;
-        std::cout << "type 1: " << type1_count << std::endl;
-        std::cout << "type 2: " << type2_count << std::endl;
+        if (is_type2) {
+            std::cout << "type 2 failure." << std::endl;
+        } else if (is_type3) {
+            std::cout << "type 3 failure." << std::endl;
+        } else if (is_type1) {
+            std::cout << "type 1 failure." << std::endl;
+        } else {
+            std::cout << "success." << std::endl;
+        }
         return 0;
     }
+
 
     // extract arrangement mesh
     std::vector<IsoVert> iso_verts;
@@ -685,6 +706,10 @@ int main(int argc, const char* argv[])
     }
     std::cout << "num iso-vertices = " << iso_verts.size() << std::endl;
     std::cout << "num iso-faces = " << iso_faces.size() << std::endl;
+    stats_labels.emplace_back("num_iso_verts");
+    stats.push_back(iso_verts.size());
+    stats_labels.emplace_back("num_iso_faces");
+    stats.push_back(iso_faces.size());
 
     // compute xyz of iso-vertices
     std::vector<std::array<double, 3>> iso_pts;
@@ -712,6 +737,8 @@ int main(int argc, const char* argv[])
         timings.push_back(timer.toc());
     }
     std::cout << "num iso-edges = " << iso_edges.size() << std::endl;
+    stats_labels.emplace_back("num_iso_edges");
+    stats.push_back(iso_edges.size());
 
 
     // group iso-faces into patches
@@ -723,6 +750,8 @@ int main(int argc, const char* argv[])
         timings.push_back(timer.toc());
     }
     std::cout << "num patches = " << patches.size() << std::endl;
+    stats_labels.emplace_back("num_patches");
+    stats.push_back(patches.size());
 
     // compute map: iso-face Id --> patch Id
     std::vector<size_t> patch_of_face;
@@ -761,6 +790,8 @@ int main(int argc, const char* argv[])
         timings.push_back(timer.toc());
     }
     std::cout << "num chains = " << chains.size() << std::endl;
+    stats_labels.emplace_back("num_chains");
+    stats.push_back(chains.size());
 
 
     absl::flat_hash_map<size_t, std::vector<size_t>> incident_tets;
@@ -837,6 +868,10 @@ int main(int argc, const char* argv[])
     }
     std::cout << "num shells = " << shells.size() << std::endl;
     std::cout << "num components = " << components.size() << std::endl;
+    stats_labels.emplace_back("num_shells");
+    stats.push_back(shells.size());
+    stats_labels.emplace_back("num_components");
+    stats.push_back(components.size());
 
     // resolve nesting order, compute arrangement cells
     // an arrangement cell is represented by a list of bounding shells
@@ -1316,6 +1351,8 @@ int main(int argc, const char* argv[])
         timing_labels.emplace_back("arrangement cells");
     }
     std::cout << "num_cells = " << arrangement_cells.size() << std::endl;
+    stats_labels.emplace_back("num_cells");
+    stats.push_back(arrangement_cells.size());
 
     if (components.size() > 1) {
         timing_labels.emplace_back("arrCells(other)");
@@ -1363,6 +1400,9 @@ int main(int argc, const char* argv[])
     }
     // test: export timings
     save_timings(output_dir + "/timings.json", timing_labels, timings);
+    // export statistics
+    save_statistics(output_dir + "/stats.json", stats_labels, stats);
+
 
     return 0;
 }

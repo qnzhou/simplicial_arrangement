@@ -40,7 +40,7 @@ int main(int argc, const char* argv[]) {
         for (size_t i = 0; i < n_func; i++) {
             funcVals[i].resize(pts.size());
             for (size_t j = 0; j < pts.size(); j++) {
-                funcVals[i][j] = sphere_function(centers[i], radius, pts[j]);
+                funcVals[i][j] = compute_sphere_distance(centers[i], radius, pts[j]);
             }
         }
     }
