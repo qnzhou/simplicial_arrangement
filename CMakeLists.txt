@@ -14,7 +14,7 @@ include(cli11)
 include(mshio)
 
 
-option(LIBIGL_COPYLEFT_WITH_CGAL "Build CGAL support in libigl" On)
+option(LIBIGL_COPYLEFT_CGAL "Build CGAL support in libigl" On)
 include(libigl)
 
 add_library(arrangement STATIC
