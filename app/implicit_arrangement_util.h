@@ -5,6 +5,8 @@
 #include <string>
 
 #include <Eigen/Core>
+#include <absl/container/flat_hash_map.h>
+
 
 using namespace simplicial_arrangement;
 
@@ -241,7 +243,8 @@ bool save_result(const std::string& filename,
     const std::vector<Edge>& edges,
     const std::vector<std::vector<size_t>>& chains,
     const std::vector<std::vector<size_t>>& non_manifold_edges_of_vert,
-    const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
+//    const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
+    const std::vector<std::vector<std::pair<std::pair<size_t, int>,std::pair<size_t, int>>>>& half_patch_pair_list,
     const std::vector<std::vector<size_t>>& shells,
     const std::vector<std::vector<size_t>>& components,
     const std::vector<std::vector<size_t>>& arrangement_cells);
@@ -514,11 +517,26 @@ void compute_chains(const std::vector<Edge>& mesh_edges,
 
 
 // compute neighboring pair of half-faces around an iso-edge in a tetrahedron
+void compute_face_order(const Edge& iso_edge, const std::vector<PolygonFace>& iso_faces,
+    const std::vector<Arrangement<3>>& cut_results,
+    const std::vector<size_t>& cut_result_index,
+    const absl::flat_hash_map<size_t, std::vector<size_t>>& incident_tets,
+//    std::vector<std::pair<size_t, int>>& ordered_faces);
+    std::vector<std::pair<std::pair<size_t, int>, std::pair<size_t, int>>>& ordered_face_pairs);
+
+// compute neighboring pair of half-faces around an iso-edge in a tetrahedron
 // pair<size_t, int> : pair (iso-face index, iso-face orientation)
 void compute_face_order_in_one_tet(const Arrangement<3>& tet_cut_result,
     const std::vector<PolygonFace>& iso_faces,
     const Edge& iso_edge,
     std::vector<std::pair<size_t, int>>& ordered_faces);
+
+// compute neighboring pair of half-faces around an iso-edge in a tetrahedron
+// pair<size_t, int> : pair (iso-face index, iso-face orientation)
+void compute_face_order_in_one_tet(const Arrangement<3>& tet_cut_result,
+    const std::vector<PolygonFace>& iso_faces,
+    const Edge& iso_edge,
+    std::vector<std::pair<std::pair<size_t, int>, std::pair<size_t, int>>>& ordered_face_pairs);
 
 // compute neighboring pair of half-faces around an edge in a tetrahedron
 // pair<size_t, int> : pair (MI-face index, MI-face orientation)
@@ -586,6 +604,18 @@ void compute_shells_and_components(size_t num_patch,
     std::vector<size_t>& component_of_patch
 );
 
+
+// compute shells and connected components of isosurfaces
+// each shell is a list of half-patches
+// each component is a list of patches
+// we also build maps: half-patch --> shell,  patch --> component
+void compute_shells_and_components(size_t num_patch,
+    const std::vector<std::vector<std::pair<std::pair<size_t, int>,std::pair<size_t, int>>>>& half_patch_pair_list,
+    std::vector<std::vector<size_t>>& shells,
+    std::vector<size_t>& shell_of_half_patch,
+    std::vector<std::vector<size_t>>& components,
+    std::vector<size_t>& component_of_patch
+);
 
 
 

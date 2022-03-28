@@ -114,7 +114,8 @@ bool save_result(const std::string& filename,
     const std::vector<Edge>& edges,
     const std::vector<std::vector<size_t>>& chains,
     const std::vector<std::vector<size_t>>& non_manifold_edges_of_vert,
-    const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
+//    const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
+    const std::vector<std::vector<std::pair<std::pair<size_t, int>,std::pair<size_t, int>>>>& half_patch_pair_list,
     const std::vector<std::vector<size_t>>& shells,
     const std::vector<std::vector<size_t>>& components,
     const std::vector<std::vector<size_t>>& arrangement_cells)
@@ -154,13 +155,22 @@ bool save_result(const std::string& filename,
         }
     }
     //
-    json jHalfPatchsList;
-    for (const auto& i : half_patch_list) {
-        json jHalfPatchs;
+//    json jHalfPatchsList;
+//    for (const auto& i : half_patch_list) {
+//        json jHalfPatchs;
+//        for (const auto& j : i) {
+//            jHalfPatchs.push_back(json(j));
+//        }
+//        jHalfPatchsList.push_back(jHalfPatchs);
+//    }
+    //
+    json jHalfPatchPairList;
+    for (const auto& i : half_patch_pair_list) {
+        json jHalfPatchPairs;
         for (const auto& j : i) {
-            jHalfPatchs.push_back(json(j));
+            jHalfPatchPairs.push_back(json(j));
         }
-        jHalfPatchsList.push_back(jHalfPatchs);
+        jHalfPatchPairList.push_back(jHalfPatchPairs);
     }
     //
     json jShells;
@@ -185,7 +195,8 @@ bool save_result(const std::string& filename,
     jOut.push_back(jEdges);
     jOut.push_back(jChains);
     jOut.push_back(jCorners);
-    jOut.push_back(jHalfPatchsList);
+//    jOut.push_back(jHalfPatchsList);
+    jOut.push_back(jHalfPatchPairList);
     jOut.push_back(jShells);
     jOut.push_back(jComponents);
     jOut.push_back(jArrCells);
@@ -1409,6 +1420,47 @@ void compute_chains(const std::vector<Edge>& mesh_edges,
     }
 }
 
+class Degenerate_Iso_Edge_Exception : public std::exception
+{
+    virtual const char* what() const throw()
+    {
+        return "More than one tets containing the iso-faces incident to the iso-edge.";
+    }
+} degenerate_iso_edge_exception;
+
+// compute neighboring pair of half-faces around an iso-edge
+// output:
+// pair<size_t, int> : pair (iso-face index, iso-face orientation)
+void compute_face_order(const Edge& iso_edge, const std::vector<PolygonFace>& iso_faces,
+                   const std::vector<Arrangement<3>>& cut_results,
+                   const std::vector<size_t>& cut_result_index,
+    const absl::flat_hash_map<size_t, std::vector<size_t>>& incident_tets,
+//    std::vector<std::pair<size_t, int>>& ordered_faces)
+    std::vector<std::pair<std::pair<size_t, int>, std::pair<size_t, int>>>& ordered_face_pairs)
+{
+    // collect all iso-faces incident to the iso-edge
+    const auto& face_edge_indices = iso_edge.face_edge_indices;
+    // collect all tets containing the incident iso-faces
+    std::set<size_t> containing_tets;
+    for (const auto& face_edge : face_edge_indices) {
+        const auto& tets = iso_faces[face_edge.first].tet_face_indices;
+        for (const auto& t : tets) {
+            containing_tets.insert(t.first);
+        }
+    }
+    // pair faces
+    if (containing_tets.size() == 1) {
+        auto tet_id = *containing_tets.begin();
+        compute_face_order_in_one_tet(
+            cut_results[cut_result_index[tet_id]], iso_faces, iso_edge,
+//            ordered_faces);
+            ordered_face_pairs);
+    } else {
+        std::cout << containing_tets.size() << " containing tets." << std::endl;
+        throw degenerate_iso_edge_exception;
+    }
+}
+
 // compute neighboring pair of half-faces around an iso-edge in a tetrahedron
 // pair<size_t, int> : pair (iso-face index, iso-face orientation)
 void compute_face_order_in_one_tet(const Arrangement<3>& tet_cut_result,
@@ -1461,6 +1513,114 @@ void compute_face_order_in_one_tet(const Arrangement<3>& tet_cut_result,
     }
 }
 
+void compute_face_order_in_one_tet(const Arrangement<3>& tet_cut_result,
+    const std::vector<PolygonFace>& iso_faces,
+    const Edge& iso_edge,
+    std::vector<std::pair<std::pair<size_t, int>, std::pair<size_t, int>>>& ordered_face_pairs)
+{
+    // in a single tetrahedron, num face pairs == num iso-faces incident to the iso-edge
+    size_t num_incident_faces = iso_edge.face_edge_indices.size();
+    //
+    std::vector<bool> is_incident_faces(tet_cut_result.faces.size(), false);
+    // map: tet face id --> iso face id
+    std::vector<size_t> iso_face_Id_of_face(tet_cut_result.faces.size(), Arrangement<3>::None);
+    for (const auto& fId_eId_pair : iso_edge.face_edge_indices) {
+        size_t iso_face_id = fId_eId_pair.first;
+        size_t face_id = iso_faces[iso_face_id].tet_face_indices[0].second;
+        is_incident_faces[face_id] = true;
+        iso_face_Id_of_face[face_id] = iso_face_id;
+    }
+
+    // travel around the edge
+    std::vector<bool> visited_cell(tet_cut_result.cells.size(), false);
+    //
+    size_t iso_face_id1 = iso_edge.face_edge_indices[0].first;
+    size_t face_id1 = iso_faces[iso_face_id1].tet_face_indices[0].second;
+    int face_sign_1 = 1;
+    size_t cell_id = tet_cut_result.faces[face_id1].positive_cell;
+    size_t iso_face_id2 = Arrangement<3>::None;
+    size_t face_id2 = Arrangement<3>::None;
+    int face_sign_2 = 0;
+    while(cell_id != Arrangement<3>::None && !visited_cell[cell_id]) {
+        //ordered_faces[i] = std::make_pair(iso_face_id1, face_sign);
+        visited_cell[cell_id] = true;
+        // find next face
+        for (const auto& fId : tet_cut_result.cells[cell_id].faces) {
+            if (is_incident_faces[fId] && fId != face_id1) {
+                face_id2 = fId;
+            }
+        }
+        if (face_id2 == Arrangement<3>::None) {
+            // next face is not found
+            break;
+        } else {
+            // get sign of face2 and find next cell
+            if (tet_cut_result.faces[face_id2].positive_cell == cell_id) {
+                cell_id = tet_cut_result.faces[face_id2].negative_cell;
+                face_sign_2 = 1;
+            } else {
+                cell_id = tet_cut_result.faces[face_id2].positive_cell;
+                face_sign_2 = -1;
+            }
+            // add (face1, face2) to the list of face pairs
+            iso_face_id2 = iso_face_Id_of_face[face_id2];
+            ordered_face_pairs.push_back(std::make_pair(std::make_pair(iso_face_id1,face_sign_1),
+                std::make_pair(iso_face_id2, face_sign_2)));
+            // update face1 and clear face2
+            face_id1 = face_id2;
+            iso_face_id1 = iso_face_id2;
+            face_sign_1 = -face_sign_2;
+            face_id2 = Arrangement<3>::None;
+            iso_face_id2 = Arrangement<3>::None;
+            face_sign_2 = 0;
+        }
+    }
+    // visit in a different direction
+    iso_face_id1 = iso_edge.face_edge_indices[0].first;
+    face_id1 = iso_faces[iso_face_id1].tet_face_indices[0].second;
+    face_sign_1 = -1;
+    cell_id = tet_cut_result.faces[face_id1].negative_cell;
+    iso_face_id2 = Arrangement<3>::None;
+    face_id2 = Arrangement<3>::None;
+    face_sign_2 = 0;
+    while(cell_id != Arrangement<3>::None && !visited_cell[cell_id]) {
+        //ordered_faces[i] = std::make_pair(iso_face_id1, face_sign);
+        visited_cell[cell_id] = true;
+        // find next face
+        for (const auto& fId : tet_cut_result.cells[cell_id].faces) {
+            if (is_incident_faces[fId] && fId != face_id1) {
+                face_id2 = fId;
+            }
+        }
+        if (face_id2 == Arrangement<3>::None) {
+            // next face is not found
+            break;
+        } else {
+            // get sign of face2 and find next cell
+            if (tet_cut_result.faces[face_id2].positive_cell == cell_id) {
+                cell_id = tet_cut_result.faces[face_id2].negative_cell;
+                face_sign_2 = 1;
+            } else {
+                cell_id = tet_cut_result.faces[face_id2].positive_cell;
+                face_sign_2 = -1;
+            }
+            // add (face1, face2) to the list of face pairs
+            iso_face_id2 = iso_face_Id_of_face[face_id2];
+            ordered_face_pairs.push_back(std::make_pair(std::make_pair(iso_face_id1,face_sign_1),
+                std::make_pair(iso_face_id2, face_sign_2)));
+            // update face1 and clear face2
+            face_id1 = face_id2;
+            iso_face_id1 = iso_face_id2;
+            face_sign_1 = -face_sign_2;
+            face_id2 = Arrangement<3>::None;
+            iso_face_id2 = Arrangement<3>::None;
+            face_sign_2 = 0;
+        }
+    }
+
+}
+
+
 void compute_shells_and_components(size_t num_patch,
     const std::vector<std::vector<std::pair<size_t, int>>>& half_patch_list,
     std::vector<std::vector<size_t>>& shells,
@@ -1489,6 +1649,110 @@ void compute_shells_and_components(size_t num_patch,
         size_t hp_Id2 = (hp2.second == 1) ? (2 * hp2.first + 1) : 2 * hp2.first;
         half_patch_adj_list[hp_Id1].push_back(hp_Id2);
         half_patch_adj_list[hp_Id2].push_back(hp_Id1);
+    }
+    // find connected component of half-patch adjacency graph
+    // each component is a shell
+    std::vector<bool> visited_half_patch(2 * num_patch, false);
+    shells.clear();
+    shell_of_half_patch.resize(2 * num_patch);
+    for (size_t i = 0; i < 2 * num_patch; i++) {
+        if (!visited_half_patch[i]) {
+            // create new component
+            size_t shell_Id = shells.size();
+            shells.emplace_back();
+            auto& shell = shells.back();
+            std::queue<size_t> Q;
+            Q.push(i);
+            shell.push_back(i);
+            shell_of_half_patch[i] = shell_Id;
+            visited_half_patch[i] = true;
+            while (!Q.empty()) {
+                auto half_patch = Q.front();
+                Q.pop();
+                for (auto hp : half_patch_adj_list[half_patch]) {
+                    if (!visited_half_patch[hp]) {
+                        shell.push_back(hp);
+                        shell_of_half_patch[hp] = shell_Id;
+                        Q.push(hp);
+                        visited_half_patch[hp] = true;
+                    }
+                }
+            }
+        }
+    }
+    // find connected component of patch-adjacency graph
+    // each component is an iso-surface component
+    std::vector<bool> visited_patch(num_patch, false);
+    components.clear();
+    component_of_patch.resize(num_patch);
+    for (size_t i = 0; i < num_patch; i++) {
+        if (!visited_patch[i]) {
+            // create new component
+            size_t component_Id = components.size();
+            components.emplace_back();
+            auto& component = components.back();
+            std::queue<size_t> Q;
+            Q.push(i);
+            component.push_back(i);
+            component_of_patch[i] = component_Id;
+            visited_patch[i] = true;
+            while (!Q.empty()) {
+                auto patch = Q.front();
+                Q.pop();
+                // 1-side of patch
+                for (auto hp : half_patch_adj_list[2 * patch]) {
+                    if (!visited_patch[hp / 2]) {
+                        auto p = hp / 2;
+                        component.push_back(p);
+                        component_of_patch[p] = component_Id;
+                        Q.push(p);
+                        visited_patch[p] = true;
+                    }
+                }
+                // -1-side of patch
+                for (auto hp : half_patch_adj_list[2 * patch + 1]) {
+                    if (!visited_patch[hp / 2]) {
+                        auto p = hp / 2;
+                        component.push_back(p);
+                        component_of_patch[p] = component_Id;
+                        Q.push(p);
+                        visited_patch[p] = true;
+                    }
+                }
+            }
+        }
+    }
+    // get shells as list of patch indices
+    //    for (auto& shell : shells) {
+    //        for (auto& pId : shell) {
+    //            pId /= 2; // get patch index of half-patch
+    //        }
+    //    }
+}
+
+
+void compute_shells_and_components(size_t num_patch,
+    const std::vector<std::vector<std::pair<std::pair<size_t, int>, std::pair<size_t, int>>>>&
+        half_patch_pair_list,
+    std::vector<std::vector<size_t>>& shells,
+    std::vector<size_t>& shell_of_half_patch,
+    std::vector<std::vector<size_t>>& components,
+    std::vector<size_t>& component_of_patch)
+{
+    // (patch i, 1) <--> 2i,  (patch i, -1) <--> 2i+1
+    // compute half-patch adjacency list
+    std::vector<std::vector<size_t>> half_patch_adj_list(2 * num_patch);
+    for (const auto& half_patch_pairs : half_patch_pair_list) {
+        for (size_t i = 0; i < half_patch_pairs.size(); i++) {
+            const auto& hp1 = half_patch_pairs[i].first;
+            const auto& hp2 = half_patch_pairs[i].second;
+            // half-patch index of hp1
+            size_t hp_Id1 = (hp1.second == 1) ? 2 * hp1.first : (2 * hp1.first + 1);
+            // half-patch index of hp2
+            size_t hp_Id2 = (hp2.second == 1) ? 2 * hp2.first : (2 * hp2.first + 1);
+            half_patch_adj_list[hp_Id1].push_back(hp_Id2);
+            half_patch_adj_list[hp_Id2].push_back(hp_Id1);
+        }
     }
     // find connected component of half-patch adjacency graph
     // each component is a shell
@@ -5563,3 +5827,4 @@ bool save_statistics(const std::string& filename,
     fout.close();
     return true;
 }
+
