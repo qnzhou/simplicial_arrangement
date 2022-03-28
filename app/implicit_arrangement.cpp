@@ -816,13 +816,17 @@ int main(int argc, const char* argv[])
 
     // compute order of patches around chains
     // pair<size_t, int> : pair (iso-face index, iso-face orientation)
-    std::vector<std::vector<std::pair<size_t, int>>> half_faces_list;
-    std::vector<std::vector<std::pair<size_t, int>>> half_patch_list;
+//    std::vector<std::vector<std::pair<size_t, int>>> half_faces_list;
+//    std::vector<std::vector<std::pair<size_t, int>>> half_patch_list;
+    std::vector<std::vector<std::pair<std::pair<size_t,int>,std::pair<size_t,int>>>> half_face_pair_list;
+    std::vector<std::vector<std::pair<std::pair<size_t,int>,std::pair<size_t,int>>>> half_patch_pair_list;
     {
         timing_labels.emplace_back("order patches around chains");
         ScopedTimer<> timer("order patches around chains");
-        half_faces_list.resize(chains.size());
-        half_patch_list.resize(half_faces_list.size());
+//        half_faces_list.resize(chains.size());
+//        half_patch_list.resize(chains.size());
+        half_face_pair_list.resize(chains.size());
+        half_patch_pair_list.resize(chains.size());
         // pick representative iso-edge from each chain
         std::vector<size_t> chain_representatives(chains.size());
         for (size_t i = 0; i < chains.size(); i++) {
@@ -832,17 +836,41 @@ int main(int argc, const char* argv[])
         for (size_t i = 0; i < chain_representatives.size(); i++) {
             // first try: assume each representative edge is in the interior of a tetrahedron
             const auto& iso_edge = iso_edges[chain_representatives[i]];
-            auto iso_face_id = iso_edge.face_edge_indices[0].first;
-            auto tet_id = iso_faces[iso_face_id].tet_face_indices[0].first;
-            compute_face_order_in_one_tet(
-                cut_results[cut_result_index[tet_id]], iso_faces, iso_edge, half_faces_list[i]);
+//            auto iso_face_id = iso_edge.face_edge_indices[0].first;
+//            auto tet_id = iso_faces[iso_face_id].tet_face_indices[0].first;
+//            compute_face_order_in_one_tet(
+//                cut_results[cut_result_index[tet_id]], iso_faces, iso_edge, half_faces_list[i]);
+            // with degeneracy handling
+            try {
+                compute_face_order(iso_edge,
+                    iso_faces,
+                    cut_results,
+                    cut_result_index,
+                    incident_tets,
+                    half_face_pair_list[i]);
+//                    half_faces_list[i]);
+            } catch (std::exception& e) {
+                std::cout << "order patches failed: " << e.what() << std::endl;
+                return -1;
+            }
         }
         // replace iso-face indices by patch indices
-        for (size_t i = 0; i < half_faces_list.size(); i++) {
-            half_patch_list[i].resize(half_faces_list[i].size());
-            for (size_t j = 0; j < half_faces_list[i].size(); j++) {
-                half_patch_list[i][j] = std::make_pair(
-                    patch_of_face[half_faces_list[i][j].first], half_faces_list[i][j].second);
+//        for (size_t i = 0; i < half_faces_list.size(); i++) {
+//            half_patch_list[i].resize(half_faces_list[i].size());
+//            for (size_t j = 0; j < half_faces_list[i].size(); j++) {
+//                half_patch_list[i][j] = std::make_pair(
+//                    patch_of_face[half_faces_list[i][j].first], half_faces_list[i][j].second);
+//            }
+//        }
+        for (size_t i = 0; i < half_face_pair_list.size(); i++) {
+            half_patch_pair_list[i].resize(half_face_pair_list[i].size());
+            for (size_t j = 0; j < half_face_pair_list[i].size(); j++) {
+                half_patch_pair_list[i][j] = std::make_pair(
+                    std::make_pair(patch_of_face[half_face_pair_list[i][j].first.first],
+                        half_face_pair_list[i][j].first.second),
+                    std::make_pair(patch_of_face[half_face_pair_list[i][j].second.first],
+                        half_face_pair_list[i][j].second.second)
+                    );
             }
         }
         timings.push_back(timer.toc());
@@ -859,7 +887,8 @@ int main(int argc, const char* argv[])
         timing_labels.emplace_back("shells and components");
         ScopedTimer<> timer("shells and components");
         compute_shells_and_components(patches.size(),
-            half_patch_list,
+//            half_patch_list,
+            half_patch_pair_list,
             shells,
             shell_of_half_patch,
             components,
@@ -1377,10 +1406,14 @@ int main(int argc, const char* argv[])
             iso_edges,
             chains,
             non_manifold_edges_of_vert,
-            half_patch_list,
+//            half_patch_list,
+            half_patch_pair_list,
             shells,
             components,
             arrangement_cells);
+        //
+        std::vector<std::vector<std::pair<size_t, int>>> half_patch_list;
+        // todo: remove half_patch_list from arguments of save_result_msh()
         save_result_msh(output_dir + "/iso_mesh",
             iso_pts,
             iso_faces,
