@@ -22,7 +22,7 @@ TEST_CASE("Lookup table", "[lookup]")
 TEST_CASE("Material Interface lookup", "[mi][lookup]")
 {
     using namespace simplicial_arrangement;
-    std::vector<Material<Int, 3>> materials;
+    std::vector<Material<double, 3>> materials;
     REQUIRE(load_lookup_table(MATERIAL_INTERFACE));
     spdlog::set_level(spdlog::level::info);
 

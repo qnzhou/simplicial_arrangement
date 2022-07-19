@@ -2,6 +2,7 @@
 
 #include <vector>
 #include "utils.h"
+#include "robust_assert.h"
 
 namespace simplicial_arrangement {
 
@@ -24,7 +25,7 @@ void consolidate(Complex<DIM>& data)
 
         for (auto& c : data.cells) {
             std::transform(c.faces.begin(), c.faces.end(), c.faces.begin(), [&](size_t i) {
-                assert(index_map[i] != INVALID);
+                ROBUST_ASSERT(index_map[i] != INVALID);
                 return index_map[i];
             });
         }
@@ -43,7 +44,7 @@ void consolidate(Complex<DIM>& data)
 
         for (auto& f : data.faces) {
             std::transform(f.edges.begin(), f.edges.end(), f.edges.begin(), [&](size_t i) {
-                assert(index_map[i] != INVALID);
+                ROBUST_ASSERT(index_map[i] != INVALID);
                 return index_map[i];
             });
         }
@@ -54,7 +55,7 @@ void consolidate(Complex<DIM>& data)
         std::vector<bool> active_vertices(data.vertices.size(), false);
         for (auto& e : data.edges) {
             for (auto vid : e.vertices) {
-                assert(vid != INVALID);
+                ROBUST_ASSERT(vid != INVALID);
                 active_vertices[vid] = true;
             }
         }

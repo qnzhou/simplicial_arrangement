@@ -30,9 +30,13 @@ template <int DIM>
 struct Arrangement;
 
 Arrangement<2> compute_arrangement(const std::vector<Plane<double, 2>>& planes);
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
 Arrangement<2> compute_arrangement(const std::vector<Plane<Int, 2>>& planes);
+#endif
 Arrangement<3> compute_arrangement(const std::vector<Plane<double, 3>>& planes);
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
 Arrangement<3> compute_arrangement(const std::vector<Plane<Int, 3>>& planes);
+#endif
 
 /**
  * A self-contained data structure for 2D or 3D arrangement representation.
@@ -81,29 +85,14 @@ struct Arrangement
          * A set of boundary face indices in no particular order.
          */
         std::vector<size_t> faces;
-
-        /**
-         * The orientation of each boundary face with respect to this cell.
-         * `face_orientations[i] == true` means this cell is on the positive
-         * side of faces[i].
-         */
-        std::vector<bool> face_orientations;
-
-        /**
-         * The orientation with respect to all planes.
-         * `plane_orientations[i] == true` means this cell is on the positive
-         * side of plane i.
-         *
-         * TODO: This field contains an super set of the data stored in
-         * `face_orientations`.  We probably should just keep one of them.
-         */
-        std::vector<bool> plane_orientations;
     };
 
     std::vector<Point<DIM>> vertices;
     std::vector<Face> faces;
     std::vector<Cell> cells;
 
+    // Note: the following structure is only non-empty if input planes contain
+    // duplicates.
     std::vector<size_t> unique_plane_indices;
     std::vector<std::vector<size_t>> unique_planes;
     std::vector<bool> unique_plane_orientations;

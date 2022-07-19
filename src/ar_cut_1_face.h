@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ARComplex.h"
+#include "robust_assert.h"
 
 #include <array>
 #include <vector>
@@ -59,7 +60,7 @@ std::array<size_t, 3> ar_cut_1_face(ARComplex<DIM>& ar_complex,
     } else if (o0 <= 0 && o1 <= 0) {
         negative_subedge_id = eid;
     } else {
-        assert(intersection_id == INVALID);
+        ROBUST_ASSERT(intersection_id == INVALID);
         intersection_id = compute_intersection_id();
         AREdge<DIM> positive_subedge, negative_subedge;
 
@@ -67,8 +68,8 @@ std::array<size_t, 3> ar_cut_1_face(ARComplex<DIM>& ar_complex,
             positive_subedge.vertices = {end_points[0], intersection_id};
             negative_subedge.vertices = {intersection_id, end_points[1]};
         } else {
-            assert(o0 < 0);
-            assert(o1 > 0);
+            ROBUST_ASSERT(o0 < 0);
+            ROBUST_ASSERT(o1 > 0);
             negative_subedge.vertices = {end_points[0], intersection_id};
             positive_subedge.vertices = {intersection_id, end_points[1]};
         }

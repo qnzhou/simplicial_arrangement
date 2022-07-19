@@ -190,13 +190,17 @@ TEST_CASE("mi_cut_1_face", "[material_interface]")
     using namespace simplicial_arrangement;
     SECTION("2D")
     {
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
         SECTION("Int") { test_2D<Int>(); }
+#endif
         SECTION("double") { test_2D<double>(); }
     }
 
     SECTION("3D")
     {
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
         SECTION("Int") { test_3D<Int>(); }
+#endif
         SECTION("double") { test_3D<double>(); }
     }
 }

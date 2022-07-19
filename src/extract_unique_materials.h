@@ -9,6 +9,34 @@ auto extract_unique_materials(const MaterialRepo<Scalar, DIM>& repo)
     -> std::tuple<std::vector<size_t>, std::vector<std::vector<size_t>>>
 {
     const size_t num_materials = repo.get_num_materials() + DIM + 1;
+
+    // Special cases for 1 or 2 materials.
+    if (num_materials == DIM + 2) {
+        // One material.
+        if constexpr (DIM == 2) {
+            return {{0, 1, 2, 3}, {{0}, {1}, {2}, {3}}};
+        } else {
+            return {{0, 1, 2, 3, 4}, {{0}, {1}, {2}, {3}, {4}}};
+        }
+    } else if (num_materials == DIM + 3) {
+        // Two materials.
+        if constexpr (DIM == 2) {
+            bool same_material = repo.get_material(3) == repo.get_material(4);
+            if (same_material) {
+                return {{0, 1, 2, 3, 3}, {{0}, {1}, {2}, {3, 4}}};
+            } else {
+                return {{0, 1, 2, 3, 4}, {{0}, {1}, {2}, {3}, {4}}};
+            }
+        } else {
+            bool same_material = repo.get_material(4) == repo.get_material(5);
+            if (same_material) {
+                return {{0, 1, 2, 3, 4, 4}, {{0}, {1}, {2}, {3}, {4, 5}}};
+            } else {
+                return {{0, 1, 2, 3, 4, 5}, {{0}, {1}, {2}, {3}, {4}, {5}}};
+            }
+        }
+    }
+
     std::vector<size_t> material_indices(num_materials);
     std::iota(material_indices.begin(), material_indices.end(), 0);
 

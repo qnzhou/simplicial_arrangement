@@ -1,6 +1,7 @@
 #include "cut.h"
 #include "BSPNode.h"
 #include "SimplicialArrangementBuilder.h"
+#include "robust_assert.h"
 
 #include <implicit_predicates/implicit_predicates.h>
 
@@ -63,9 +64,14 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
         const size_t prev_edge = (i + num_edges - 1) % num_edges;
         const auto& prev_plane = builder.get_plane(face.edge_planes[prev_edge]);
         const auto& curr_plane = builder.get_plane(face.edge_planes[i]);
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+        orientations.push_back(implicit_predicates::orient3d_nonrobust(
+            prev_plane.data(), supporting_plane.data(), curr_plane.data(), cut_plane.data()));
+#else
         orientations.push_back(implicit_predicates::orient3d(
             prev_plane.data(), supporting_plane.data(), curr_plane.data(), cut_plane.data()));
-        assert(orientations.back() != implicit_predicates::INVALID);
+#endif
+        ROBUST_ASSERT(orientations.back() != implicit_predicates::INVALID);
         non_negative = non_negative && orientations.back() >= 0;
         non_positive = non_positive && orientations.back() <= 0;
         if (orientations.back() == implicit_predicates::ZERO) {
@@ -76,8 +82,8 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
     auto add_vertex = [&](size_t e_prev, size_t e_curr, size_t e_next) {
         size_t v0 = builder.get_vertex_index({face.supporting_plane, e_prev, e_curr});
         size_t v1 = builder.get_vertex_index({face.supporting_plane, e_curr, e_next});
-        assert(v0 != simplicial_arrangement::INVALID);
-        assert(v1 != simplicial_arrangement::INVALID);
+        ROBUST_ASSERT(v0 != simplicial_arrangement::INVALID);
+        ROBUST_ASSERT(v1 != simplicial_arrangement::INVALID);
 
         if (v0 > v1) std::swap(v0, v1);
         std::array<size_t, 2> e({v0, v1});
@@ -86,7 +92,7 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
         if (itr == edge_map.end()) {
             size_t id = builder.get_vertex_count();
             edge_map[e] = id;
-            assert(edge_map.contains(e));
+            ROBUST_ASSERT(edge_map.contains(e));
             builder.register_vertex({face.supporting_plane, e_curr, cut_plane_index}, id);
             builder.bump_vertex_count();
             logger().debug("Register ({}, {}, {}) as {} (new)",
@@ -97,16 +103,16 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
         } else {
 #ifndef NDEBUG
             // Just a sanity check.
-            assert(builder.has_vertex({face.supporting_plane, e_curr, cut_plane_index}));
-            assert(itr->second ==
-                   builder.get_vertex_index({face.supporting_plane, e_curr, cut_plane_index}));
+            ROBUST_ASSERT(builder.has_vertex({face.supporting_plane, e_curr, cut_plane_index}));
+            ROBUST_ASSERT(itr->second == builder.get_vertex_index(
+                                             {face.supporting_plane, e_curr, cut_plane_index}));
 #endif
         }
     };
 
     auto add_touching_vertex = [&](size_t e0, size_t e1) {
         size_t id = builder.get_vertex_index({face.supporting_plane, e0, e1});
-        assert(id != simplicial_arrangement::INVALID);
+        ROBUST_ASSERT(id != simplicial_arrangement::INVALID);
         builder.register_vertex({face.supporting_plane, e0, cut_plane_index}, id);
         builder.register_vertex({face.supporting_plane, e1, cut_plane_index}, id);
     };
@@ -158,7 +164,7 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
                     cut_edge.next_plane = curr_plane;
                     add_touching_vertex(curr_plane, next_plane);
                     break;
-                default: assert(false);
+                default: ROBUST_ASSERT(false);
                 }
                 break;
             case implicit_predicates::POSITIVE:
@@ -182,7 +188,7 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
                     cut_edge.prev_plane = curr_plane;
                     add_touching_vertex(curr_plane, next_plane);
                     break;
-                default: assert(false);
+                default: ROBUST_ASSERT(false);
                 }
                 break;
             case implicit_predicates::ZERO:
@@ -199,30 +205,30 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
                 case implicit_predicates::ZERO:
                     // Zero - Zero: impossible.
                     // This case should be captured by case 4 below, not here.
-                    assert(false);
+                    ROBUST_ASSERT(false);
                     break;
-                default: assert(false);
+                default: ROBUST_ASSERT(false);
                 }
                 break;
-            default: assert(false);
+            default: ROBUST_ASSERT(false);
             }
         }
 
-        assert(cut_edge.prev_plane != simplicial_arrangement::INVALID);
-        assert(cut_edge.next_plane != simplicial_arrangement::INVALID);
-        assert(cut_edge.prev_plane != cut_edge.next_plane);
+        ROBUST_ASSERT(cut_edge.prev_plane != simplicial_arrangement::INVALID);
+        ROBUST_ASSERT(cut_edge.next_plane != simplicial_arrangement::INVALID);
+        ROBUST_ASSERT(cut_edge.prev_plane != cut_edge.next_plane);
         return {std::move(cut_edge), std::move(negative), std::move(positive)};
     } else if (!non_negative || !non_positive) {
         // Case 4: Face is tangent to the cut plane at an edge.
-        assert(vertices_on_cut_plane.size() == 2);
+        ROBUST_ASSERT(vertices_on_cut_plane.size() == 2);
         size_t e_curr = vertices_on_cut_plane[0];
         size_t e_next = vertices_on_cut_plane[1];
         if (e_curr == 0 && e_next == num_edges - 1) {
             std::swap(e_curr, e_next);
         }
         const size_t e_prev = (e_curr + num_edges - 1) % num_edges;
-        assert(e_next == (e_curr + 1) % num_edges);
-        assert(e_prev != e_next);
+        ROBUST_ASSERT(e_next == (e_curr + 1) % num_edges);
+        ROBUST_ASSERT(e_prev != e_next);
 
         // Basically, e_curr, supporting_plane and cut_plane intersect at a line.
         // Need to update vertex index map.
@@ -230,8 +236,8 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
             {face.supporting_plane, face.edge_planes[e_prev], face.edge_planes[e_curr]});
         size_t v1 = builder.get_vertex_index(
             {face.supporting_plane, face.edge_planes[e_curr], face.edge_planes[e_next]});
-        assert(v0 != simplicial_arrangement::INVALID);
-        assert(v1 != simplicial_arrangement::INVALID);
+        ROBUST_ASSERT(v0 != simplicial_arrangement::INVALID);
+        ROBUST_ASSERT(v1 != simplicial_arrangement::INVALID);
         builder.register_vertex(
             {face.supporting_plane, face.edge_planes[e_prev], cut_plane_index}, v0);
         builder.register_vertex(
@@ -245,7 +251,7 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
                 std::nullopt,
                 face};
         } else {
-            assert(non_positive);
+            ROBUST_ASSERT(non_positive);
             return {Edge<3>({cut_plane_index,
                         face.edge_planes[e_next],
                         face.supporting_plane,
@@ -255,7 +261,7 @@ std::tuple<OptionalEdge<3>, OptionalFace<3>, OptionalFace<3>> cut_face(
         }
     } else {
         // Case 5: Face is coplanar with cut plane.
-        assert(vertices_on_cut_plane.size() == num_edges);
+        ROBUST_ASSERT(vertices_on_cut_plane.size() == num_edges);
         builder.register_coplanar_planes(face.supporting_plane, cut_plane_index);
         return {std::nullopt, std::nullopt, std::nullopt};
     }
@@ -316,8 +322,8 @@ std::optional<std::array<Cell<3>, 2>> cut_cell(SimplicialArrangementBuilder<Scal
             builder.get_vertex_index({e.supporting_plane, e.curr_plane, e.prev_plane});
         const size_t v1 =
             builder.get_vertex_index({e.supporting_plane, e.curr_plane, e.next_plane});
-        assert(v0 != simplicial_arrangement::INVALID);
-        assert(v1 != simplicial_arrangement::INVALID);
+        ROBUST_ASSERT(v0 != simplicial_arrangement::INVALID);
+        ROBUST_ASSERT(v1 != simplicial_arrangement::INVALID);
         next_map.insert({v0, {v1, e.curr_plane}});
         if (start_vertex == simplicial_arrangement::INVALID) {
             start_vertex = v0;
@@ -333,13 +339,13 @@ std::optional<std::array<Cell<3>, 2>> cut_cell(SimplicialArrangementBuilder<Scal
     size_t curr_edge = 0;
     do {
         auto itr = next_map.find(curr_vertex);
-        assert(itr != next_map.end());
+        ROBUST_ASSERT(itr != next_map.end());
         vertex_loop.push_back(curr_vertex);
         std::tie(curr_vertex, curr_edge) = itr->second;
         cut_face.edge_planes.push_back(curr_edge);
-        assert(cut_face.edge_planes.size() <= num_cut_edges);
+        ROBUST_ASSERT(cut_face.edge_planes.size() <= num_cut_edges);
     } while (curr_vertex != start_vertex);
-    assert(cut_face.edge_planes.size() == num_cut_edges);
+    ROBUST_ASSERT(cut_face.edge_planes.size() == num_cut_edges);
 
     // Ensure all vertices around the face are registered.
     for (size_t i = 0; i < num_cut_edges; i++) {
@@ -382,9 +388,14 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(SimplicialArrangementBuilder<Scal
         const size_t prev_i = (i + num_edges - 1) % num_edges;
         const auto& prev_plane = builder.get_plane(cell.edges[prev_i]);
         const auto& curr_plane = builder.get_plane(cell.edges[i]);
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+        orientations.push_back(implicit_predicates::orient2d_nonrobust(
+            prev_plane.data(), curr_plane.data(), cut_plane.data()));
+#else
         orientations.push_back(
             implicit_predicates::orient2d(prev_plane.data(), curr_plane.data(), cut_plane.data()));
-        assert(orientations.back() != implicit_predicates::INVALID);
+#endif
+        ROBUST_ASSERT(orientations.back() != implicit_predicates::INVALID);
     }
 
     bool non_negative = true, non_positive = true;
@@ -418,8 +429,8 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(SimplicialArrangementBuilder<Scal
     auto add_vertex = [&](size_t e_prev, size_t e_curr, size_t e_next) {
         size_t v0 = builder.get_vertex_index({e_prev, e_curr});
         size_t v1 = builder.get_vertex_index({e_curr, e_next});
-        assert(v0 != simplicial_arrangement::INVALID);
-        assert(v1 != simplicial_arrangement::INVALID);
+        ROBUST_ASSERT(v0 != simplicial_arrangement::INVALID);
+        ROBUST_ASSERT(v1 != simplicial_arrangement::INVALID);
 
         if (v0 > v1) std::swap(v0, v1);
         std::array<size_t, 2> e({v0, v1});
@@ -428,22 +439,22 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(SimplicialArrangementBuilder<Scal
         if (itr == edge_map.end()) {
             size_t id = builder.get_vertex_count();
             edge_map[e] = id;
-            assert(edge_map.contains(e));
+            ROBUST_ASSERT(edge_map.contains(e));
             builder.register_vertex({e_curr, cut_plane_index}, id);
             builder.bump_vertex_count();
             logger().debug("Register ({}, {}) as {} (new)", e_curr, cut_plane_index, id);
         } else {
 #ifndef NDEBUG
             // Just a sanity check.
-            assert(builder.has_vertex({e_curr, cut_plane_index}));
-            assert(itr->second == builder.get_vertex_index({e_curr, cut_plane_index}));
+            ROBUST_ASSERT(builder.has_vertex({e_curr, cut_plane_index}));
+            ROBUST_ASSERT(itr->second == builder.get_vertex_index({e_curr, cut_plane_index}));
 #endif
         }
     };
 
     auto add_touching_vertex = [&](size_t e0, size_t e1) {
         size_t id = builder.get_vertex_index({e0, e1});
-        assert(id != simplicial_arrangement::INVALID);
+        ROBUST_ASSERT(id != simplicial_arrangement::INVALID);
         builder.register_vertex({e0, cut_plane_index}, id);
         builder.register_vertex({e1, cut_plane_index}, id);
     };
@@ -472,7 +483,7 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(SimplicialArrangementBuilder<Scal
                 negative.edges.push_back(cut_plane_index);
                 add_touching_vertex(cell.edges[i], cell.edges[j]);
                 break;
-            default: assert(false);
+            default: ROBUST_ASSERT(false);
             }
             break;
         case implicit_predicates::POSITIVE:
@@ -494,7 +505,7 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(SimplicialArrangementBuilder<Scal
                 positive.edges.push_back(cut_plane_index);
                 add_touching_vertex(cell.edges[i], cell.edges[j]);
                 break;
-            default: assert(false);
+            default: ROBUST_ASSERT(false);
             }
             break;
         case implicit_predicates::ZERO:
@@ -511,12 +522,12 @@ std::optional<std::array<Cell<2>, 2>> cut_cell(SimplicialArrangementBuilder<Scal
             case implicit_predicates::ZERO:
                 // Zero - Zero: impossible.
                 // Cell is tangent to the cut plane, should be handled by case 1 or 2.
-                assert(false);
+                ROBUST_ASSERT(false);
                 break;
-            default: assert(false);
+            default: ROBUST_ASSERT(false);
             }
             break;
-        default: assert(false);
+        default: ROBUST_ASSERT(false);
         }
     }
     return std::array<Cell<2>, 2>({std::move(negative), std::move(positive)});
@@ -542,8 +553,13 @@ bool do_intersect(const SimplicialArrangementBuilder<Scalar, 2>& builder,
         const auto& prev_plane = builder.get_plane(prev_plane_id);
         const auto& curr_plane = builder.get_plane(curr_plane_id);
 
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+        auto r = implicit_predicates::orient2d_nonrobust(
+            prev_plane.data(), curr_plane.data(), cut_plane.data());
+#else
         auto r =
             implicit_predicates::orient2d(prev_plane.data(), curr_plane.data(), cut_plane.data());
+#endif
         switch (r) {
         case implicit_predicates::POSITIVE:
             if (!certain) {
@@ -569,11 +585,11 @@ bool do_intersect(const SimplicialArrangementBuilder<Scalar, 2>& builder,
         case implicit_predicates::INVALID:
             // Impossible case.
             logger().error("Invalid 2D intersection detected");
-            assert(false);
+            ROBUST_ASSERT(false);
             break;
         }
     }
-    assert(certain);
+    ROBUST_ASSERT(certain);
     return false;
 }
 
@@ -599,8 +615,13 @@ bool do_intersect(const SimplicialArrangementBuilder<Scalar, 3>& builder,
         const auto& prev_plane = builder.get_plane(prev_plane_id);
         const auto& curr_plane = builder.get_plane(curr_plane_id);
 
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+        auto r = implicit_predicates::orient3d_nonrobust(
+            supporting_plane.data(), prev_plane.data(), curr_plane.data(), cut_plane.data());
+#else
         auto r = implicit_predicates::orient3d(
             supporting_plane.data(), prev_plane.data(), curr_plane.data(), cut_plane.data());
+#endif
         switch (r) {
         case implicit_predicates::POSITIVE:
             if (!certain) {
@@ -626,12 +647,12 @@ bool do_intersect(const SimplicialArrangementBuilder<Scalar, 3>& builder,
         case implicit_predicates::INVALID:
             // Impossible case.
             logger().error("Invalid 3D intersection detected");
-            assert(false);
+            ROBUST_ASSERT(false);
             break;
         }
     }
 
-    assert(certain);
+    ROBUST_ASSERT(certain);
     return false;
 }
 
@@ -665,8 +686,8 @@ void cut(SimplicialArrangementBuilder<Scalar, DIM>& builder,
             root.positive->cell = std::move((*r)[1]);
         }
     } else {
-        assert(root.negative != nullptr);
-        assert(root.positive != nullptr);
+        ROBUST_ASSERT(root.negative != nullptr);
+        ROBUST_ASSERT(root.positive != nullptr);
         if (do_intersect(builder, root.negative->cell, cut_plane_index)) {
             cut(builder, edge_map, *root.negative, cut_plane_index);
         }
@@ -687,12 +708,14 @@ void cut(SimplicialArrangementBuilder<double, 2>& builder, BSPNode<2>& root, siz
     ::cut(builder, edge_map, root, cut_plane_index);
 }
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
 void cut(SimplicialArrangementBuilder<Int, 2>& builder, BSPNode<2>& root, size_t cut_plane_index)
 {
     EdgeIndexMap edge_map;
     edge_map.reserve(builder.get_num_planes());
     ::cut(builder, edge_map, root, cut_plane_index);
 }
+#endif
 
 void cut(SimplicialArrangementBuilder<double, 3>& builder, BSPNode<3>& root, size_t cut_plane_index)
 {
@@ -701,11 +724,13 @@ void cut(SimplicialArrangementBuilder<double, 3>& builder, BSPNode<3>& root, siz
     ::cut(builder, edge_map, root, cut_plane_index);
 }
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
 void cut(SimplicialArrangementBuilder<Int, 3>& builder, BSPNode<3>& root, size_t cut_plane_index)
 {
     EdgeIndexMap edge_map;
     edge_map.reserve(builder.get_num_planes() * builder.get_num_planes());
     ::cut(builder, edge_map, root, cut_plane_index);
 }
+#endif
 
 } // namespace simplicial_arrangement::internal

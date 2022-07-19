@@ -1,6 +1,7 @@
 #include "extract_arrangement.h"
 #include "ARComplex.h"
 #include "SimplicialArrangementBuilder.h"
+#include "robust_assert.h"
 
 #include <absl/container/flat_hash_map.h>
 
@@ -30,10 +31,15 @@ template <typename Scalar, int DIM>
 void extract_unique_planes(Arrangement<DIM>& r, SimplicialArrangementBuilder<Scalar, DIM>& builder)
 {
     auto [coplanar_planes, unique_plane_indices] = builder.extract_coplanar_planes();
+    if (coplanar_planes.size() == unique_plane_indices.size()) {
+        // All plane are unique.  Leave the data structure empty.
+        return;
+    }
+
     std::vector<bool> coplanar_plane_orientations(unique_plane_indices.size(), true);
     for (const auto& planes : coplanar_planes) {
         const size_t num_planes = planes.size();
-        assert(num_planes > 0);
+        ROBUST_ASSERT(num_planes > 0);
         coplanar_plane_orientations[planes[0]] = true;
         const auto& ref_plane = builder.get_plane(planes[0]);
         for (size_t i = 1; i < num_planes; i++) {
@@ -47,62 +53,10 @@ void extract_unique_planes(Arrangement<DIM>& r, SimplicialArrangementBuilder<Sca
     r.unique_plane_orientations = std::move(coplanar_plane_orientations);
 }
 
-template <typename Scalar, int DIM>
-void extract_plane_orientations(
-    Arrangement<DIM>& r, SimplicialArrangementBuilder<Scalar, DIM>& builder)
-{
-    const size_t num_cells = r.cells.size();
-    const size_t num_planes = builder.get_num_planes();
-    if (num_cells == 0) return;
-
-    std::vector<bool> visited(num_cells, false);
-    std::vector<bool> consistent(num_planes, true);
-    std::vector<size_t> Q;
-    Q.reserve(num_cells);
-    Q.push_back(0);
-    size_t id = 0;
-    visited[id] = true;
-    r.cells.front().plane_orientations = std::vector<bool>(num_planes, true);
-
-    while (id < Q.size()) {
-        size_t cell_id = Q[id];
-        id++;
-        auto& cell = r.cells[cell_id];
-        size_t num_faces = cell.faces.size();
-
-        for (size_t i = 0; i < num_faces; i++) {
-            const auto& f = r.faces[cell.faces[i]];
-            const bool ori = cell.face_orientations[i];
-            size_t next_cell_id = ori ? f.negative_cell : f.positive_cell;
-            assert(next_cell_id != cell_id);
-            if (next_cell_id == Arrangement<3>::None) continue;
-            if (visited[next_cell_id]) continue;
-
-            auto& next_cell = r.cells[next_cell_id];
-            next_cell.plane_orientations = cell.plane_orientations; // Copied intentionally.
-            for (auto pid : r.unique_planes[r.unique_plane_indices[f.supporting_plane]]) {
-                next_cell.plane_orientations[pid] = !next_cell.plane_orientations[pid];
-                consistent[pid] =
-                    (cell.plane_orientations[f.supporting_plane] == cell.face_orientations[i]) ==
-                    (r.unique_plane_orientations[pid] ==
-                        r.unique_plane_orientations[f.supporting_plane]);
-            }
-            visited[next_cell_id] = true;
-            Q.push_back(next_cell_id);
-        }
-    }
-
-    for (auto& cell : r.cells) {
-        for (size_t i = 0; i < num_planes; i++) {
-            cell.plane_orientations[i] = (cell.plane_orientations[i] == consistent[i]);
-        }
-    }
-}
-
 template <typename T>
 typename T::iterator cyclic_next(T& container, const typename T::iterator& itr)
 {
-    assert(itr != container.end());
+    ROBUST_ASSERT(itr != container.end());
     typename T::iterator next_itr = std::next(itr);
     if (next_itr == container.end()) {
         next_itr = container.begin();
@@ -113,7 +67,7 @@ typename T::iterator cyclic_next(T& container, const typename T::iterator& itr)
 template <typename T>
 typename T::iterator cyclic_prev(T& container, const typename T::iterator& itr)
 {
-    assert(itr != container.end());
+    ROBUST_ASSERT(itr != container.end());
     typename T::iterator prev_itr;
     if (itr == container.begin()) {
         prev_itr = std::prev(container.end());
@@ -139,7 +93,7 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangementBuilder<Scalar, 2>& b
                         size_t v1,
                         size_t supporting_plane_index,
                         bool cell_on_positive_side_of_supporting_plane) -> size_t {
-        assert(v0 != v1);
+        ROBUST_ASSERT(v0 != v1);
 
         // Compute canonical ordering of the face.
         bool reversed = v0 > v1;
@@ -184,7 +138,6 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangementBuilder<Scalar, 2>& b
 
         Arrangement<2>::Cell out_cell;
         out_cell.faces.reserve(num_cell_edges);
-        out_cell.face_orientations.reserve(num_cell_edges);
 
         std::vector<size_t> vertex_indices;
         vertex_indices.reserve(num_cell_edges);
@@ -202,7 +155,6 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangementBuilder<Scalar, 2>& b
             auto fid = add_face(vertex_indices[i], vertex_indices[j], cell.edges[i], oriented);
 
             out_cell.faces.push_back(fid);
-            out_cell.face_orientations.push_back(oriented);
 
             auto& out_face = r.faces[fid];
             if (oriented) {
@@ -224,15 +176,14 @@ Arrangement<2> extract_arrangement_2D(SimplicialArrangementBuilder<Scalar, 2>& b
             bounding_plane_orientations[node.separating_plane] = false;
             depth_first_traversal(*node.negative);
         } else {
-            assert(node.positive == nullptr);
-            assert(node.negative == nullptr);
+            ROBUST_ASSERT(node.positive == nullptr);
+            ROBUST_ASSERT(node.negative == nullptr);
             add_cell(node.cell, bounding_plane_orientations);
         }
     };
 
     extract_unique_planes(r, builder);
     depth_first_traversal(builder.get_root());
-    extract_plane_orientations(r, builder);
 
     return r;
 }
@@ -249,7 +200,7 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangementBuilder<Scalar, 3>& b
     auto add_face = [&](const Face<3>& face,
                         bool cell_on_positive_side_of_supporting_plane) -> size_t {
         const size_t num_edges = face.edge_planes.size();
-        assert(num_edges >= 3);
+        ROBUST_ASSERT(num_edges >= 3);
 
         // Step 1: convert boundary edge plane loop into vertex index loop.
         std::vector<size_t> vertex_indices;
@@ -259,7 +210,7 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangementBuilder<Scalar, 3>& b
             size_t prev_i = (i + num_edges - 1) % num_edges;
             vertex_indices.push_back(builder.get_vertex_index(
                 {face.edge_planes[i], face.edge_planes[prev_i], face.supporting_plane}));
-            assert(vertex_indices.back() < builder.get_vertex_count());
+            ROBUST_ASSERT(vertex_indices.back() < builder.get_vertex_count());
         }
 
         // Step 2: reorder vertex indices such that a face always starts
@@ -315,13 +266,11 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangementBuilder<Scalar, 3>& b
 
         Arrangement<3>::Cell out_cell;
         out_cell.faces.reserve(num_faces);
-        out_cell.face_orientations.reserve(num_faces);
 
         for (const auto& face : cell.faces) {
             bool on_positive_side = plane_orientations[face.supporting_plane];
             auto fid = add_face(face, on_positive_side);
             out_cell.faces.push_back(fid);
-            out_cell.face_orientations.push_back(on_positive_side);
 
             if (on_positive_side) {
                 r.faces[fid].positive_cell = cell_id;
@@ -342,15 +291,14 @@ Arrangement<3> extract_arrangement_3D(SimplicialArrangementBuilder<Scalar, 3>& b
             bounding_plane_orientations[node.separating_plane] = false;
             depth_first_traversal(*node.negative);
         } else {
-            assert(node.positive == nullptr);
-            assert(node.negative == nullptr);
+            ROBUST_ASSERT(node.positive == nullptr);
+            ROBUST_ASSERT(node.negative == nullptr);
             add_cell(node.cell, bounding_plane_orientations);
         }
     };
 
     extract_unique_planes(r, builder);
     depth_first_traversal(builder.get_root());
-    extract_plane_orientations(r, builder);
 
     return r;
 }
@@ -405,16 +353,6 @@ Arrangement<2> extract_arrangement(ARComplex<2>&& ar_complex)
         auto& cf = faces[i];
         auto& f = ar.cells[i];
         f.faces = std::move(cf.edges);
-        f.plane_orientations = std::move(cf.signs);
-    }
-
-    // TODO: This section is computing redundant face orientation info.
-    for (auto& c : ar.cells) {
-        c.face_orientations.reserve(c.faces.size());
-        for (auto fid : c.faces) {
-            const auto& f = ar.faces[fid];
-            c.face_orientations.push_back(c.plane_orientations[f.supporting_plane]);
-        }
     }
 
     return ar;
@@ -434,7 +372,7 @@ Arrangement<3> extract_arrangement(ARComplex<3>&& ar_complex)
         auto& cf = faces[i];
         auto& f = ar.faces[i];
         const size_t num_bd_edges = cf.edges.size();
-        assert(num_bd_edges >= 3);
+        ROBUST_ASSERT(num_bd_edges >= 3);
         f.vertices.reserve(num_bd_edges);
 
         for (size_t j = 0; j < num_bd_edges; j++) {
@@ -444,8 +382,8 @@ Arrangement<3> extract_arrangement(ARComplex<3>&& ar_complex)
                 curr_e.vertices[0] == next_e.vertices[1]) {
                 f.vertices.push_back(curr_e.vertices[0]);
             } else {
-                assert(curr_e.vertices[1] == next_e.vertices[0] ||
-                       curr_e.vertices[1] == next_e.vertices[1]);
+                ROBUST_ASSERT(curr_e.vertices[1] == next_e.vertices[0] ||
+                              curr_e.vertices[1] == next_e.vertices[1]);
                 f.vertices.push_back(curr_e.vertices[1]);
             }
         }
@@ -463,16 +401,6 @@ Arrangement<3> extract_arrangement(ARComplex<3>&& ar_complex)
         auto& cc = cells[i];
         auto& c = ar.cells[i];
         c.faces = std::move(cc.faces);
-        c.plane_orientations = std::move(cc.signs);
-    }
-
-    // TODO: This section is computing redundant face orientation info.
-    for (auto& c : ar.cells) {
-        c.face_orientations.reserve(c.faces.size());
-        for (auto fid : c.faces) {
-            const auto& f = ar.faces[fid];
-            c.face_orientations.push_back(c.plane_orientations[f.supporting_plane]);
-        }
     }
 
     return ar;

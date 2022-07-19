@@ -2,6 +2,7 @@
 
 #include "MIComplex.h"
 #include "MaterialRepo.h"
+#include "robust_assert.h"
 #include "utils.h"
 
 #include <implicit_predicates/implicit_predicates.h>
@@ -14,7 +15,7 @@ int8_t mi_cut_0_face(const MaterialRepo<Scalar, 2>& materials,
     size_t vid,
     size_t material_index)
 {
-    assert(material_index > 2);
+    ROBUST_ASSERT(material_index > 2);
     const auto& vertices = mi_complex.vertices;
     const auto& p = vertices[vid];
     const auto& material = materials.get_material(material_index);
@@ -25,7 +26,7 @@ int8_t mi_cut_0_face(const MaterialRepo<Scalar, 2>& materials,
     if (p[2] > 2) vertex_type |= 4;
 
     auto get_corner_id = [](size_t i, size_t j) -> size_t {
-        assert(i <= 2 && j <= 2);
+        ROBUST_ASSERT(i <= 2 && j <= 2);
         if (i != 0 && j != 0) return 0;
         if (i != 1 && j != 1) return 1;
         if (i != 2 && j != 2) return 2;
@@ -48,25 +49,37 @@ int8_t mi_cut_0_face(const MaterialRepo<Scalar, 2>& materials,
         [&](size_t i,
             const Material<Scalar, 2>& m0,
             const Material<Scalar, 2>& m1) -> implicit_predicates::Orientation {
-        assert(i <= 2);
+        ROBUST_ASSERT(i <= 2);
         switch (i) {
         case 0: {
             const Scalar mm0[]{m0[1], m0[2]};
             const Scalar mm1[]{m1[1], m1[2]};
             const Scalar mm[]{material[1], material[2]};
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+            return implicit_predicates::mi_orient1d_nonrobust(mm0, mm1, mm);
+#else
             return implicit_predicates::mi_orient1d(mm0, mm1, mm);
+#endif
         }
         case 1: {
             const Scalar mm0[]{m0[0], m0[2]};
             const Scalar mm1[]{m1[0], m1[2]};
             const Scalar mm[]{material[0], material[2]};
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+            return implicit_predicates::mi_orient1d_nonrobust(mm0, mm1, mm);
+#else
             return implicit_predicates::mi_orient1d(mm0, mm1, mm);
+#endif
         }
         case 2: {
             const Scalar mm0[]{m0[0], m0[1]};
             const Scalar mm1[]{m1[0], m1[1]};
             const Scalar mm[]{material[0], material[1]};
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+            return implicit_predicates::mi_orient1d_nonrobust(mm0, mm1, mm);
+#else
             return implicit_predicates::mi_orient1d(mm0, mm1, mm);
+#endif
         }
         default:
             logger().error("Invalid simplex boundary: {}", i);
@@ -106,8 +119,13 @@ int8_t mi_cut_0_face(const MaterialRepo<Scalar, 2>& materials,
         const auto& m0 = materials.get_material(p[0]);
         const auto& m1 = materials.get_material(p[1]);
         const auto& m2 = materials.get_material(p[2]);
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+        return utils::signof(implicit_predicates::mi_orient2d_nonrobust(
+            m0.data(), m1.data(), m2.data(), material.data()));
+#else
         return utils::signof(
             implicit_predicates::mi_orient2d(m0.data(), m1.data(), m2.data(), material.data()));
+#endif
     }
     default:
         logger().error("Impossible vertex type case detected: {}", vertex_type);
@@ -121,7 +139,7 @@ int8_t mi_cut_0_face(const MaterialRepo<Scalar, 3>& materials,
     size_t vid,
     size_t material_index)
 {
-    assert(material_index > 3);
+    ROBUST_ASSERT(material_index > 3);
     const auto& vertices = mi_complex.vertices;
     const auto& p = vertices[vid];
     const auto& material = materials.get_material(material_index);
@@ -133,7 +151,7 @@ int8_t mi_cut_0_face(const MaterialRepo<Scalar, 3>& materials,
     if (p[3] > 3) vertex_type |= 8;
 
     auto get_corner_id = [](size_t i, size_t j, size_t k) -> size_t {
-        assert(i <= 3 && j <= 3 && k <= 3);
+        ROBUST_ASSERT(i <= 3 && j <= 3 && k <= 3);
         if (i != 0 && j != 0 && k != 0) return 0;
         if (i != 1 && j != 1 && k != 1) return 1;
         if (i != 2 && j != 2 && k != 2) return 2;
@@ -157,8 +175,8 @@ int8_t mi_cut_0_face(const MaterialRepo<Scalar, 3>& materials,
             size_t j,
             const Material<Scalar, 3>& m0,
             const Material<Scalar, 3>& m1) -> implicit_predicates::Orientation {
-        assert(i <= 3 && j <= 3);
-        assert(i != j);
+        ROBUST_ASSERT(i <= 3 && j <= 3);
+        ROBUST_ASSERT(i != j);
         short t = 0;
         if (i == 0 || j == 0) t |= 1;
         if (i == 1 || j == 1) t |= 2;
@@ -169,37 +187,61 @@ int8_t mi_cut_0_face(const MaterialRepo<Scalar, 3>& materials,
             const Scalar mm0[]{m0[2], m0[3]};
             const Scalar mm1[]{m1[2], m1[3]};
             const Scalar mm[]{material[2], material[3]};
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+            return implicit_predicates::mi_orient1d_nonrobust(mm0, mm1, mm);
+#else
             return implicit_predicates::mi_orient1d(mm0, mm1, mm);
+#endif
         }
         case 5: {
             const Scalar mm0[]{m0[1], m0[3]};
             const Scalar mm1[]{m1[1], m1[3]};
             const Scalar mm[]{material[1], material[3]};
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+            return implicit_predicates::mi_orient1d_nonrobust(mm0, mm1, mm);
+#else
             return implicit_predicates::mi_orient1d(mm0, mm1, mm);
+#endif
         }
         case 6: {
             const Scalar mm0[]{m0[0], m0[3]};
             const Scalar mm1[]{m1[0], m1[3]};
             const Scalar mm[]{material[0], material[3]};
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+            return implicit_predicates::mi_orient1d_nonrobust(mm0, mm1, mm);
+#else
             return implicit_predicates::mi_orient1d(mm0, mm1, mm);
+#endif
         }
         case 9: {
             const Scalar mm0[]{m0[1], m0[2]};
             const Scalar mm1[]{m1[1], m1[2]};
             const Scalar mm[]{material[1], material[2]};
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+            return implicit_predicates::mi_orient1d_nonrobust(mm0, mm1, mm);
+#else
             return implicit_predicates::mi_orient1d(mm0, mm1, mm);
+#endif
         }
         case 10: {
             const Scalar mm0[]{m0[0], m0[2]};
             const Scalar mm1[]{m1[0], m1[2]};
             const Scalar mm[]{material[0], material[2]};
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+            return implicit_predicates::mi_orient1d_nonrobust(mm0, mm1, mm);
+#else
             return implicit_predicates::mi_orient1d(mm0, mm1, mm);
+#endif
         }
         case 12: {
             const Scalar mm0[]{m0[0], m0[1]};
             const Scalar mm1[]{m1[0], m1[1]};
             const Scalar mm[]{material[0], material[1]};
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+            return implicit_predicates::mi_orient1d_nonrobust(mm0, mm1, mm);
+#else
             return implicit_predicates::mi_orient1d(mm0, mm1, mm);
+#endif
         }
         default:
             logger().error("Invalid 3D simplex edge: {}, {} with key {}", i, j, t);
@@ -217,28 +259,44 @@ int8_t mi_cut_0_face(const MaterialRepo<Scalar, 3>& materials,
             const Scalar mm1[]{m1[1], m1[2], m1[3]};
             const Scalar mm2[]{m2[1], m2[2], m2[3]};
             const Scalar mm[]{material[1], material[2], material[3]};
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+            return implicit_predicates::mi_orient2d_nonrobust(mm0, mm1, mm2, mm);
+#else
             return implicit_predicates::mi_orient2d(mm0, mm1, mm2, mm);
+#endif
         }
         case 1: {
             const Scalar mm0[]{m0[0], m0[2], m0[3]};
             const Scalar mm1[]{m1[0], m1[2], m1[3]};
             const Scalar mm2[]{m2[0], m2[2], m2[3]};
             const Scalar mm[]{material[0], material[2], material[3]};
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+            return implicit_predicates::mi_orient2d_nonrobust(mm0, mm1, mm2, mm);
+#else
             return implicit_predicates::mi_orient2d(mm0, mm1, mm2, mm);
+#endif
         }
         case 2: {
             const Scalar mm0[]{m0[0], m0[1], m0[3]};
             const Scalar mm1[]{m1[0], m1[1], m1[3]};
             const Scalar mm2[]{m2[0], m2[1], m2[3]};
             const Scalar mm[]{material[0], material[1], material[3]};
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+            return implicit_predicates::mi_orient2d_nonrobust(mm0, mm1, mm2, mm);
+#else
             return implicit_predicates::mi_orient2d(mm0, mm1, mm2, mm);
+#endif
         }
         case 3: {
             const Scalar mm0[]{m0[0], m0[1], m0[2]};
             const Scalar mm1[]{m1[0], m1[1], m1[2]};
             const Scalar mm2[]{m2[0], m2[1], m2[2]};
             const Scalar mm[]{material[0], material[1], material[2]};
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+            return implicit_predicates::mi_orient2d_nonrobust(mm0, mm1, mm2, mm);
+#else
             return implicit_predicates::mi_orient2d(mm0, mm1, mm2, mm);
+#endif
         }
         default:
             logger().error("Invalid 3D simplex face: {}", i);
@@ -322,8 +380,13 @@ int8_t mi_cut_0_face(const MaterialRepo<Scalar, 3>& materials,
         const auto& m1 = materials.get_material(p[1]);
         const auto& m2 = materials.get_material(p[2]);
         const auto& m3 = materials.get_material(p[3]);
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+        return utils::signof(implicit_predicates::mi_orient3d_nonrobust(
+            m0.data(), m1.data(), m2.data(), m3.data(), material.data()));
+#else
         return utils::signof(implicit_predicates::mi_orient3d(
             m0.data(), m1.data(), m2.data(), m3.data(), material.data()));
+#endif
     }
     default:
         logger().error("Impossible vertex type case detected: {}", vertex_type);

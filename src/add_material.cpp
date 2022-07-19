@@ -174,11 +174,13 @@ void add_material(
     ::add_material(builder, mi_complex, material_index);
 }
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
 void add_material(
     MaterialInterfaceBuilder<Int, 2>& builder, MIComplex<2>& mi_complex, size_t material_index)
 {
     ::add_material(builder, mi_complex, material_index);
 }
+#endif
 
 void add_material(
     MaterialInterfaceBuilder<double, 3>& builder, MIComplex<3>& mi_complex, size_t material_index)
@@ -186,10 +188,12 @@ void add_material(
     ::add_material(builder, mi_complex, material_index);
 }
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
 void add_material(
     MaterialInterfaceBuilder<Int, 3>& builder, MIComplex<3>& mi_complex, size_t material_index)
 {
     ::add_material(builder, mi_complex, material_index);
 }
+#endif
 
 } // namespace simplicial_arrangement::internal

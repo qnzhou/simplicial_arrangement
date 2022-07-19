@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MIComplex.h"
+#include "robust_assert.h"
 
 #include <array>
 #include <vector>
@@ -8,8 +9,7 @@
 namespace simplicial_arrangement {
 
 template <int DIM>
-std::array<size_t, 3> mi_cut_1_face(
-    MIComplex<DIM>& mi_complex,
+std::array<size_t, 3> mi_cut_1_face(MIComplex<DIM>& mi_complex,
     size_t eid,
     size_t material_index,
     const std::vector<int8_t>& orientations)
@@ -57,7 +57,7 @@ std::array<size_t, 3> mi_cut_1_face(
     } else if (o0 <= 0 && o1 <= 0) {
         negative_subedge_id = eid;
     } else {
-        assert(intersection_id == INVALID);
+        ROBUST_ASSERT(intersection_id == INVALID);
         intersection_id = compute_intersection_id();
         MIEdge<DIM> positive_subedge, negative_subedge;
 
@@ -65,8 +65,8 @@ std::array<size_t, 3> mi_cut_1_face(
             positive_subedge.vertices = {end_points[0], intersection_id};
             negative_subedge.vertices = {intersection_id, end_points[1]};
         } else {
-            assert(o0 < 0);
-            assert(o1 > 0);
+            ROBUST_ASSERT(o0 < 0);
+            ROBUST_ASSERT(o1 > 0);
             negative_subedge.vertices = {end_points[0], intersection_id};
             positive_subedge.vertices = {intersection_id, end_points[1]};
         }

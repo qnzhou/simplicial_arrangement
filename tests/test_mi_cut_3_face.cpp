@@ -201,7 +201,9 @@ TEST_CASE("mi_cut_3_face", "[material_interface]")
 
     SECTION("3D")
     {
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
         SECTION("Int") { test_3D<Int>(); }
+#endif
         SECTION("double") { test_3D<double>(); }
     }
 }

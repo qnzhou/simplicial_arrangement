@@ -341,34 +341,35 @@ private:
         if (m_spec.elements.entity_blocks.empty()) {
             throw std::runtime_error("Please add elements before adding element attributes!");
         }
-        const auto& elem_block = m_spec.elements.entity_blocks.back();
-        if (elem_block.entity_dim != ELEMENT_DIM) {
-            throw std::runtime_error(
-                "It seems the last added element block has different dimension "
-                "than the element attribute you want to add.");
-        }
-        const size_t num_elements = elem_block.num_elements_in_block;
 
         mshio::Data data;
         data.header.string_tags = {name};
         data.header.real_tags = {0.0};
-        data.header.int_tags = {0, NUM_FIELDS, int(num_elements), 0, ELEMENT_DIM};
+        data.entries.reserve(m_spec.elements.num_elements);
 
-        data.entries.resize(num_elements);
-        for (size_t i = 0; i < num_elements; i++) {
-            auto& entry = data.entries[i];
-            entry.tag = elem_block.data[i * (ELEMENT_DIM + 2)];
-            entry.data.reserve(NUM_FIELDS);
-            const auto& attr = get_attribute_cb(i);
-            if constexpr (NUM_FIELDS == 1) {
-                entry.data.push_back(attr);
-            } else {
-                for (size_t j = 0; j < NUM_FIELDS; j++) {
-                    entry.data.push_back(attr[j]);
+        size_t total_num_elements = 0;
+        for (const auto& elem_block : m_spec.elements.entity_blocks) {
+            if (elem_block.entity_dim != ELEMENT_DIM) continue;
+            const size_t num_elements = elem_block.num_elements_in_block;
+
+            for (size_t i = 0; i < num_elements; i++) {
+                data.entries.emplace_back();
+                auto& entry = data.entries.back();
+                entry.tag = elem_block.data[i * (ELEMENT_DIM + 2)];
+                entry.data.reserve(NUM_FIELDS);
+                const auto& attr = get_attribute_cb(total_num_elements + i);
+                if constexpr (NUM_FIELDS == 1) {
+                    entry.data.push_back(attr);
+                } else {
+                    for (size_t j = 0; j < NUM_FIELDS; j++) {
+                        entry.data.push_back(attr[j]);
+                    }
                 }
             }
+            total_num_elements += num_elements;
         }
 
+        data.header.int_tags = {0, NUM_FIELDS, int(total_num_elements), 0, ELEMENT_DIM};
         m_spec.element_data.push_back(std::move(data));
     }
 

@@ -20,11 +20,21 @@ int8_t ar_cut_0_face(const PlaneRepo<Scalar, DIM>& planes,
     const auto& p1 = planes.get_plane(v[1]);
 
     if constexpr (DIM == 2) {
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+        return utils::signof(
+            implicit_predicates::orient2d_nonrobust(p0.data(), p1.data(), p.data()));
+#else
         return utils::signof(implicit_predicates::orient2d(p0.data(), p1.data(), p.data()));
+#endif
     } else {
         const auto& p2 = planes.get_plane(v[2]);
+#ifdef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
+        return utils::signof(
+            implicit_predicates::orient3d_nonrobust(p0.data(), p1.data(), p2.data(), p.data()));
+#else
         return utils::signof(
             implicit_predicates::orient3d(p0.data(), p1.data(), p2.data(), p.data()));
+#endif
     }
 }
 

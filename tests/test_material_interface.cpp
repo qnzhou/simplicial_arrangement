@@ -333,6 +333,36 @@ void test_3D()
             REQUIRE(mi.vertices.size() == 7);
             validate(mi);
         }
+        SECTION("Case 6")
+        {
+            materials.push_back({1, 1, 1, 1});
+            materials.push_back({0, 0, 2, 0});
+            materials.push_back({2, 0, 0, 0});
+            auto mi = compute_material_interface(materials);
+            REQUIRE(mi.cells.size() == 3);
+            REQUIRE(mi.faces.size() == 12);
+            REQUIRE(mi.vertices.size() == 9);
+            validate(mi);
+
+            // Check vertex shared by more than 4 materials uses the materials
+            // with the smallest index.
+            const auto& vertices = mi.vertices;
+            const auto& faces = mi.faces;
+            std::vector<size_t> vertex_valence(vertices.size(), 0);
+            for (const auto& f : faces) {
+                for (const auto& vid : f.vertices) {
+                    vertex_valence[vid]++;
+                }
+            }
+            const auto itr = std::max_element(vertex_valence.begin(), vertex_valence.end());
+            REQUIRE(*itr == 8);
+            auto v = vertices[itr - vertex_valence.begin()];
+            std::sort(v.begin(), v.end());
+            REQUIRE(v[0] == 1);
+            REQUIRE(v[1] == 3);
+            REQUIRE(v[2] == 4);
+            REQUIRE(v[3] == 5);
+        }
     }
     SECTION("4 implicits")
     {
@@ -412,6 +442,18 @@ void test_3D()
             REQUIRE(mi.unique_material_indices[4] == mi.unique_material_indices[7]);
             REQUIRE(mi.unique_material_indices[5] == mi.unique_material_indices[6]);
         }
+        SECTION("Case 7")
+        {
+            materials.push_back({0, 0, 2, 0}); // material 4
+            materials.push_back({2, 0, 0, 0}); // material 5
+            materials.push_back({4, -1, -2, -1}); // material 6
+            materials.push_back({-2, -1, 4, -1}); // material 7
+            auto mi = compute_material_interface(materials);
+            REQUIRE(mi.cells.size() == 4);
+            REQUIRE(mi.faces.size() == 15);
+            REQUIRE(mi.vertices.size() == 9);
+            validate(mi);
+        }
     }
 }
 } // namespace
@@ -419,7 +461,9 @@ void test_3D()
 TEST_CASE("Material interface 2D", "[material_interface][2D]")
 {
     using namespace simplicial_arrangement;
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
     SECTION("Int") { test_2D<Int>(); }
+#endif
     SECTION("double") { test_2D<double>(); }
 }
 
@@ -428,6 +472,7 @@ TEST_CASE("Material interface 3D", "[material_interface][3D]")
     using namespace simplicial_arrangement;
     REQUIRE(load_lookup_table(MATERIAL_INTERFACE));
 
+#ifndef SIMPLICIAL_ARRANGEMENT_NON_ROBUST
     SECTION("Int")
     {
         SECTION("Without lookup")
@@ -442,6 +487,7 @@ TEST_CASE("Material interface 3D", "[material_interface][3D]")
         }
         disable_lookup_table();
     }
+#endif
     SECTION("double")
     {
         SECTION("Without lookup")
