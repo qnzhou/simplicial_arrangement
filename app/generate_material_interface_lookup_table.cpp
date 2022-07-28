@@ -219,7 +219,7 @@ int main(int argc, char** argv)
     std::cout << "3 cell: " << num_cells[2] << std::endl;
     size_t num_level_1_entries = 0;
     size_t num_level_2_entries = 0;
-    std::array<size_t, 5> ambiguous_cases = {0, 0, 0, 0};
+    std::array<size_t, 5> ambiguous_cases = {0, 0, 0, 0, 0};
     for (size_t i = 1; i < start_index.size(); i++) {
         size_t diff = start_index[i] - start_index[i - 1];
         if (diff == 0) continue;
