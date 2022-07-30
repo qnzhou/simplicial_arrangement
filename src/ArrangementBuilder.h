@@ -6,6 +6,7 @@
 #include "add_plane.h"
 #include "common.h"
 #include "initialize_simplicial_ar_complex.h"
+#include "lookup_table_forward_declarations.h"
 
 #include <algorithm>
 #include <array>
@@ -27,22 +28,34 @@ public:
     {
         const size_t num_planes = m_planes.get_num_planes();
         m_coplanar_planes.init(num_planes + DIM + 1);
-        auto ar_complex = initialize_simplicial_ar_complex<DIM>(num_planes + DIM + 1);
-        size_t unique_plane_count = 0;
-        for (size_t i = 0; i < num_planes; i++) {
-            size_t plane_id = i + DIM + 1;
-            size_t coplanar_plane_id = internal::add_plane(m_planes, ar_complex, plane_id);
-            if (coplanar_plane_id != INVALID) {
-                m_coplanar_planes.merge(plane_id, coplanar_plane_id);
-            } else {
-                unique_plane_count++;
+
+        bool need_full_compute = true;
+        if (use_lookup_table) {
+            const auto* ar = lookup(planes);
+            if (ar != nullptr) {
+                m_arrangement = *ar;
+                need_full_compute = false;
             }
         }
-        m_arrangement = extract_arrangement(std::move(ar_complex));
-        if (unique_plane_count != num_planes) {
-            // Only popularize unqiue plane structure if duplicate planes are
-            // detected.
-            extract_unique_planes();
+
+        if (need_full_compute) {
+            auto ar_complex = initialize_simplicial_ar_complex<DIM>(num_planes + DIM + 1);
+            size_t unique_plane_count = 0;
+            for (size_t i = 0; i < num_planes; i++) {
+                size_t plane_id = i + DIM + 1;
+                size_t coplanar_plane_id = internal::add_plane(m_planes, ar_complex, plane_id);
+                if (coplanar_plane_id != INVALID) {
+                    m_coplanar_planes.merge(plane_id, coplanar_plane_id);
+                } else {
+                    unique_plane_count++;
+                }
+            }
+            m_arrangement = extract_arrangement(std::move(ar_complex));
+            if (unique_plane_count != num_planes) {
+                // Only popularize unqiue plane structure if duplicate planes are
+                // detected.
+                extract_unique_planes();
+            }
         }
     }
 
@@ -51,6 +64,48 @@ public:
     Arrangement<DIM>&& export_arrangement() && { return std::move(m_arrangement); }
 
 private:
+    const Arrangement<DIM>* lookup(const std::vector<Plane<Scalar, DIM>>& planes) const
+    {
+        extern std::vector<Arrangement<3>> ar_data;
+        extern std::vector<size_t> ar_indices;
+        const size_t num_planes = planes.size();
+
+        if constexpr (DIM == 3) {
+            if (num_planes == 1) {
+                const size_t outer_index = ar_compute_outer_index(planes[0]);
+                if (outer_index == INVALID) return nullptr;
+
+                logger().debug("AR lookup outer index: {}", outer_index);
+                const size_t start_idx = ar_indices[outer_index];
+                assert(ar_indices[outer_index + 1] == start_idx + 1);
+
+                logger().debug("AR lookup data index: {}", start_idx);
+                return &ar_data[start_idx];
+            } else if (num_planes == 2) {
+                const size_t outer_index = ar_compute_outer_index(planes[0], planes[1]);
+                if (outer_index == INVALID) return nullptr;
+
+                logger().debug("AR lookup outer index: {}", outer_index);
+                const size_t start_idx = ar_indices[outer_index];
+                const size_t end_idx = ar_indices[outer_index + 1];
+
+                if (end_idx == start_idx + 1) {
+                    logger().debug("AR lookup data index: {}", start_idx);
+                    return &ar_data[start_idx];
+                } else if (end_idx > start_idx) {
+                    const size_t inner_index =
+                        ar_compute_inner_index(outer_index, planes[0], planes[1]);
+                    if (inner_index == INVALID) return nullptr;
+                    assert(inner_index < end_idx - start_idx);
+                    logger().debug("AR lookup inner index: {}", inner_index);
+                    logger().debug("AR lookup data index: {}", start_idx + inner_index);
+                    return &ar_data[start_idx + inner_index];
+                }
+            }
+        }
+        return nullptr;
+    }
+
     void extract_unique_planes()
     {
         auto is_plane_consistently_oriented = [&](size_t i1, size_t i2) -> bool {

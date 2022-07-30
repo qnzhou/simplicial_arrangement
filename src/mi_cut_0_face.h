@@ -7,6 +7,10 @@
 
 #include <implicit_predicates/implicit_predicates.h>
 
+#ifdef LOOKUP_TABLE_GEN
+#error "This header should not be included in lookup table generation mode."
+#endif
+
 namespace simplicial_arrangement {
 
 template <typename Scalar>

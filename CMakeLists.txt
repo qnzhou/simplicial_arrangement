@@ -11,6 +11,8 @@ include(sanitizers)
 include(cli11)
 include(mshio)
 
+option(SIMPLICIAL_ARRANGEMENT_UNIT_TESTS
+    "Build unit tests for simplicial arrangement" OFF)
 option(SIMPLICIAL_ARRANGEMENT_LOOKUP_TABLE_GEN
     "Lookup table generation mode (for developers only)" OFF)
 option(SIMPLICIAL_ARRANGEMENT_DETERMINISTIC
@@ -28,6 +30,9 @@ target_link_libraries(simplicial_arrangement
     PUBLIC absl::numeric absl::flat_hash_map nlohmann_json::nlohmann_json
     PRIVATE implicit_predicates::implicit_predicates spdlog::spdlog)
 target_compile_features(simplicial_arrangement PRIVATE cxx_std_17)
+set(LOOKUP_TABLE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lookup_table")
+target_compile_definitions(simplicial_arrangement PUBLIC -DLOOKUP_TABLE_PATH="${LOOKUP_TABLE_PATH}")
+
 if (SIMPLICIAL_ARRANGEMENT_LOOKUP_TABLE_GEN)
     target_compile_definitions(simplicial_arrangement PUBLIC -DLOOKUP_TABLE_GEN)
 endif()
@@ -45,8 +50,10 @@ endif()
 add_library(simplicial_arrangement::simplicial_arrangement ALIAS
     simplicial_arrangement)
 
-option(SIMPLICIAL_ARRANGEMENT_UNIT_TESTS "Build unit tests for simplicial arrangement" OFF)
 if (SIMPLICIAL_ARRANGEMENT_UNIT_TESTS)
+    if (SIMPLICIAL_ARRANGEMENT_LOOKUP_TABLE_GEN)
+        message(FATAL_ERROR "Lookup table generation mode cannot used for building unit tests.")
+    endif()
     include(CTest)
     enable_testing()
     include(Catch2)
@@ -82,15 +89,21 @@ if (SIMPLICIAL_ARRANGEMENT_UNIT_TESTS)
     endif()
 endif()
 
-set(LOOKUP_TABLE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lookup_table")
-target_compile_definitions(simplicial_arrangement PUBLIC -DLOOKUP_TABLE_PATH="${LOOKUP_TABLE_PATH}")
+if (SIMPLICIAL_ARRANGEMENT_LOOKUP_TABLE_GEN)
+    add_executable(generate_material_interface_lookup_table
+        "app/generate_material_interface_lookup_table.cpp")
+    target_link_libraries(generate_material_interface_lookup_table PRIVATE
+        simplicial_arrangement::simplicial_arrangement nlohmann_json::nlohmann_json
+        spdlog::spdlog)
+    target_compile_features(generate_material_interface_lookup_table PRIVATE cxx_std_17)
 
-add_executable(generate_material_interface_lookup_table
-    "app/generate_material_interface_lookup_table.cpp")
-target_link_libraries(generate_material_interface_lookup_table PRIVATE
-    simplicial_arrangement::simplicial_arrangement nlohmann_json::nlohmann_json
-    spdlog::spdlog)
-target_compile_features(generate_material_interface_lookup_table PRIVATE cxx_std_17)
+    add_executable(generate_simplicial_arrangement_lookup_table
+        "app/generate_simplicial_arrangement_lookup_table.cpp")
+    target_link_libraries(generate_simplicial_arrangement_lookup_table PRIVATE
+        simplicial_arrangement::simplicial_arrangement nlohmann_json::nlohmann_json
+        spdlog::spdlog)
+    target_compile_features(generate_simplicial_arrangement_lookup_table PRIVATE cxx_std_17)
+endif()
 
 add_executable(simplex_case_study "app/simplex_case_study.cpp")
 target_link_libraries(simplex_case_study PRIVATE
