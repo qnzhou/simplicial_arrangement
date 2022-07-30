@@ -8,17 +8,6 @@
 #include <spdlog/spdlog.h>
 #include <catch2/catch.hpp>
 
-TEST_CASE("Lookup table", "[lookup]")
-{
-    using namespace simplicial_arrangement;
-
-    bool loaded = load_lookup_table(ARRANGEMENT);
-    REQUIRE(loaded);
-
-    REQUIRE(one_func_lookup_table->size() == 16);
-    REQUIRE(two_func_lookup_table->size() == 256);
-}
-
 TEST_CASE("Simplicial arrangement lookup", "[ar][lookup]")
 {
     using namespace simplicial_arrangement;

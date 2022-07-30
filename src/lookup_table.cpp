@@ -11,24 +11,7 @@
 
 namespace simplicial_arrangement {
 
-namespace {
-
-template <typename T>
-void load_vector(std::vector<T>& vec, const nlohmann::json& data)
-{
-    const size_t s = data.size();
-    vec.resize(s);
-    for (size_t i = 0; i < s; i++) {
-        vec[i] = data[i].get<T>();
-    }
-}
-
-} // namespace
-
 // Global variables.
-std::unique_ptr<std::vector<Arrangement<3>>> one_func_lookup_table;
-std::unique_ptr<std::vector<std::vector<std::pair<int, int>>>> to_check_edge_table;
-std::unique_ptr<std::vector<std::vector<Arrangement<3>>>> two_func_lookup_table;
 std::vector<Arrangement<3>> ar_data;
 std::vector<size_t> ar_indices;
 std::vector<MaterialInterface<3>> mi_data;
@@ -43,10 +26,6 @@ std::array<bool, 6> edge_signs;
 #endif
 
 // Forward declarations.
-bool load_one_func_lookup_table(const std::string& filename);
-bool load_to_check_edge_table(const std::string& filename);
-bool load_two_func_lookup_table(const std::string& filename);
-void load_arrangement(Arrangement<3>& arrangement, const nlohmann::json& data);
 bool load_material_interface_lookup_table(const std::string& filename);
 bool load_simplicial_arrangement_lookup_table(const std::string& filename);
 
@@ -68,15 +47,6 @@ bool load_lookup_table(LookupTableType table_type)
     std::string lookup_table_path = LOOKUP_TABLE_PATH;
 
     if (table_type & ARRANGEMENT) {
-        std::string one_func_table_file = lookup_table_path + "/1_func_lookup_table.json";
-        if (!load_one_func_lookup_table(one_func_table_file)) return false;
-
-        std::string to_check_edge_table_file = lookup_table_path + "/to_check_edge_table.json";
-        if (!load_to_check_edge_table(to_check_edge_table_file)) return false;
-
-        std::string two_func_table_file = lookup_table_path + "/2_func_lookup_table.json";
-        if (!load_two_func_lookup_table(two_func_table_file)) return false;
-
         std::string simplicial_arrangement_lookup_table_file =
             lookup_table_path + "/simplicial_arrangement_lookup_table.msgpack";
         if (!load_simplicial_arrangement_lookup_table(simplicial_arrangement_lookup_table_file))
@@ -94,134 +64,6 @@ bool load_lookup_table(LookupTableType table_type)
     return true;
 }
 
-
-bool load_one_func_lookup_table(const std::string& filename)
-{
-    if (one_func_lookup_table != nullptr) return true;
-    auto t0 = std::chrono::high_resolution_clock::now();
-    using json = nlohmann::json;
-    std::ifstream fin(filename.c_str());
-    if (!fin) {
-        std::cout << "One function lookup table file not exist!" << std::endl;
-        return false;
-    }
-    json input;
-    fin >> input;
-    fin.close();
-
-    // populate the lookup table
-    size_t num_entry = 16; // 2^4
-    one_func_lookup_table = std::make_unique<std::vector<Arrangement<3>>>(num_entry);
-    for (size_t i = 0; i < num_entry; i++) {
-        auto& arrangement = (*one_func_lookup_table)[i];
-        load_arrangement(arrangement, input[i]);
-    }
-    auto t1 = std::chrono::high_resolution_clock::now();
-    logger().info("Arrangement 1 function lookup table load time: {}s",
-        std::chrono::duration<double>(t1 - t0).count());
-    return true;
-}
-
-bool load_to_check_edge_table(const std::string& filename)
-{
-    if (to_check_edge_table != nullptr) return true;
-    auto t0 = std::chrono::high_resolution_clock::now();
-    using json = nlohmann::json;
-    std::ifstream fin(filename.c_str());
-    if (!fin) {
-        std::cout << "Two function to-check edge lookup table file not exist!" << std::endl;
-        return false;
-    }
-    json input;
-    fin >> input;
-    fin.close();
-
-    // populate the lookup table
-    size_t num_entry = 256; // 2^(4+4)
-    to_check_edge_table =
-        std::make_unique<std::vector<std::vector<std::pair<int, int>>>>(num_entry);
-    for (size_t i = 0; i < num_entry; i++) {
-        size_t n_edge = input[i].size();
-        if (n_edge > 0) {
-            auto& edges = (*to_check_edge_table)[i];
-            edges.resize(n_edge);
-            for (size_t j = 0; j < n_edge; j++) {
-                edges[j].first = input[i][j][0];
-                edges[j].second = input[i][j][1];
-            }
-        }
-    }
-    auto t1 = std::chrono::high_resolution_clock::now();
-    logger().info("Arrangement check edge lookup table load time: {}s",
-        std::chrono::duration<double>(t1 - t0).count());
-    return true;
-}
-
-bool load_two_func_lookup_table(const std::string& filename)
-{
-    if (two_func_lookup_table != nullptr) return true;
-    auto t0 = std::chrono::high_resolution_clock::now();
-    using json = nlohmann::json;
-    std::ifstream fin(filename.c_str());
-    if (!fin) {
-        std::cout << "Two function lookup table file not exist!" << std::endl;
-        return false;
-    }
-    json input;
-    fin >> input;
-    fin.close();
-
-    // populate the lookup table
-    size_t num_entry = 256; // 2^(4+4)
-    two_func_lookup_table = std::make_unique<std::vector<std::vector<Arrangement<3>>>>(num_entry);
-    for (size_t i = 0; i < num_entry; i++) {
-        size_t n_sub_entry = input[i].size();
-        auto& arrangements = (*two_func_lookup_table)[i];
-        arrangements.resize(n_sub_entry);
-        for (size_t j = 0; j < n_sub_entry; j++) {
-            if (input[i][j].size() > 0) {
-                load_arrangement(arrangements[j], input[i][j]);
-            }
-        }
-    }
-    auto t1 = std::chrono::high_resolution_clock::now();
-    logger().info("Arrangement 2 function lookup table load time: {}s",
-        std::chrono::duration<double>(t1 - t0).count());
-    return true;
-}
-
-void load_arrangement(Arrangement<3>& arrangement, const nlohmann::json& data)
-{
-    //
-    auto& vertices = arrangement.vertices;
-    const size_t num_vertices = data[0].size();
-    vertices.resize(num_vertices);
-    for (size_t j = 0; j < num_vertices; j++) {
-        vertices[j] = data[0][j];
-    }
-    //
-    auto& faces = arrangement.faces;
-    const size_t num_faces = data[1].size();
-    faces.resize(num_faces);
-    for (size_t j = 0; j < num_faces; j++) {
-        auto& face = faces[j];
-        load_vector(face.vertices, data[1][j]);
-        face.supporting_plane = data[2][j];
-        face.positive_cell = data[3][j] < 0 ? Arrangement<3>::None : data[3][j].get<size_t>();
-        face.negative_cell = data[4][j] < 0 ? Arrangement<3>::None : data[4][j].get<size_t>();
-    }
-    //
-    auto& cells = arrangement.cells;
-    const size_t num_cells = data[5].size();
-    cells.resize(num_cells);
-    for (size_t j = 0; j < num_cells; j++) {
-        auto& cell = cells[j];
-        load_vector(cell.faces, data[5][j]);
-    }
-    // No need to populate unique_planes etc. beccause all planes are uniques in
-    // the cases stored in the lookup table.
-    // done
-}
 
 bool load_material_interface_lookup_table(const std::string& filename)
 {

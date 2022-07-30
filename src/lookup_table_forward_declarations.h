@@ -6,13 +6,6 @@
 
 namespace simplicial_arrangement {
 
-// one function look up table
-extern std::unique_ptr<std::vector<Arrangement<3>>> one_func_lookup_table;
-
-// two function look up table
-extern std::unique_ptr<std::vector<std::vector<std::pair<int, int>>>> to_check_edge_table;
-extern std::unique_ptr<std::vector<std::vector<Arrangement<3>>>> two_func_lookup_table;
-
 // Lookup table for simplicial arrangement
 extern std::vector<Arrangement<3>> ar_data;
 extern std::vector<size_t> ar_indices;
