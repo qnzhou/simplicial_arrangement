@@ -4,10 +4,11 @@
 #include "common.h"
 
 #include <implicit_predicates/implicit_predicates.h>
+#include <nlohmann/json.hpp>
 
+#include <bitset>
 #include <fstream>
 #include <iostream>
-#include <nlohmann/json.hpp>
 
 namespace simplicial_arrangement {
 
