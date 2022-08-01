@@ -241,6 +241,16 @@ size_t ar_compute_inner_index_impl(
     if ((v2 ^ v3).all())
         if (!add_edge(2, 3)) return INVALID;
 
+    if (edge_count == 4) {
+        assert(index != 6 && index != 9); // Impossible cases.
+        if (index < 6) {
+        } else if (index < 9) {
+            index -= 1; // Skipping invalid case with index 6.
+        } else {
+            index -= 2; // Skipping invalid case with index 6 and 9.
+        }
+    }
+
     return index;
 }
 
