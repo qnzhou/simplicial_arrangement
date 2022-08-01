@@ -95,6 +95,17 @@ TEST_CASE("Simplicial arrangement lookup", "[ar][lookup]")
     }
     SECTION("Case 9") { planes.push_back({1, 1, 1, -1}); }
     SECTION("Case 10") { planes.push_back({1, 1, -2, -1}); }
+    SECTION("Case 11")
+    {
+        planes.push_back({-0.011580921511964659,
+            -0.093672652278739665,
+            0.025375829081217716,
+            0.0066544614307747496});
+        planes.push_back({-0.021899454112778494,
+            -0.017737799597463133,
+            0.014110607076315729,
+            0.10106216401814538});
+    }
 
     enable_lookup_table();
     const auto ar0 = compute_arrangement(planes);

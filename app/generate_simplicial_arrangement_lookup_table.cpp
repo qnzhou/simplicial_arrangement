@@ -6,6 +6,7 @@
 #include <limits>
 #include <vector>
 
+#include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
 
 #include <simplicial_arrangement/simplicial_arrangement.h>
@@ -117,16 +118,22 @@ auto generate_lookup_table()
                 // pairs.
                 if (ambiguous_edges == std::vector<size_t>({0, 1, 4, 5})) {
                     if ((edge_signs[0] != edge_signs[1]) && (edge_signs[1] != edge_signs[5]) &&
-                        (edge_signs[5] != edge_signs[4]))
+                        (edge_signs[5] != edge_signs[4])) {
+                        spdlog::info("1. i={} Skipping j={}", i, j);
                         continue;
+                    }
                 } else if (ambiguous_edges == std::vector<size_t>({0, 2, 3, 5})) {
                     if ((edge_signs[0] != edge_signs[2]) && (edge_signs[2] != edge_signs[5]) &&
-                        (edge_signs[5] != edge_signs[3]))
+                        (edge_signs[5] != edge_signs[3])) {
+                        spdlog::info("2. i={} Skipping j={}", i, j);
                         continue;
+                    }
                 } else if (ambiguous_edges == std::vector<size_t>({1, 2, 3, 4})) {
                     if ((edge_signs[1] != edge_signs[2]) && (edge_signs[2] != edge_signs[4]) &&
-                        (edge_signs[4] != edge_signs[3]))
+                        (edge_signs[4] != edge_signs[3])) {
+                        spdlog::info("3. i={} Skipping j={}", i, j);
                         continue;
+                    }
                 }
 
                 data.push_back(compute_arrangement(dummy_planes));
