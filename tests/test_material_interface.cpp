@@ -503,3 +503,94 @@ TEST_CASE("Material interface 3D", "[material_interface][3D]")
         disable_lookup_table();
     }
 }
+
+TEST_CASE("Material interface degeneracy", "[mi][degeneracy][3D]")
+{
+    using namespace simplicial_arrangement;
+    disable_lookup_table();
+
+    using Scalar = double;
+    std::vector<Material<Scalar, 3>> materials;
+
+    auto assert_equivalent = [](const auto& mi1, const auto& mi2) {
+        REQUIRE(mi1.vertices.size() == mi2.vertices.size());
+        REQUIRE(mi1.faces.size() == mi2.faces.size());
+        REQUIRE(mi1.cells.size() == mi2.cells.size());
+    };
+
+    SECTION("5 materials in different order")
+    {
+        SECTION("Point intersection")
+        {
+            materials.push_back(
+                {-1.155765120458494, -3.192762224028497, 0.5553418458787984, 3.793185498608192});
+            materials.push_back(
+                {-2.392200834775261, -1.528746399924049, 5.208044446314545, -1.287097211615235});
+            materials.push_back(
+                {1.271220156626018, -1.439963072432723, 0.6169791304579846, -0.4482362146512795});
+            materials.push_back(
+                {6.390380078685507, 5.280405125348178, 4.520264151726717, -16.1910493557604});
+            materials.push_back(
+                {-6.781799097287127, 5.240177899219642, -8.129031919657647, 9.670653117725132});
+
+            const auto r1 = compute_material_interface(materials);
+            std::reverse(materials.begin(), materials.end());
+            const auto r2 = compute_material_interface(materials);
+            assert_equivalent(r1, r2);
+        }
+        SECTION("Segment intersection")
+        {
+            materials.push_back(
+                {7.718609961072335, -9.204820073642072, -4.746189735932862, 6.232399848502599});
+            materials.push_back(
+                {-1.597335209387186, -0.4805352955931301, 5.753076219347818, -3.675205714367502});
+            materials.push_back(
+                {-8.454966357160966, 13.00990946531108, -0.6549198591392553, -3.900023249010856});
+            materials.push_back(
+                {-2.677583008334603, -0.3260814570562367, 8.684911939116279, -5.681247473725441});
+            materials.push_back(
+                {4.425259585475192, -4.509084694383795, -4.257609367657988, 4.34143447656659});
+
+            const auto r1 = compute_material_interface(materials);
+            std::reverse(materials.begin(), materials.end());
+            const auto r2 = compute_material_interface(materials);
+            assert_equivalent(r1, r2);
+        }
+        SECTION("Triangle intersection")
+        {
+            materials.push_back(
+                {2.137454324991177, -2.137454315051372, -2.137454319214663, -2.137454327568319});
+            materials.push_back(
+                {-9.391832302908245, 9.391832300523651, 9.391832312300817, 9.391832301038432});
+            materials.push_back(
+                {1.681410363741283, -1.681410373407355, -1.681410377891855, -1.681410372213574});
+            materials.push_back(
+                {4.867248900161551, -4.867248902720028, -4.867248888583141, -4.867248900564688});
+            materials.push_back(
+                {7.602325749023126, -7.60232575169791, -7.602325755232684, -7.602325750807439});
+
+            const auto r1 = compute_material_interface(materials);
+            std::reverse(materials.begin(), materials.end());
+            const auto r2 = compute_material_interface(materials);
+            assert_equivalent(r1, r2);
+        }
+        SECTION("Quad intersection")
+        {
+            materials.push_back(
+                {-7.395795332281445, -7.395795334049828, 7.39579533993123, 7.3957953347206});
+            materials.push_back(
+                {6.411832922871854, 6.411832913469024, -6.411832914570133, -6.411832919619761});
+            materials.push_back(
+                {1.036045238227753, 1.036045244464811, -1.036045238074583, -1.036045253607837});
+            materials.push_back(
+                {-5.986464634521012, -5.986464625816754, 5.986464619923138, 5.986464624311083});
+            materials.push_back(
+                {-3.737885309931638, -3.737885301409309, 3.737885298445151, 3.737885295185574});
+
+            const auto r1 = compute_material_interface(materials);
+            std::reverse(materials.begin(), materials.end());
+            const auto r2 = compute_material_interface(materials);
+            assert_equivalent(r1, r2);
+        }
+    }
+}
