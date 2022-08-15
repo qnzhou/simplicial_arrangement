@@ -803,7 +803,8 @@ TEST_CASE("Arrangement degeneracy", "[ar][3D]")
     constexpr Scalar LARGE = M_PI * 1e6;
     std::vector<Plane<Scalar, 3>> planes;
 
-    SECTION("Near parallel planes") {
+    SECTION("Near parallel planes")
+    {
         // Reference case:
         planes.push_back({-1.1, -1.2, 1.3, 1.4});
         planes.push_back({-1.2, -1.1, 1.3, 1.4});
@@ -836,7 +837,7 @@ TEST_CASE("Arrangement degeneracy", "[ar][3D]")
             planes.push_back({-EPS2, -EPS, EPS3, EPS4});
             planes.push_back({-EPS3, -EPS2, EPS, EPS4});
             planes.push_back({-EPS4, -EPS2, EPS3, EPS});
-            //spdlog::set_level(spdlog::level::debug);
+            // spdlog::set_level(spdlog::level::debug);
             const auto r2 = compute_arrangement(planes);
             assert_equivalent(r1, r2);
         }
@@ -876,6 +877,74 @@ TEST_CASE("Arrangement degeneracy", "[ar][3D]")
             planes.push_back({-v2, v2, -v2, v2});
             planes.push_back({-v3, v3, v3, -v3});
             planes.push_back({v4, -v2, -v4, v2});
+            const auto r2 = compute_arrangement(planes);
+            assert_equivalent(r1, r2);
+        }
+    }
+
+    SECTION("4 planes in different order")
+    {
+        SECTION("Point intersection")
+        {
+            planes.push_back(
+                {6.926218366896812, -3.734529738225069, 0.4909632573147267, -3.68265188598647});
+            planes.push_back(
+                {-2.241785194788779, 3.394920808940942, 8.710781454093603, -9.863917068245765});
+            planes.push_back(
+                {9.980810309305472, -5.278220474036615, -2.068385476747814, -2.634204358521043});
+            planes.push_back(
+                {9.94369616460531, 8.65114722736331, -7.437511044553879, -11.15733234741474});
+
+            const auto r1 = compute_arrangement(planes);
+            std::reverse(planes.begin(), planes.end());
+            const auto r2 = compute_arrangement(planes);
+            assert_equivalent(r1, r2);
+        }
+        SECTION("Segment intersection")
+        {
+            planes.push_back(
+                {17.24675904665293, -26.21427764215589, 0.6882781443530117, 8.279240451149956});
+            planes.push_back(
+                {-11.94785331394204, 18.48725103287373, -1.130942123921345, -5.408455595010345});
+            planes.push_back(
+                {-2.752603223595615, 5.996169704505958, -3.734529738225069, 0.4909632573147267});
+            planes.push_back(
+                {22.56321818788723, -38.20021800887764, 8.710781454093603, 6.926218366896812});
+
+            const auto r1 = compute_arrangement(planes);
+            std::reverse(planes.begin(), planes.end());
+            const auto r2 = compute_arrangement(planes);
+            assert_equivalent(r1, r2);
+        }
+        SECTION("Tri intersection")
+        {
+            planes.push_back(
+                {-6.76762939664222, 6.767629402413544, 6.767629396432295, 6.767629409302009});
+            planes.push_back(
+                {-4.112810564622128, 4.11281055783204, 4.112810554094155, 4.11281055555015});
+            planes.push_back(
+                {5.639169256076264, -5.639169262552152, -5.639169251034964, -5.639169260805547});
+            planes.push_back(
+                {-1.432351809908365, 1.432351800879061, 1.432351815479439, 1.432351815092373});
+
+            const auto r1 = compute_arrangement(planes);
+            std::reverse(planes.begin(), planes.end());
+            const auto r2 = compute_arrangement(planes);
+            assert_equivalent(r1, r2);
+        }
+        SECTION("Quad intersection")
+        {
+            planes.push_back(
+                {9.406140896875673, 9.406140889947853, -9.406140902713707, -9.40614090529332});
+            planes.push_back(
+                {-9.912418053618833, -9.912418066025847, 9.912418049659827, 9.912418049968453});
+            planes.push_back(
+                {0.3326368104448145, 0.3326368139110936, -0.3326368178811913, -0.3326368006459226});
+            planes.push_back(
+                {-7.077317534324832, -7.077317531984346, 7.077317548576322, 7.07731754191976});
+
+            const auto r1 = compute_arrangement(planes);
+            std::reverse(planes.begin(), planes.end());
             const auto r2 = compute_arrangement(planes);
             assert_equivalent(r1, r2);
         }

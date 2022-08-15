@@ -5,7 +5,7 @@ endif()
 include(FetchContent)
 FetchContent_Declare(
     implicit_predicates
-    GIT_REPOSITORY git@github.com:qnzhou/implicit_predicates.git
+    GIT_REPOSITORY https://github.com/qnzhou/implicit_predicates.git
     GIT_TAG main
     )
 
