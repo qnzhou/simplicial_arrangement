@@ -6,10 +6,7 @@ jobs:
     build-Ubuntu:
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v2
-            - uses: webfactory/ssh-agent@v0.5.3
-              with:
-                  ssh-private-key: ${{ secrets.IMPLICIT_PREDICATES_KEY }}
+            - uses: actions/checkout@v4
             - name: dependencies
               run: |
                   sudo apt-get update
@@ -27,10 +24,7 @@ jobs:
     build-Windows:
         runs-on: windows-latest
         steps:
-            - uses: actions/checkout@v2
-            - uses: webfactory/ssh-agent@v0.5.3
-              with:
-                  ssh-private-key: ${{ secrets.IMPLICIT_PREDICATES_KEY }}
+            - uses: actions/checkout@v4
             - name: build
               run: |
                   mkdir build
