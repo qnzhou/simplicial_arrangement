@@ -6,7 +6,7 @@ include(FetchContent)
 FetchContent_Declare(
     absl
     GIT_REPOSITORY https://github.com/abseil/abseil-cpp.git
-    GIT_TAG c5a424a2a21005660b182516eb7a079cd8021699
+    GIT_TAG 20230802.1
     )
 
 set(OLD_CXX_STANDARD ${CMAKE_CXX_STANDARD})
