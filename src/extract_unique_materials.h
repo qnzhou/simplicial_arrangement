@@ -2,6 +2,8 @@
 
 #include "MaterialRepo.h"
 
+#include <algorithm>
+
 namespace simplicial_arrangement {
 
 template <typename Scalar, int DIM>
