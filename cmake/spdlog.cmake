@@ -30,6 +30,12 @@ set_target_properties(spdlog PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 set_target_properties(spdlog PROPERTIES FOLDER third_party)
 
+get_target_property(_spdlog_iface_includes spdlog INTERFACE_INCLUDE_DIRECTORIES)
+if(_spdlog_iface_includes)
+    set_target_properties(spdlog PROPERTIES
+        INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_spdlog_iface_includes}")
+endif()
+
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang" OR
    "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     target_compile_options(spdlog PRIVATE
